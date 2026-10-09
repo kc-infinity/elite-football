@@ -357,13 +357,21 @@ export const OpponentSquadPopup: React.FC<OpponentSquadPopupProps> = ({
             {inspectedPlayer && (
               <div className="p-2.5 rounded-xl bg-[#070A0E]/90 border border-white/10 flex items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <PlayerPhotoAvatar
-                    player={inspectedPlayer}
-                    className="w-11 h-11 rounded-lg border border-white/25"
-                    showRatingBadge={true}
-                  />
+                  <div className="flex flex-col items-center shrink-0">
+                    <PlayerPhotoAvatar
+                      player={inspectedPlayer}
+                      className="w-11 h-11 rounded-lg border border-white/25"
+                      showRatingBadge={true}
+                    />
+                    <div className="text-[9px] font-sans font-bold text-white truncate max-w-[68px] mt-0.5 leading-tight text-center">
+                      {inspectedPlayer.name}
+                    </div>
+                  </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
+                    <div className="font-display font-bold text-xs text-white truncate">
+                      {inspectedPlayer.name}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="px-1.5 py-0.5 rounded bg-[#10B981]/20 text-[#10B981] font-mono text-[10px] font-bold">
                         {inspectedSlot?.label || inspectedPlayer.position}
                       </span>
@@ -443,19 +451,24 @@ export const OpponentSquadPopup: React.FC<OpponentSquadPopupProps> = ({
                       >
                         {slot.label}
                       </span>
-                      <PlayerPhotoAvatar
-                        player={player}
-                        className="w-9 h-9 rounded-lg border border-white/20"
-                      />
+                      <div className="flex flex-col items-center shrink-0">
+                        <PlayerPhotoAvatar
+                          player={player}
+                          className="w-9 h-9 rounded-lg border border-white/20"
+                        />
+                        <div className="text-[8px] font-sans font-bold text-white truncate max-w-[54px] mt-0.5 leading-tight text-center">
+                          {player.name}
+                        </div>
+                      </div>
                       <div className="min-w-0">
-                        <div className="text-[10px] font-mono text-white font-semibold truncate flex items-center gap-1">
-                          <span>#{player.number} · {player.nationality}</span>
+                        <div className="text-xs font-display text-white font-bold truncate flex items-center gap-1">
+                          <span>{player.name}</span>
                           {player.rating >= 94 && (
                             <Star className="w-3 h-3 text-[#F59E0B] fill-[#F59E0B] shrink-0" />
                           )}
                         </div>
                         <div className="text-[10px] text-slate-400 truncate">
-                          {player.position} · PAC {player.attributes.pace} · SHO{' '}
+                          #{player.number} · {player.nationality} · PAC {player.attributes.pace} · SHO{' '}
                           {player.attributes.shooting}
                         </div>
                       </div>

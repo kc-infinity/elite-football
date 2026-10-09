@@ -840,10 +840,13 @@ export const OnlineMatchCenter: React.FC<OnlineMatchCenterProps> = ({
                       showPositionBadge={false}
                       showRatingBadge={true}
                     />
-                    <span className="mt-1 px-1.5 py-0.5 rounded bg-black/60 font-mono text-[9px] font-bold text-[#10B981]">
+                    <span className="text-[10px] font-sans font-bold text-white truncate w-full mt-1 leading-tight">
+                      {p.name}
+                    </span>
+                    <span className="mt-0.5 px-1.5 py-0.5 rounded bg-black/60 font-mono text-[9px] font-bold text-[#10B981]">
                       {roleLabel}
                     </span>
-                    <span className="text-[10px] font-display font-bold text-white truncate w-full mt-0.5">
+                    <span className="text-[10px] font-display font-bold text-[#F59E0B] truncate w-full mt-0.5">
                       {isMySlot
                         ? 'YOU'
                         : otherController

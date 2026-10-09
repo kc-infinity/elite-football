@@ -804,6 +804,7 @@ export default function App() {
   // Fullscreen 3D Match Viewport when playing
   if (screen === 'in_match') {
     const myClientId = FriendRoomService.getClientId();
+    const myMember = friendRoomState.members.find((m) => m.clientId === myClientId);
     const isOnline1v1 =
       (selectedMode === 'join_code_match' || selectedMode === 'dream_team_11v11_online') &&
       (friendRoomState.members.length >= 2 || Boolean(activeOnlineLobby?.guest));
@@ -815,12 +816,20 @@ export default function App() {
       friendRoomState.members.find((m) => m.clientId !== hostMember?.clientId);
 
     const myRole: 'host' | 'guest' =
-      guestMember && guestMember.clientId === myClientId ? 'guest' : 'host';
+      hostMember && hostMember.clientId !== myClientId ? 'guest' : 'host';
 
     const activeOnlineFormat: '11v11' | '1v1' =
       selectedMode === 'dream_team_11v11_online'
         ? '11v11'
         : friendRoomState.matchFormat || hostMember?.matchFormat || onlineMatchFormat;
+
+    const myTeamSide: 'home' | 'away' =
+      myMember?.teamSide || (myRole === 'host' ? 'home' : 'away');
+    const myAssignedSlotIdx: number =
+      typeof myMember?.assignedSlotIdx === 'number' ? myMember.assignedSlotIdx : 9;
+    const lockToAssignedPlayer =
+      activeOnlineFormat === '11v11' &&
+      (friendRoomState.members.length > 2 || typeof myMember?.assignedSlotIdx === 'number');
 
     const resolvedHomeTeam =
       isOnline1v1 && myRole === 'guest' && hostMember
@@ -908,6 +917,9 @@ export default function App() {
                 guestUsername:
                   guestMember?.username || activeOnlineLobby?.guest?.username || 'Opponent',
                 matchFormat: activeOnlineFormat,
+                myTeamSide,
+                myAssignedSlotIdx,
+                lockToAssignedPlayer,
                 opponentStarPlayerId,
                 opponentSquadIds,
                 opponentFormation,
@@ -1334,13 +1346,14 @@ export default function App() {
                     </div>
 
                     {/* Live Connected Friends in Private Room */}
-                    <div className="p-3 bg-[#070A0E]/80 border border-white/10 rounded-xl space-y-2">
+                    <div className="p-3 bg-[#070A0E]/80 border border-white/10 rounded-xl space-y-2.5">
                       <div className="flex items-center justify-between text-[11px] font-mono">
                         <span className="text-slate-400">
-                          ONLINE LOBBY ({friendRoomState.roomCode || hostJoinCode})
+                          MATCH CODE ({friendRoomState.roomCode || hostJoinCode}) · {onlineMatchFormat.toUpperCase()}
                         </span>
                         <span className="text-[#10B981] font-bold">
-                          {Math.max(1, friendRoomState.members.length)} / 2 PLAYERS READY
+                          {friendRoomState.members.filter((m) => m.isReady).length} /{' '}
+                          {friendRoomState.requiredPlayers || 2} PLAYERS READY
                         </span>
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-xs">
@@ -1361,7 +1374,7 @@ export default function App() {
                           <div className="p-2 rounded-lg bg-[#111722] border border-[#F59E0B]/50">
                             <div className="flex items-center justify-between">
                               <span className="text-[10px] font-mono text-[#F59E0B] font-bold">
-                                FRIEND JOINED
+                                FRIEND JOINED ({friendRoomState.members.length} IN ROOM)
                               </span>
                               <button
                                 type="button"
@@ -1413,10 +1426,10 @@ export default function App() {
                           <div className="p-2 rounded-lg bg-[#111722]/60 border border-white/10 flex flex-col justify-between gap-1">
                             <div>
                               <div className="text-[10px] font-mono text-slate-400">
-                                INVITE FRIEND BY USERNAME
+                                SHARE MATCH CODE
                               </div>
                               <div className="text-[11px] text-slate-300 font-medium">
-                                Enter friend’s username above or open Online Match Lobby
+                                Friends enter <span className="text-[#10B981] font-mono font-bold">{friendRoomState.roomCode || hostJoinCode}</span> to join
                               </div>
                             </div>
                             <button
@@ -1439,6 +1452,48 @@ export default function App() {
                           </div>
                         )}
                       </div>
+
+                      {/* Ready Up & Auto-Start Match Bar */}
+                      {(() => {
+                        const myMemberInRoom = friendRoomState.members.find(
+                          (m) => m.clientId === FriendRoomService.getClientId()
+                        );
+                        const amIReady = Boolean(myMemberInRoom?.isReady);
+                        const readyCnt = friendRoomState.members.filter((m) => m.isReady).length;
+                        const reqCnt = friendRoomState.requiredPlayers || 2;
+                        return (
+                          <div className="grid grid-cols-2 gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                SoundEngine.playUIClick();
+                                FriendRoomService.setRoomReady(
+                                  friendRoomState.roomCode || hostJoinCode,
+                                  !amIReady
+                                );
+                              }}
+                              className={`py-2 px-3 rounded-lg font-display font-bold text-xs transition-all cursor-pointer ${
+                                amIReady
+                                  ? 'bg-[#10B981] text-[#070A0E]'
+                                  : 'bg-white/10 hover:bg-white/15 border border-[#10B981] text-[#10B981]'
+                              }`}
+                            >
+                              {amIReady
+                                ? `READY ✓ (${readyCnt}/${reqCnt})`
+                                : `READY UP (${readyCnt}/${reqCnt})`}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => navigateTo('online_match')}
+                              className="py-2 px-3 rounded-lg bg-[#38BDF8]/15 hover:bg-[#38BDF8]/25 border border-[#38BDF8]/40 text-[#38BDF8] font-display font-bold text-xs transition-colors cursor-pointer"
+                            >
+                              {onlineMatchFormat === '11v11'
+                                ? 'PICK 11V11 PLAYER →'
+                                : 'OPEN MATCH LOBBY →'}
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Active Squad Quick Summary */}
@@ -1572,6 +1627,7 @@ export default function App() {
             userTeam={userTeam}
             awayTeam={awayTeam}
             leadStar={userSquad[9] || PLAYERS_DB[0]}
+            userSquad={userSquad}
             onlinePlayers={onlinePlayers}
             activeLobby={activeOnlineLobby}
             friendRoomState={friendRoomState}
@@ -1824,7 +1880,10 @@ export default function App() {
                                 showPositionBadge={true}
                                 showRatingBadge={true}
                               />
-                              <div className="text-[10px] font-mono mt-1.5 truncate w-full">
+                              <div className="text-xs font-sans font-bold text-white truncate mt-1.5 w-full leading-tight">
+                                {p.name}
+                              </div>
+                              <div className="text-[10px] font-mono mt-0.5 truncate w-full">
                                 {isLead ? (
                                   <span className="text-[#10B981] font-bold">ACTIVE STAR</span>
                                 ) : (
@@ -1854,7 +1913,7 @@ export default function App() {
                                   disabled={!canAfford}
                                   title={`${star.name} (${star.position} · OVR ${star.rating})`}
                                   onClick={() => handleBuyPlayer(star)}
-                                  className={`p-2.5 rounded-xl border flex items-center gap-2.5 text-left transition-all ${
+                                  className={`p-2.5 rounded-xl border flex flex-col items-center text-center transition-all ${
                                     canAfford
                                       ? 'bg-[#070A0E] border-[#F59E0B]/40 hover:border-[#F59E0B] cursor-pointer'
                                       : 'bg-[#070A0E]/50 border-white/5 opacity-60 cursor-not-allowed'
@@ -1862,20 +1921,21 @@ export default function App() {
                                 >
                                   <PlayerPhotoAvatar
                                     player={star}
-                                    className="w-12 h-12 rounded-xl border border-[#F59E0B]/40"
+                                    className="w-13 h-13 rounded-xl border border-[#F59E0B]/40"
                                     showPositionBadge={true}
                                     showRatingBadge={true}
                                   />
-                                  <div className="min-w-0">
-                                    <div className="text-[10px] font-mono text-[#F59E0B] font-bold">
-                                      {star.position} · OVR {star.rating}
-                                    </div>
-                                    <div className="text-[10px] text-slate-400 truncate">
-                                      {star.nationality}
-                                    </div>
-                                    <div className="text-[10px] font-mono text-[#10B981] font-bold mt-0.5">
-                                      {star.price.toLocaleString()} Coins
-                                    </div>
+                                  <div className="text-xs font-sans font-bold text-white truncate w-full mt-1.5 leading-tight">
+                                    {star.name}
+                                  </div>
+                                  <div className="text-[10px] font-mono text-[#F59E0B] font-bold mt-0.5">
+                                    {star.position} · OVR {star.rating}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 truncate w-full">
+                                    {star.nationality}
+                                  </div>
+                                  <div className="text-[10px] font-mono text-[#10B981] font-bold mt-0.5">
+                                    {star.price.toLocaleString()} Coins
                                   </div>
                                 </button>
                               );

@@ -596,7 +596,10 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                             showPositionBadge={true}
                             showRatingBadge={true}
                           />
-                          <div className="text-[10px] font-mono text-slate-300 truncate mt-1.5 w-full">
+                          <div className="text-xs font-sans font-bold text-white truncate mt-1.5 w-full leading-tight">
+                            {p.name}
+                          </div>
+                          <div className="text-[10px] font-mono text-slate-300 truncate mt-0.5 w-full">
                             {inStartingXI ? (
                               <span className="text-[#10B981] font-bold">STARTING XI</span>
                             ) : (
@@ -639,14 +642,22 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                               className="p-3.5 rounded-xl bg-[#070A0E] border border-[#F59E0B]/30 flex flex-col justify-between gap-2.5"
                             >
                               <div className="flex items-center gap-3">
-                                <PlayerPhotoAvatar
-                                  player={star}
-                                  className="w-14 h-14 rounded-xl border border-[#F59E0B]/40"
-                                  showPositionBadge={true}
-                                  showRatingBadge={true}
-                                />
+                                <div className="flex flex-col items-center shrink-0">
+                                  <PlayerPhotoAvatar
+                                    player={star}
+                                    className="w-14 h-14 rounded-xl border border-[#F59E0B]/40"
+                                    showPositionBadge={true}
+                                    showRatingBadge={true}
+                                  />
+                                  <div className="text-[10px] font-sans font-bold text-white truncate max-w-[76px] mt-1 leading-tight text-center">
+                                    {star.name}
+                                  </div>
+                                </div>
                                 <div className="min-w-0 flex-1">
-                                  <div className="flex items-center justify-between text-xs font-mono mb-0.5">
+                                  <div className="font-display font-bold text-sm text-white truncate">
+                                    {star.name}
+                                  </div>
+                                  <div className="flex items-center justify-between text-xs font-mono mb-0.5 mt-0.5">
                                     <span className="text-[#F59E0B] font-bold">
                                       {star.position} · OVR {star.rating}
                                     </span>
@@ -974,8 +985,8 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                   style={{ borderColor: `${accent}45` }}
                 >
                   <div>
-                    {/* Top Row: Rating, Position, Realistic Player Photo & Rarity */}
-                    <div className="flex items-start justify-between mb-3">
+                    {/* Top Row: Rating, Position, Realistic Player Photo & Name Below Image */}
+                    <div className="flex items-start justify-between mb-2">
                       <div>
                         <div
                           className="font-mono text-3xl font-bold leading-none tabular-nums"
@@ -990,10 +1001,15 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                           {player.rarity}
                         </div>
                       </div>
-                      <PlayerPhotoAvatar
-                        player={player}
-                        className="w-18 h-18 rounded-2xl border-2 shadow-lg"
-                      />
+                      <div className="flex flex-col items-center">
+                        <PlayerPhotoAvatar
+                          player={player}
+                          className="w-18 h-18 rounded-2xl border-2 shadow-lg"
+                        />
+                        <div className="font-display font-bold text-sm text-white text-center mt-2 leading-tight">
+                          {player.name}
+                        </div>
+                      </div>
                       <div className="text-right">
                         <div className="text-xs font-mono font-bold text-white">
                           #{player.number}
@@ -1380,13 +1396,16 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                             {star.position}
                           </span>
                         </div>
-                        <div className="flex justify-center my-2">
+                        <div className="flex flex-col items-center my-2">
                           <PlayerPhotoAvatar
                             player={star}
                             className="w-16 h-16 rounded-xl border border-white/25 shadow-lg"
                           />
+                          <div className="font-display font-bold text-xs sm:text-sm text-white text-center truncate w-full mt-1.5 leading-tight">
+                            {star.name}
+                          </div>
                         </div>
-                        <div className="text-[11px] text-slate-300 text-center truncate mt-1">
+                        <div className="text-[11px] text-slate-300 text-center truncate mt-0.5">
                           {star.nationality} · {star.club}
                         </div>
                       </div>
@@ -1540,18 +1559,19 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                           OVR {star.rating}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex flex-col items-center text-center">
                         <PlayerPhotoAvatar
                           player={star}
-                          className="w-13 h-13 rounded-xl border border-white/20"
+                          className="w-14 h-14 rounded-xl border border-white/20 shadow-md"
                           showPositionBadge={true}
                         />
-                        <div className="min-w-0">
-                          <div className="text-[11px] text-slate-300 font-semibold truncate">
-                            {star.position} · {star.nationality}
-                          </div>
-                          <div className="text-[10px] text-slate-400 truncate">{star.club}</div>
+                        <div className="font-display font-bold text-xs sm:text-sm text-white truncate w-full mt-1.5 leading-tight">
+                          {star.name}
                         </div>
+                        <div className="text-[11px] text-slate-300 font-semibold truncate w-full mt-0.5">
+                          {star.position} · {star.nationality}
+                        </div>
+                        <div className="text-[10px] text-slate-400 truncate w-full">{star.club}</div>
                       </div>
                     </div>
 
