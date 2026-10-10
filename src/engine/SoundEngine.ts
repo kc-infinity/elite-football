@@ -364,6 +364,68 @@ class SoundEngineService {
       osc.stop(now + idx * 0.09 + 0.6);
     });
   }
+
+  public playSpinBuildup() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const vol = this.settings.masterVolume * this.settings.sfxVolume * 0.16;
+
+    // Rising synth sweep for spin anticipation
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(140, now);
+    osc.frequency.exponentialRampToValueAtTime(680, now + 0.75);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(400, now);
+    filter.frequency.exponentialRampToValueAtTime(2400, now + 0.75);
+
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(vol, now + 0.2);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.82);
+  }
+
+  public playCardRevealFlare() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const vol = this.settings.masterVolume * this.settings.sfxVolume * 0.22;
+
+    // Deep sub impact + shimmering high chord
+    const sub = ctx.createOscillator();
+    const subGain = ctx.createGain();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(120, now);
+    sub.frequency.exponentialRampToValueAtTime(36, now + 0.45);
+    subGain.gain.setValueAtTime(vol * 1.4, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+    sub.connect(subGain);
+    subGain.connect(ctx.destination);
+    sub.start(now);
+    sub.stop(now + 0.52);
+
+    [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + i * 0.04);
+      g.gain.setValueAtTime(vol * 0.7, now + i * 0.04);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
+      osc.connect(g);
+      g.connect(ctx.destination);
+      osc.start(now + i * 0.04);
+      osc.stop(now + 0.8);
+    });
+  }
 }
 
 export const SoundEngine = new SoundEngineService();

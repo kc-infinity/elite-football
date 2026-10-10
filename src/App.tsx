@@ -976,7 +976,7 @@ export default function App() {
                 : ''
             }`}
           >
-            Player Store ({PLAYERS_DB.length})
+            Player Cards ({PLAYERS_DB.length})
           </button>
           <button
             onClick={() => navigateTo('spin_roulette')}
@@ -984,7 +984,7 @@ export default function App() {
               screen === 'spin_roulette' ? 'text-[#F59E0B] font-semibold' : 'text-[#F59E0B]'
             }`}
           >
-            50-Star Spin
+            Spin / Draw
           </button>
           <button
             onClick={() => navigateTo('my_team')}
@@ -1050,7 +1050,7 @@ export default function App() {
             screen === 'transfer_market' ? 'bg-[#F59E0B] text-[#070A0E]' : 'text-slate-300'
           }`}
         >
-          Player Store ({PLAYERS_DB.length})
+          Player Cards ({PLAYERS_DB.length})
         </button>
         <button
           onClick={() => navigateTo('spin_roulette')}
@@ -1058,7 +1058,7 @@ export default function App() {
             screen === 'spin_roulette' ? 'bg-[#F59E0B] text-[#070A0E]' : 'text-[#F59E0B]'
           }`}
         >
-          50-Star Spin (500K)
+          Spin / Draw
         </button>
         <button
           onClick={() => navigateTo('my_team')}
@@ -1179,16 +1179,16 @@ export default function App() {
 
                     <button
                       onClick={() => navigateTo('transfer_market')}
-                      className="py-3 px-4 bg-[#111722]/90 hover:bg-[#192231] border border-[#F59E0B]/40 rounded-xl font-display font-semibold text-xs text-[#F59E0B] transition-colors whitespace-nowrap"
+                      className="py-3 px-4 bg-[#111722]/90 hover:bg-[#192231] border border-[#F59E0B]/40 rounded-xl font-display font-semibold text-xs text-[#F59E0B] transition-colors whitespace-nowrap cursor-pointer"
                     >
-                      PLAYER STORE ({PLAYERS_DB.length})
+                      PLAYER CARDS ({PLAYERS_DB.length})
                     </button>
 
                     <button
                       onClick={() => navigateTo('spin_roulette')}
                       className="py-3 px-4 bg-gradient-to-r from-[#F59E0B]/20 to-[#F59E0B]/10 hover:from-[#F59E0B] hover:to-[#D97706] border border-[#F59E0B] rounded-xl font-display font-bold text-xs text-[#F59E0B] hover:text-[#070A0E] transition-all whitespace-nowrap cursor-pointer"
                     >
-                      50-STAR SPIN (500K)
+                      SPIN / DRAW CARDS
                     </button>
 
                     <button

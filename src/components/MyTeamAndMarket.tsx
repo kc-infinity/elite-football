@@ -36,7 +36,57 @@ import { SoundEngine } from '../engine/SoundEngine';
 import { FriendRoomService } from '../engine/FriendRoomService';
 import { OpponentSquadInfo, OpponentSquadPopup } from './OpponentSquadPopup';
 import { EFootballPitchPlayerCard, PlayerPhotoAvatar } from './PlayerPhotoAvatar';
+import { EFootballCardOpeningModal, EFootballPlayerCard } from './EFootballPlayerCard';
 import packShowcaseImg from '../assets/images/transfer_pack_showcase_1791305671660.jpg';
+
+interface SpinDrawTier {
+  id: string;
+  name: string;
+  subtitle: string;
+  costCoins: number;
+  minRarity: PlayerRarity;
+  accentColor: string;
+  badgeText: string;
+}
+
+const SPIN_DRAW_TIERS: SpinDrawTier[] = [
+  {
+    id: 'spin_standard_10k',
+    name: 'Standard Star Spin Draw',
+    subtitle: 'Draw from all 56 World Cup Stars (OVR 85–98)',
+    costCoins: 10000,
+    minRarity: 'Common',
+    accentColor: '#38BDF8',
+    badgeText: '10,000 COINS · ALL STARS',
+  },
+  {
+    id: 'spin_highlight_25k',
+    name: 'Highlight & Show Time Draw',
+    subtitle: 'Guaranteed Elite, World Class, or Legendary Card (OVR 88+)',
+    costCoins: 25000,
+    minRarity: 'Elite',
+    accentColor: '#A855F7',
+    badgeText: '25,000 COINS · ELITE+',
+  },
+  {
+    id: 'spin_epic_50k',
+    name: 'Epic & Show Time Legend Draw',
+    subtitle: 'Guaranteed World Class or Legendary Icon (OVR 91–98)',
+    costCoins: 50000,
+    minRarity: 'World Class',
+    accentColor: '#10B981',
+    badgeText: '50,000 COINS · WORLD CLASS+',
+  },
+  {
+    id: 'spin_mega_500k',
+    name: '50-Star Mega Legend Roulette',
+    subtitle: 'Guaranteed Unowned Top 50 Football Superstar & Icon',
+    costCoins: SPIN_COST_COINS,
+    minRarity: 'World Class',
+    accentColor: '#F59E0B',
+    badgeText: '500,000 COINS · TOP 50 UNOWNED',
+  },
+];
 
 interface MyTeamAndMarketProps {
   initialSection: 'my_team' | 'transfer_market' | 'packs' | 'spin_roulette';
@@ -120,6 +170,7 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
   // Market filters
   const [rarityFilter, setRarityFilter] = useState<'All' | PlayerRarity>('All');
   const [posFilter, setPosFilter] = useState<'All' | PositionCode>('All');
+  const [ownershipFilter, setOwnershipFilter] = useState<'all' | 'owned' | 'available'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Tactics state
@@ -127,11 +178,21 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
   const [passingStyle, setPassingStyle] = useState(userTeam.tactics.passingStyle);
   const [defensiveLine, setDefensiveLine] = useState(userTeam.tactics.defensiveLine);
 
-  // Pack reveal modal state
+  // eFootball Card-Opening Walkout / Inspection Modal state
   const [openingPack, setOpeningPack] = useState<PackDefinition | null>(null);
   const [revealedPlayer, setRevealedPlayer] = useState<FootballPlayer | null>(null);
+  const [cardModalState, setCardModalState] = useState<{
+    player: FootballPlayer;
+    sourceTitle: string;
+    sourceSubtitle: string;
+    skipAnimation: boolean;
+    canSpinAgain?: boolean;
+    spinAgainLabel?: string;
+    onSpinAgain?: () => void;
+  } | null>(null);
 
-  // 50-Star Roulette Spin state
+  // Spin / Draw & 50-Star Roulette state
+  const [selectedSpinTierId, setSelectedSpinTierId] = useState<string>('spin_epic_50k');
   const [isSpinningRoulette, setIsSpinningRoulette] = useState(false);
   const [rouletteHighlightIndex, setRouletteHighlightIndex] = useState<number>(0);
   const [rouletteWinner, setRouletteWinner] = useState<FootballPlayer | null>(null);
@@ -141,60 +202,94 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
     setSection(initialSection);
   }, [initialSection]);
 
-  const handleStartRouletteSpin = () => {
-    if (isSpinningRoulette || coins < SPIN_COST_COINS) return;
-    const pool = TOP_50_SPIN_PLAYERS;
+  const activeSpinTier =
+    SPIN_DRAW_TIERS.find((t) => t.id === selectedSpinTierId) || SPIN_DRAW_TIERS[2];
+
+  const handlePurchasePlayerWithReveal = (player: FootballPlayer) => {
+    if (coins < player.price || unlockedPlayerIds.includes(player.id)) return;
+    onBuyPlayer(player);
+    setCardModalState({
+      player,
+      sourceTitle: 'EFOOTBALL TRANSFER SIGNING',
+      sourceSubtitle: `Purchased for ${player.price.toLocaleString()} Coins`,
+      skipAnimation: false,
+      canSpinAgain: false,
+    });
+  };
+
+  const handleStartRouletteSpin = (tierOverride?: SpinDrawTier) => {
+    const tier = tierOverride || activeSpinTier;
+    if (isSpinningRoulette || coins < tier.costCoins) return;
+
+    const rarityOrder: PlayerRarity[] = ['Common', 'Rare', 'Elite', 'World Class', 'Legendary'];
+    const minIdx = rarityOrder.indexOf(tier.minRarity);
+    const basePool =
+      tier.id === 'spin_mega_500k'
+        ? TOP_50_SPIN_PLAYERS
+        : TOP_50_SPIN_PLAYERS.filter((p) => rarityOrder.indexOf(p.rarity) >= minIdx);
+    const pool = basePool.length > 0 ? basePool : TOP_50_SPIN_PLAYERS;
     if (!pool.length) return;
 
-    // Prefer unowned stars from the top 50 so spins feel super rewarding; fallback to full 50 pool
+    // Prefer unowned stars so spins feel super rewarding; fallback to full pool
     const unownedPool = pool.filter((p) => !unlockedPlayerIds.includes(p.id));
     const candidatePool = unownedPool.length > 0 ? unownedPool : pool;
     const chosen = candidatePool[Math.floor(Math.random() * candidatePool.length)] || pool[0];
-    const targetIdx = Math.max(0, pool.findIndex((p) => p.id === chosen.id));
+    const targetIdx = Math.max(0, TOP_50_SPIN_PLAYERS.findIndex((p) => p.id === chosen.id));
 
     setIsSpinningRoulette(true);
     setRouletteWinner(null);
+    setCardModalState(null);
     SoundEngine.playUIClick();
 
-    const totalSteps = 32 + targetIdx;
+    const displayPoolLen = TOP_50_SPIN_PLAYERS.length;
+    const totalSteps = 26 + (targetIdx % displayPoolLen);
     let step = 0;
 
     const tick = () => {
       step += 1;
-      const currentIdx = step % pool.length;
+      const currentIdx = step % displayPoolLen;
       setRouletteHighlightIndex(currentIdx);
       SoundEngine.playUIClick();
 
       if (step < totalSteps) {
         const progress = step / totalSteps;
-        const delay = Math.round(35 + Math.pow(progress, 2.3) * 210);
+        const delay = Math.round(32 + Math.pow(progress, 2.2) * 185);
         setTimeout(tick, delay);
       } else {
         setRouletteHighlightIndex(targetIdx);
         setIsSpinningRoulette(false);
         setRouletteWinner(chosen);
         setSpinHistory((prev) => [chosen, ...prev.slice(0, 7)]);
-        SoundEngine.playPackOpen();
         if (onSpinRoulette) {
-          onSpinRoulette(SPIN_COST_COINS, chosen);
+          onSpinRoulette(tier.costCoins, chosen);
         } else {
           onOpenPack(
             {
-              id: 'roulette_50_spin',
-              name: '50-Star Legend Roulette',
-              price: SPIN_COST_COINS,
-              guaranteedRarity: 'World Class',
-              description: 'Top 50 Football Stars Roulette Spin',
-              accentColor: '#F59E0B',
-              oddsText: '100% Top 50 World Star',
+              id: tier.id,
+              name: tier.name,
+              price: tier.costCoins,
+              guaranteedRarity: tier.minRarity,
+              description: tier.subtitle,
+              accentColor: tier.accentColor,
+              oddsText: tier.badgeText,
             },
             chosen
           );
         }
+        // Trigger smooth, exciting eFootball Card-Opening Walkout Reveal Modal!
+        setCardModalState({
+          player: chosen,
+          sourceTitle: tier.name.toUpperCase(),
+          sourceSubtitle: `${tier.costCoins.toLocaleString()} Coins Spin Draw`,
+          skipAnimation: false,
+          canSpinAgain: coins - tier.costCoins >= tier.costCoins,
+          spinAgainLabel: `SPIN AGAIN (${tier.costCoins.toLocaleString()})`,
+          onSpinAgain: () => handleStartRouletteSpin(tier),
+        });
       }
     };
 
-    setTimeout(tick, 45);
+    setTimeout(tick, 40);
   };
 
   const handleSwapPlayers = (idxA: number, idxB: number) => {
@@ -228,7 +323,6 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
 
   const handleTriggerPackOpen = (pack: PackDefinition) => {
     if (coins < pack.price) return;
-    SoundEngine.playPackOpen();
     setOpeningPack(pack);
 
     // Filter pool by guaranteed rarity or higher
@@ -239,9 +333,20 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
 
     setRevealedPlayer(pulled);
     onOpenPack(pack, pulled);
+    setCardModalState({
+      player: pulled,
+      sourceTitle: `${pack.name.toUpperCase()} WALKOUT`,
+      sourceSubtitle: `${pack.oddsText} · Guaranteed ${pack.guaranteedRarity}+`,
+      skipAnimation: false,
+      canSpinAgain: coins - pack.price >= pack.price,
+      spinAgainLabel: `OPEN AGAIN (${pack.price.toLocaleString()})`,
+      onSpinAgain: () => handleTriggerPackOpen(pack),
+    });
   };
 
   const filteredMarketPlayers = PLAYERS_DB.filter((p) => {
+    if (ownershipFilter === 'owned' && !unlockedPlayerIds.includes(p.id)) return false;
+    if (ownershipFilter === 'available' && unlockedPlayerIds.includes(p.id)) return false;
     if (rarityFilter !== 'All' && p.rarity !== rarityFilter) return false;
     if (posFilter !== 'All' && p.position !== posFilter) return false;
     if (
@@ -323,7 +428,7 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
-              50-Star Spin (500K)
+              Spin / Draw Cards
             </button>
             <button
               onClick={() => {
@@ -673,15 +778,15 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                               </div>
                               <button
                                 disabled={!canAfford}
-                                onClick={() => onBuyPlayer(star)}
-                                className={`w-full py-2 rounded-lg font-display font-bold text-xs transition-colors flex items-center justify-center gap-1.5 ${
+                                onClick={() => handlePurchasePlayerWithReveal(star)}
+                                className={`w-full py-2 rounded-lg font-display font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
                                   canAfford
                                     ? 'bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E]'
                                     : 'bg-white/5 text-slate-500 cursor-not-allowed'
                                 }`}
                               >
                                 <Coins className="w-3.5 h-3.5" />
-                                UNLOCK ({star.price.toLocaleString()} COINS)
+                                UNLOCK CARD ({star.price.toLocaleString()} COINS)
                               </button>
                             </div>
                           );
@@ -922,229 +1027,197 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
           </div>
 
           {/* Filter Bar */}
-          <div className="bg-[#111722] border border-white/10 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {(['All', 'Legendary', 'World Class', 'Elite', 'Rare', 'Common'] as const).map((r) => (
-                <button
-                  key={r}
-                  onClick={() => setRarityFilter(r)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
-                    rarityFilter === r
-                      ? 'bg-[#10B981] text-[#070A0E] font-bold'
-                      : 'bg-[#070A0E] text-slate-300 hover:text-white'
-                  }`}
-                >
-                  {r}
-                </button>
-              ))}
+          <div className="bg-[#111722] border border-white/10 rounded-2xl p-5 flex flex-col gap-4">
+            {/* Ownership Filter Tabs (All Cards / Purchased eFootball Cards / Available to Buy) */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3.5">
+              <div className="flex flex-wrap items-center gap-2">
+                {(
+                  [
+                    { id: 'all', label: `All eFootball Cards (${PLAYERS_DB.length})` },
+                    { id: 'owned', label: `My Purchased / Club Cards (${unlockedPlayerIds.length})` },
+                    {
+                      id: 'available',
+                      label: `Available to Sign (${PLAYERS_DB.length - unlockedPlayerIds.length})`,
+                    },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => {
+                      SoundEngine.playUIClick();
+                      setOwnershipFilter(tab.id);
+                    }}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-display font-bold transition-all cursor-pointer ${
+                      ownershipFilter === tab.id
+                        ? 'bg-[#F59E0B] text-[#070A0E] shadow-md'
+                        : 'bg-[#070A0E] text-slate-300 border border-white/10 hover:border-white/30'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  SoundEngine.playUIClick();
+                  setSection('spin_roulette');
+                }}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-[#070A0E] font-display font-bold text-xs flex items-center gap-1.5 shadow-lg cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                SPIN / DRAW PLAYER CARDS
+              </button>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <select
-                value={posFilter}
-                onChange={(e) => setPosFilter(e.target.value as typeof posFilter)}
-                className="bg-[#070A0E] border border-white/15 rounded-lg px-3 py-2 text-xs text-white font-mono"
-              >
-                <option value="All">All Positions</option>
-                <option value="ST">ST (Striker)</option>
-                <option value="LW">LW (Left Wing)</option>
-                <option value="RW">RW (Right Wing)</option>
-                <option value="CAM">CAM (Attacking Mid)</option>
-                <option value="CM">CM (Central Mid)</option>
-                <option value="CDM">CDM (Defensive Mid)</option>
-                <option value="LB">LB (Left Back)</option>
-                <option value="CB">CB (Center Back)</option>
-                <option value="RB">RB (Right Back)</option>
-                <option value="GK">GK (Goalkeeper)</option>
-              </select>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(['All', 'Legendary', 'World Class', 'Elite', 'Rare', 'Common'] as const).map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setRarityFilter(r)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap cursor-pointer ${
+                      rarityFilter === r
+                        ? 'bg-[#10B981] text-[#070A0E] font-bold'
+                        : 'bg-[#070A0E] text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
 
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search footballer or nation..."
-                  className="bg-[#070A0E] border border-white/15 rounded-lg pl-8 pr-3 py-2 text-xs text-white placeholder:text-slate-500 w-56"
-                />
+              <div className="flex flex-wrap items-center gap-3">
+                <select
+                  value={posFilter}
+                  onChange={(e) => setPosFilter(e.target.value as typeof posFilter)}
+                  className="bg-[#070A0E] border border-white/15 rounded-lg px-3 py-2 text-xs text-white font-mono"
+                >
+                  <option value="All">All Positions</option>
+                  <option value="ST">ST (Striker)</option>
+                  <option value="LW">LW (Left Wing)</option>
+                  <option value="RW">RW (Right Wing)</option>
+                  <option value="CAM">CAM (Attacking Mid)</option>
+                  <option value="CM">CM (Central Mid)</option>
+                  <option value="CDM">CDM (Defensive Mid)</option>
+                  <option value="LB">LB (Left Back)</option>
+                  <option value="CB">CB (Center Back)</option>
+                  <option value="RB">RB (Right Back)</option>
+                  <option value="GK">GK (Goalkeeper)</option>
+                </select>
+
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search footballer or nation..."
+                    className="bg-[#070A0E] border border-white/15 rounded-lg pl-8 pr-3 py-2 text-xs text-white placeholder:text-slate-500 w-56"
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Player Cards Grid */}
+          {/* Authentic eFootball Foil Player Cards Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {filteredMarketPlayers.map((player) => {
               const isOwned = unlockedPlayerIds.includes(player.id);
+              const isInStartingXI = userSquad.slice(0, 11).some((s) => s.id === player.id);
+              const isLeadStar = userSquad[9]?.id === player.id;
               const canAfford = coins >= player.price;
-              const accent = RARITY_COLORS[player.rarity];
 
               return (
-                <div
+                <EFootballPlayerCard
                   key={player.id}
-                  className="bg-[#111722] border rounded-2xl p-5 flex flex-col justify-between transition-all hover:-translate-y-0.5"
-                  style={{ borderColor: `${accent}45` }}
-                >
-                  <div>
-                    {/* Top Row: Rating, Position, Realistic Player Photo & Name Below Image */}
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <div
-                          className="font-mono text-3xl font-bold leading-none tabular-nums"
-                          style={{ color: accent }}
-                        >
-                          {player.rating}
+                  player={player}
+                  isOwned={isOwned}
+                  isLeadStar={isLeadStar}
+                  isInStartingXI={isInStartingXI}
+                  onInspect={(p) =>
+                    setCardModalState({
+                      player: p,
+                      sourceTitle: 'EFOOTBALL PLAYER CARD SHOWCASE',
+                      sourceSubtitle: `${p.club} · ${p.nationality}`,
+                      skipAnimation: true,
+                    })
+                  }
+                  footerSlot={
+                    isOwned ? (
+                      isLeadStar ? (
+                        <div className="w-full py-2.5 bg-[#10B981]/20 border border-[#10B981] rounded-xl text-center font-mono text-xs text-[#10B981] font-bold flex items-center justify-center gap-1.5">
+                          <Check className="w-4 h-4" /> ACTIVE LEAD STAR (YOU)
                         </div>
-                        <div className="font-mono text-xs font-bold text-white mt-1">
-                          {player.position}
-                        </div>
-                        <div className="text-[11px] font-semibold mt-1" style={{ color: accent }}>
-                          {player.rarity}
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-center">
-                        <PlayerPhotoAvatar
-                          player={player}
-                          className="w-18 h-18 rounded-2xl border-2 shadow-lg"
-                        />
-                        <div className="font-display font-bold text-sm text-white text-center mt-2 leading-tight">
-                          {player.name}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs font-mono font-bold text-white">
-                          #{player.number}
-                        </div>
-                        <div className="text-[11px] text-slate-400 mt-1">
-                          {player.nationality}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Club & Role Info */}
-                    <div className="border-y border-white/10 py-2.5 mb-3 flex items-center justify-between text-xs">
-                      <span className="text-slate-300 font-medium truncate">{player.club}</span>
-                      <span className="font-mono text-[11px] text-[#10B981]">
-                        {isOwned ? 'IN SQUAD POOL' : 'AVAILABLE'}
-                      </span>
-                    </div>
-
-                    {/* 10 Attributes Matrix */}
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-xs mb-5 tabular-nums">
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">PAC</span>
-                        <span className="text-white font-semibold">{player.attributes.pace}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">DRI</span>
-                        <span className="text-white font-semibold">{player.attributes.dribbling}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">SHO</span>
-                        <span className="text-white font-semibold">{player.attributes.shooting}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">DEF</span>
-                        <span className="text-white font-semibold">{player.attributes.defending}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">PAS</span>
-                        <span className="text-white font-semibold">{player.attributes.passing}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">PHY</span>
-                        <span className="text-white font-semibold">{player.attributes.physical}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">CRV</span>
-                        <span className="text-[#F59E0B] font-semibold">{player.attributes.curve}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">SKL</span>
-                        <span className="text-[#38BDF8] font-semibold">{player.attributes.skill}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">STA</span>
-                        <span className="text-white font-semibold">{player.attributes.stamina}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">REA</span>
-                        <span className="text-white font-semibold">{player.attributes.reactions}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Buy / Owned Button (Coins or App Payment Checkout) */}
-                  {isOwned ? (
-                    userSquad[9]?.id === player.id ? (
-                      <div className="w-full py-2.5 bg-[#10B981]/20 border border-[#10B981] rounded-lg text-center font-mono text-xs text-[#10B981] font-bold flex items-center justify-center gap-1.5">
-                        <Check className="w-4 h-4" /> ACTIVE LEAD STAR (YOU)
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setSelectedSwapIndex(9);
-                          handleAssignUnlockedPlayerToSlot(player);
-                        }}
-                        className="w-full py-2.5 bg-white/10 hover:bg-[#10B981] text-white hover:text-[#070A0E] border border-white/15 rounded-lg font-display font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <Check className="w-4 h-4" /> SET AS LEAD STAR (YOU)
-                      </button>
-                    )
-                  ) : (
-                    <div className="space-y-2">
-                      <button
-                        disabled={!canAfford}
-                        onClick={() => onBuyPlayer(player)}
-                        className={`w-full py-2.5 rounded-lg font-display font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer ${
-                          canAfford
-                            ? 'bg-[#10B981] hover:bg-[#059669] text-[#070A0E]'
-                            : 'bg-white/5 text-slate-500 cursor-not-allowed'
-                        }`}
-                      >
-                        <Coins className="w-3.5 h-3.5" />
-                        BUY ({player.price.toLocaleString()} COINS)
-                      </button>
-
-                      {onTriggerPaymentCheckout && (
+                      ) : (
                         <button
                           onClick={() => {
-                            SoundEngine.playUIClick();
-                            const usd =
-                              player.rating >= 95
-                                ? 6.99
-                                : player.rating >= 92
-                                ? 4.99
-                                : player.rating >= 89
-                                ? 2.99
-                                : 1.99;
-                            onTriggerPaymentCheckout({
-                              itemType: 'player',
-                              itemId: player.id,
-                              itemName: `${player.name} (${player.rating} OVR)`,
-                              subtitle: `${player.nationality} · ${player.position} · ${player.club}`,
-                              amountUsd: usd,
-                              coinsAdded: 0,
-                              playerToUnlock: player,
-                            });
+                            setSelectedSwapIndex(9);
+                            handleAssignUnlockedPlayerToSlot(player);
                           }}
-                          className="w-full py-2 rounded-lg bg-[#070A0E] hover:bg-[#192231] border border-[#38BDF8]/40 text-[#38BDF8] font-display font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                          className="w-full py-2.5 bg-white/10 hover:bg-[#10B981] text-white hover:text-[#070A0E] border border-white/15 rounded-xl font-display font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                         >
-                          <CreditCard className="w-3.5 h-3.5" />
-                          INSTANT BUY ($
-                          {(player.rating >= 95
-                            ? 6.99
-                            : player.rating >= 92
-                            ? 4.99
-                            : player.rating >= 89
-                            ? 2.99
-                            : 1.99
-                          ).toFixed(2)}
-                          )
+                          <Check className="w-4 h-4" /> EQUIP AS LEAD STAR (YOU)
                         </button>
-                      )}
-                    </div>
-                  )}
-                </div>
+                      )
+                    ) : (
+                      <div className="space-y-2">
+                        <button
+                          disabled={!canAfford}
+                          onClick={() => handlePurchasePlayerWithReveal(player)}
+                          className={`w-full py-2.5 rounded-xl font-display font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer ${
+                            canAfford
+                              ? 'bg-[#10B981] hover:bg-[#059669] text-[#070A0E] shadow-md'
+                              : 'bg-white/5 text-slate-500 cursor-not-allowed'
+                          }`}
+                        >
+                          <Coins className="w-3.5 h-3.5" />
+                          SIGN CARD ({player.price.toLocaleString()} COINS)
+                        </button>
+
+                        {onTriggerPaymentCheckout && (
+                          <button
+                            onClick={() => {
+                              SoundEngine.playUIClick();
+                              const usd =
+                                player.rating >= 95
+                                  ? 6.99
+                                  : player.rating >= 92
+                                  ? 4.99
+                                  : player.rating >= 89
+                                  ? 2.99
+                                  : 1.99;
+                              onTriggerPaymentCheckout({
+                                itemType: 'player',
+                                itemId: player.id,
+                                itemName: `${player.name} (${player.rating} OVR)`,
+                                subtitle: `${player.nationality} · ${player.position} · ${player.club}`,
+                                amountUsd: usd,
+                                coinsAdded: 0,
+                                playerToUnlock: player,
+                              });
+                            }}
+                            className="w-full py-2 rounded-xl bg-[#070A0E] hover:bg-[#192231] border border-[#38BDF8]/40 text-[#38BDF8] font-display font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                            INSTANT SIGN ($
+                            {(player.rating >= 95
+                              ? 6.99
+                              : player.rating >= 92
+                              ? 4.99
+                              : player.rating >= 89
+                              ? 2.99
+                              : 1.99
+                            ).toFixed(2)}
+                            )
+                          </button>
+                        )}
+                      </div>
+                    )
+                  }
+                />
               );
             })}
           </div>
@@ -1238,93 +1311,26 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
             })}
           </div>
 
-          {/* PACK OPENING ANIMATION MODAL */}
-          {openingPack && revealedPlayer && (
-            <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xl flex items-center justify-center p-6">
-              <div
-                className="bg-[#111722] border-2 rounded-2xl max-w-md w-full p-8 text-center shadow-2xl animate-in zoom-in-95 duration-300"
-                style={{ borderColor: RARITY_COLORS[revealedPlayer.rarity] }}
-              >
-                <div
-                  className="text-xs font-mono font-bold tracking-widest mb-2"
-                  style={{ color: RARITY_COLORS[revealedPlayer.rarity] }}
-                >
-                  {openingPack.name.toUpperCase()} WALKOUT REVEAL!
-                </div>
-                <div className="my-4 flex flex-col items-center">
-                  <PlayerPhotoAvatar
-                    player={revealedPlayer}
-                    className="w-24 h-24 rounded-2xl border-2 border-[#F59E0B] shadow-2xl"
-                    showPositionBadge={true}
-                    showRatingBadge={true}
-                  />
-                </div>
-                <div className="text-sm font-mono text-white font-semibold mb-1">
-                  {revealedPlayer.position} · {revealedPlayer.nationality} · {revealedPlayer.rarity}
-                </div>
-                <h2 className="font-display text-3xl font-bold text-white mb-2">
-                  {revealedPlayer.name}
-                </h2>
-                <p className="text-xs text-slate-400 mb-6">{revealedPlayer.club}</p>
-
-                <div className="grid grid-cols-3 gap-2 bg-[#070A0E] border border-white/10 rounded-xl p-4 font-mono text-xs mb-6 tabular-nums">
-                  <div>
-                    <span className="text-slate-400 block">PAC</span>
-                    <span className="text-white font-bold text-sm">{revealedPlayer.attributes.pace}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block">SHO</span>
-                    <span className="text-white font-bold text-sm">{revealedPlayer.attributes.shooting}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block">DRI</span>
-                    <span className="text-white font-bold text-sm">{revealedPlayer.attributes.dribbling}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block">PAS</span>
-                    <span className="text-white font-bold text-sm">{revealedPlayer.attributes.passing}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block">CRV</span>
-                    <span className="text-[#F59E0B] font-bold text-sm">{revealedPlayer.attributes.curve}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block">SKL</span>
-                    <span className="text-[#38BDF8] font-bold text-sm">{revealedPlayer.attributes.skill}</span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => {
-                    setOpeningPack(null);
-                    setRevealedPlayer(null);
-                  }}
-                  className="w-full py-3 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-sm rounded-lg transition-colors"
-                >
-                  SEND TO MY SQUAD
-                </button>
-              </div>
-            </div>
-          )}
+          {/* SECTION 3 PACK OPENING uses the global EFootballCardOpeningModal below */}
         </div>
       )}
 
-      {/* SECTION 4: 50-STAR PLAYER SPIN / ROULETTE SYSTEM (500,000 COINS PER SPIN) */}
+      {/* SECTION 4: EFOOTBALL SPECIAL AGENT SPIN / DRAW & ROULETTE SYSTEM */}
       {section === 'spin_roulette' && (
         <div className="space-y-8">
-          {/* Main Roulette Spin Arena */}
+          {/* Main Spin / Draw Arena */}
           <div className="bg-gradient-to-b from-[#111722] to-[#0A0F18] border-2 border-[#F59E0B]/60 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/10 pb-5">
               <div>
                 <div className="text-xs font-mono text-[#F59E0B] font-bold flex items-center gap-2">
                   <Sparkles className="w-4 h-4" />
-                  OFFICIAL 50-STAR SUPERSTAR ROULETTE · {SPIN_COST_COINS.toLocaleString()} COINS PER SPIN
+                  OFFICIAL EFOOTBALL SPECIAL AGENT · SPIN & CARD DRAW SYSTEM
                 </div>
                 <h2 className="font-display text-2xl sm:text-3xl font-bold text-white mt-1">
-                  TOP 50 WORLD FOOTBALL STARS ROULETTE
+                  SPIN & DRAW EFOOTBALL SUPERSTAR CARDS
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl">
-                  Every spin costs <span className="text-[#F59E0B] font-mono font-bold">500,000 Coins</span> and guarantees one of the <span className="text-white font-semibold">50 Best Football Stars & Icons</span> (OVR 89–98). Won players are permanently unlocked and saved to your account!
+                  Select a Special Agent Spin Tier below, spend your Coins to spin the wheel, and experience the <span className="text-[#F59E0B] font-semibold">full eFootball Walkout Card Reveal</span>!
                 </p>
               </div>
 
@@ -1337,7 +1343,7 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                   </span>
                 </div>
 
-                {onTriggerPaymentCheckout && coins < SPIN_COST_COINS && (
+                {onTriggerPaymentCheckout && (
                   <button
                     onClick={() => {
                       SoundEngine.playUIClick();
@@ -1345,7 +1351,7 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                         itemType: 'coins',
                         itemId: 'coins_500k_spin',
                         itemName: '+500,000 Roulette Spin Coins',
-                        subtitle: 'Instant 500,000 Coins for the 50-Star Roulette Wheel',
+                        subtitle: 'Instant 500,000 Coins for the eFootball Spin / Draw Wheel',
                         amountUsd: 9.99,
                         coinsAdded: 500000,
                       });
@@ -1359,13 +1365,78 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
               </div>
             </div>
 
+            {/* 4 Selectable Spin / Draw Tiers (10K, 25K, 50K, 500K Coins) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              {SPIN_DRAW_TIERS.map((tier) => {
+                const isSelected = activeSpinTier.id === tier.id;
+                const affordable = coins >= tier.costCoins;
+                return (
+                  <div
+                    key={tier.id}
+                    onClick={() => {
+                      SoundEngine.playUIClick();
+                      setSelectedSpinTierId(tier.id);
+                    }}
+                    className={`p-4 rounded-2xl border-2 transition-all flex flex-col justify-between cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#192231] scale-[1.02] shadow-xl'
+                        : 'bg-[#070A0E]/90 hover:bg-[#111722] opacity-85 hover:opacity-100'
+                    }`}
+                    style={{
+                      borderColor: isSelected ? tier.accentColor : 'rgba(255,255,255,0.12)',
+                    }}
+                  >
+                    <div>
+                      <div
+                        className="text-[10px] font-mono font-extrabold uppercase tracking-wider mb-1"
+                        style={{ color: tier.accentColor }}
+                      >
+                        {tier.badgeText}
+                      </div>
+                      <div className="font-display font-bold text-base text-white leading-snug">
+                        {tier.name}
+                      </div>
+                      <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                        {tier.subtitle}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isSpinningRoulette || !affordable}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedSpinTierId(tier.id);
+                        handleStartRouletteSpin(tier);
+                      }}
+                      className={`mt-4 w-full py-2.5 rounded-xl font-display font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        affordable
+                          ? 'text-[#070A0E] shadow-md hover:brightness-110'
+                          : 'bg-white/5 text-slate-500 cursor-not-allowed'
+                      }`}
+                      style={
+                        affordable
+                          ? { backgroundColor: tier.accentColor }
+                          : undefined
+                      }
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      SPIN ({tier.costCoins.toLocaleString()} COINS)
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
             {/* Interactive Roulette Carousel Window (Displays 5 Cards Around Active Highlight Index) */}
             <div className="relative bg-[#070A0E] border-2 border-[#F59E0B]/50 rounded-2xl p-5 sm:p-6 overflow-hidden">
               {/* Top & Bottom Center Pointer Triangles */}
               <div className="flex justify-center mb-3">
                 <div className="px-3 py-1 rounded-full bg-[#F59E0B] text-[#070A0E] font-mono text-[11px] font-bold tracking-wider flex items-center gap-1.5 shadow-lg">
                   <Crown className="w-3.5 h-3.5" />
-                  {isSpinningRoulette ? 'SPINNING 50-STAR WHEEL...' : 'ROULETTE TARGET SELECTOR ▼'}
+                  {isSpinningRoulette
+                    ? `DRAWING FROM ${activeSpinTier.name.toUpperCase()}...`
+                    : `${activeSpinTier.name.toUpperCase()} TARGET SELECTOR ▼`}
                 </div>
               </div>
 
@@ -1426,22 +1497,22 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
               {/* Spin Action Button */}
               <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-4">
                 <button
-                  disabled={isSpinningRoulette || coins < SPIN_COST_COINS}
-                  onClick={handleStartRouletteSpin}
+                  disabled={isSpinningRoulette || coins < activeSpinTier.costCoins}
+                  onClick={() => handleStartRouletteSpin(activeSpinTier)}
                   className={`px-8 py-4 rounded-xl font-display font-bold text-base transition-all flex items-center justify-center gap-3 shadow-2xl cursor-pointer ${
                     isSpinningRoulette
                       ? 'bg-[#F59E0B]/50 text-[#070A0E] cursor-wait'
-                      : coins >= SPIN_COST_COINS
+                      : coins >= activeSpinTier.costCoins
                       ? 'bg-gradient-to-r from-[#F59E0B] via-[#FBBF24] to-[#F59E0B] hover:brightness-110 text-[#070A0E] scale-100 hover:scale-105'
                       : 'bg-white/10 text-slate-400 cursor-not-allowed'
                   }`}
                 >
                   <Sparkles className="w-5 h-5" />
                   {isSpinningRoulette
-                    ? 'SPINNING ROULETTE...'
-                    : coins >= SPIN_COST_COINS
-                    ? `SPIN ROULETTE WHEEL (${SPIN_COST_COINS.toLocaleString()} COINS)`
-                    : `NEED ${SPIN_COST_COINS.toLocaleString()} COINS TO SPIN (YOU HAVE ${coins.toLocaleString()})`}
+                    ? 'SPINNING & OPENING CARD...'
+                    : coins >= activeSpinTier.costCoins
+                    ? `SPIN & DRAW CARD (${activeSpinTier.costCoins.toLocaleString()} COINS)`
+                    : `NEED ${activeSpinTier.costCoins.toLocaleString()} COINS TO SPIN (YOU HAVE ${coins.toLocaleString()})`}
                 </button>
               </div>
             </div>
@@ -1453,21 +1524,26 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                 style={{ borderColor: RARITY_COLORS[rouletteWinner.rarity] }}
               >
                 <div className="flex items-center gap-5">
-                  <PlayerPhotoAvatar
-                    player={rouletteWinner}
-                    className="w-20 h-20 rounded-2xl border-2 border-[#F59E0B] shadow-2xl"
-                    showPositionBadge={true}
-                    showRatingBadge={true}
-                  />
+                  <div className="flex flex-col items-center">
+                    <PlayerPhotoAvatar
+                      player={rouletteWinner}
+                      className="w-20 h-20 rounded-2xl border-2 border-[#F59E0B] shadow-2xl"
+                      showPositionBadge={true}
+                      showRatingBadge={true}
+                    />
+                    <div className="font-display font-bold text-xs text-white mt-1.5 text-center">
+                      {rouletteWinner.name}
+                    </div>
+                  </div>
                   <div>
                     <div className="text-xs font-mono text-[#10B981] font-bold">
-                      ★ ROULETTE REWARD UNLOCKED & SAVED PERMANENTLY!
+                      ★ EFOOTBALL CARD UNLOCKED & SAVED PERMANENTLY!
                     </div>
                     <h3 className="font-display text-2xl sm:text-3xl font-bold text-white">
-                      {rouletteWinner.name}
+                      {rouletteWinner.name} ({rouletteWinner.rating} OVR · {rouletteWinner.position})
                     </h3>
                     <p className="text-xs text-slate-300">
-                      {rouletteWinner.nationality} · {rouletteWinner.club} · PAC{' '}
+                      {rouletteWinner.rarity} · {rouletteWinner.nationality} · {rouletteWinner.club} · PAC{' '}
                       {rouletteWinner.attributes.pace} · SHO {rouletteWinner.attributes.shooting} · DRI{' '}
                       {rouletteWinner.attributes.dribbling}
                     </p>
@@ -1475,6 +1551,22 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 shrink-0">
+                  <button
+                    onClick={() =>
+                      setCardModalState({
+                        player: rouletteWinner,
+                        sourceTitle: activeSpinTier.name.toUpperCase(),
+                        sourceSubtitle: 'Full eFootball Card Walkout Replay',
+                        skipAnimation: false,
+                        canSpinAgain: coins >= activeSpinTier.costCoins,
+                        spinAgainLabel: `SPIN AGAIN (${activeSpinTier.costCoins.toLocaleString()})`,
+                        onSpinAgain: () => handleStartRouletteSpin(activeSpinTier),
+                      })
+                    }
+                    className="px-4 py-3 bg-white/10 hover:bg-white/20 border border-white/15 text-white font-display font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                  >
+                    REPLAY WALKOUT
+                  </button>
                   <button
                     onClick={() => {
                       setSelectedSwapIndex(9);
@@ -1486,15 +1578,15 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                     PUT IN STARTING XI (LEAD STAR)
                   </button>
                   <button
-                    disabled={coins < SPIN_COST_COINS}
-                    onClick={handleStartRouletteSpin}
+                    disabled={coins < activeSpinTier.costCoins}
+                    onClick={() => handleStartRouletteSpin(activeSpinTier)}
                     className={`px-5 py-3 font-display font-bold text-xs rounded-xl transition-colors cursor-pointer ${
-                      coins >= SPIN_COST_COINS
+                      coins >= activeSpinTier.costCoins
                         ? 'bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E]'
                         : 'bg-white/10 text-slate-500 cursor-not-allowed'
                     }`}
                   >
-                    SPIN AGAIN (500K)
+                    SPIN AGAIN ({activeSpinTier.costCoins.toLocaleString()})
                   </button>
                 </div>
               </div>
@@ -1600,6 +1692,27 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
           opponent={scoutOpponentInfo}
         />
       )}
+
+      {/* EFOOTBALL MULTI-STAGE CARD-OPENING WALKOUT & CARD SHOWCASE MODAL */}
+      <EFootballCardOpeningModal
+        isOpen={Boolean(cardModalState)}
+        player={cardModalState?.player || null}
+        sourceTitle={cardModalState?.sourceTitle}
+        sourceSubtitle={cardModalState?.sourceSubtitle}
+        skipAnimation={cardModalState?.skipAnimation}
+        canSpinAgain={cardModalState?.canSpinAgain}
+        spinAgainLabel={cardModalState?.spinAgainLabel}
+        onSpinAgain={cardModalState?.onSpinAgain}
+        onEquipToSquad={(player) => {
+          setSelectedSwapIndex(9);
+          handleAssignUnlockedPlayerToSlot(player);
+        }}
+        onClose={() => {
+          setCardModalState(null);
+          setOpeningPack(null);
+          setRevealedPlayer(null);
+        }}
+      />
     </div>
   );
 };
