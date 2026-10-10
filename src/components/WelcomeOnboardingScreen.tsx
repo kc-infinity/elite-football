@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Check, ChevronRight, User } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Check, ChevronRight, ImagePlus, User } from 'lucide-react';
 import { FootballPlayer, TeamData } from '../data/gameDatabase';
+import { useAppIcon } from '../data/appIconStore';
 import { SoundEngine } from '../engine/SoundEngine';
 import heroStadiumImg from '../assets/images/hero_stadium_backdrop_1791305638088.jpg';
 
@@ -33,6 +34,8 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
   );
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const { iconUrl, uploadIconFile } = useAppIcon();
+  const iconFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleGoogleSignInClick = () => {
     SoundEngine.playUIClick();
@@ -90,7 +93,41 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
       <main className="relative z-10 w-full max-w-md">
         <div className="bg-[#111722]/95 backdrop-blur-2xl border border-white/15 rounded-3xl p-7 sm:p-9 shadow-2xl space-y-7 transition-all">
           {/* Brand Header */}
-          <div className="text-center space-y-2">
+          <div className="text-center space-y-2.5">
+            <div className="flex flex-col items-center">
+              <div
+                onClick={() => iconFileInputRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) uploadIconFile(file);
+                }}
+                title="Click or drop your custom icon image"
+                className="group relative w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-[#070A0E] border-2 border-[#F59E0B]/50 shadow-[0_0_35px_rgba(16,185,129,0.28)] flex items-center justify-center overflow-hidden cursor-pointer transition-transform hover:scale-105 mb-1"
+              >
+                <img
+                  src={iconUrl}
+                  alt="Football Elite App Icon"
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-contain p-1"
+                />
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 text-[10px] font-mono text-white">
+                  <ImagePlus className="w-4 h-4 text-[#10B981]" />
+                  <span>CHANGE ICON</span>
+                </div>
+              </div>
+              <input
+                ref={iconFileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadIconFile(file);
+                }}
+              />
+            </div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#10B981]/15 border border-[#10B981]/30 text-[#10B981] font-mono text-[11px] font-bold tracking-wider">
               ONLINE 1V1 & 11V11 MULTIPLAYER
             </div>

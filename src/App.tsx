@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Award,
   Check,
@@ -13,6 +13,7 @@ import {
   Copy,
   Eye,
   Globe,
+  ImagePlus,
   KeyRound,
   Moon,
   Play,
@@ -74,6 +75,7 @@ import {
   PaymentCheckoutItem,
   PaymentCheckoutModal,
 } from './components/OnlineMatchAndAuthModal';
+import { useAppIcon } from './data/appIconStore';
 import heroStadiumImg from './assets/images/hero_stadium_backdrop_1791305638088.jpg';
 
 type ActiveScreen =
@@ -93,6 +95,8 @@ type ActiveScreen =
   | 'settings';
 
 export default function App() {
+  const { iconUrl, isCustom: isCustomAppIcon, uploadIconFile, resetIcon } = useAppIcon();
+  const headerIconInputRef = useRef<HTMLInputElement | null>(null);
   const [screen, setScreen] = useState<ActiveScreen>(() => {
     const hasSession =
       Boolean(localStorage.getItem('fe_auth_token')) ||
@@ -948,14 +952,47 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#070A0E] text-[#F1F5F9] flex flex-col">
       {/* STRICT 3-ZONE TOP BAR CONTRACT */}
-      <header className="sticky top-0 z-30 flex items-center justify-between px-6 py-4 bg-[#070A0E]/90 backdrop-blur-md border-b border-white/10">
-        {/* Zone 1: Single text element wordmark */}
-        <button
-          onClick={() => navigateTo('home')}
-          className="font-display text-xl font-bold tracking-tight text-white text-left whitespace-nowrap shrink-0"
-        >
-          FOOTBALL ELITE
-        </button>
+      <header className="sticky top-0 z-30 flex items-center justify-between px-6 py-3.5 bg-[#070A0E]/90 backdrop-blur-md border-b border-white/10">
+        {/* Zone 1: Brand App Icon + Wordmark */}
+        <div className="flex items-center gap-3 shrink-0">
+          <div
+            onClick={() => headerIconInputRef.current?.click()}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              const file = e.dataTransfer.files?.[0];
+              if (file) uploadIconFile(file);
+            }}
+            title="Click or drag & drop your custom icon PNG"
+            className="group relative w-10 h-10 rounded-xl bg-[#111722] border border-[#F59E0B]/40 flex items-center justify-center overflow-hidden cursor-pointer shadow-md hover:border-[#10B981] transition-colors shrink-0"
+          >
+            <img
+              src={iconUrl}
+              alt="Football Elite Icon"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-contain p-0.5"
+            />
+            <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <ImagePlus className="w-3.5 h-3.5 text-[#10B981]" />
+            </div>
+          </div>
+          <input
+            ref={headerIconInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) uploadIconFile(file);
+            }}
+          />
+          <button
+            onClick={() => navigateTo('home')}
+            className="font-display text-xl font-bold tracking-tight text-white text-left whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            FOOTBALL ELITE
+          </button>
+        </div>
 
         {/* Zone 2: 5 single-line clean text navigation links */}
         <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-slate-300">
@@ -1114,13 +1151,56 @@ export default function App() {
               <div className="relative z-10 max-w-7xl mx-auto px-6 py-12 w-full grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
                 {/* Left 7 Cols: Brand Hero & Main Buttons */}
                 <div className="lg:col-span-7 space-y-6">
-                  <div className="text-xs font-mono text-[#10B981] tracking-widest">
-                    WORLD OF CHAMPIONS · 60 FPS 3D WEBGL ENGINE · KEYBOARD + MOUSE HYBRID
+                  <div className="flex items-center gap-4">
+                    <div
+                      onClick={() => headerIconInputRef.current?.click()}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const file = e.dataTransfer.files?.[0];
+                        if (file) uploadIconFile(file);
+                      }}
+                      title="Click or drop your custom icon image"
+                      className="group relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-[#111722]/90 border-2 border-[#F59E0B]/50 shadow-[0_0_30px_rgba(16,185,129,0.25)] flex items-center justify-center overflow-hidden cursor-pointer shrink-0 hover:scale-105 transition-transform"
+                    >
+                      <img
+                        src={iconUrl}
+                        alt="Football Elite App Icon"
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-contain p-1"
+                      />
+                      <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-0.5 text-[9px] font-mono text-white">
+                        <ImagePlus className="w-4 h-4 text-[#10B981]" />
+                        <span>SET ICON</span>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-mono text-[#10B981] tracking-widest">
+                          WORLD OF CHAMPIONS · 60 FPS 3D WEBGL ENGINE
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => headerIconInputRef.current?.click()}
+                          className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] font-mono text-slate-200 transition-colors cursor-pointer"
+                        >
+                          {isCustomAppIcon ? 'Change Custom Icon' : 'Upload Custom Icon PNG'}
+                        </button>
+                        {isCustomAppIcon && (
+                          <button
+                            type="button"
+                            onClick={resetIcon}
+                            className="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-[10px] font-mono text-rose-300 transition-colors cursor-pointer"
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                      <h1 className="font-display text-5xl sm:text-6xl font-bold tracking-tight text-white leading-none">
+                        FOOTBALL ELITE
+                      </h1>
+                    </div>
                   </div>
-
-                  <h1 className="font-display text-5xl sm:text-6xl font-bold tracking-tight text-white leading-none">
-                    FOOTBALL ELITE
-                  </h1>
 
                   <p className="font-display text-xl sm:text-2xl font-semibold text-[#F59E0B] tracking-wide">
                     PLAY. COMPETE. CONQUER.

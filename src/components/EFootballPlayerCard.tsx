@@ -11,6 +11,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { FootballPlayer, PlayerRarity } from '../data/gameDatabase';
+import { useAppIcon } from '../data/appIconStore';
 import { SoundEngine } from '../engine/SoundEngine';
 import { PlayerPhotoAvatar } from './PlayerPhotoAvatar';
 
@@ -115,6 +116,7 @@ export const EFootballPlayerCard: React.FC<EFootballPlayerCardProps> = ({
   onInspect,
   footerSlot,
 }) => {
+  const { iconUrl } = useAppIcon();
   const theme = EFOOTBALL_RARITY_THEMES[player.rarity] || EFOOTBALL_RARITY_THEMES.Rare;
   const starCount = player.rating >= 90 ? 5 : player.rating >= 85 ? 4 : 3;
 
@@ -152,16 +154,24 @@ export const EFootballPlayerCard: React.FC<EFootballPlayerCardProps> = ({
         <div>
           {/* Top Header Strip: Series Badge + Stars + Owned Pill */}
           <div className="flex items-center justify-between gap-1.5 mb-2.5">
-            <span
-              className="px-2 py-0.5 rounded text-[10px] font-mono font-extrabold tracking-wider uppercase border"
-              style={{
-                backgroundColor: `${theme.accent}22`,
-                borderColor: `${theme.accent}66`,
-                color: theme.secondary,
-              }}
-            >
-              {theme.badgeLabel}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <img
+                src={iconUrl}
+                alt="Crest"
+                referrerPolicy="no-referrer"
+                className="w-4 h-4 rounded-sm object-contain shrink-0"
+              />
+              <span
+                className="px-2 py-0.5 rounded text-[10px] font-mono font-extrabold tracking-wider uppercase border"
+                style={{
+                  backgroundColor: `${theme.accent}22`,
+                  borderColor: `${theme.accent}66`,
+                  color: theme.secondary,
+                }}
+              >
+                {theme.badgeLabel}
+              </span>
+            </div>
 
             <div className="flex items-center gap-0.5" title={`${starCount}-Star eFootball Card`}>
               {Array.from({ length: 5 }).map((_, i) => (
@@ -360,6 +370,7 @@ export const EFootballCardOpeningModal: React.FC<EFootballCardOpeningModalProps>
 }) => {
   const [stage, setStage] = useState<'spinning' | 'flare' | 'revealed'>('spinning');
   const [equippedSuccess, setEquippedSuccess] = useState(false);
+  const { iconUrl } = useAppIcon();
 
   useEffect(() => {
     if (!isOpen || !player) return;
@@ -422,14 +433,19 @@ export const EFootballCardOpeningModal: React.FC<EFootballCardOpeningModalProps>
               style={{ borderColor: theme.accent }}
             />
             <div
-              className="w-28 h-36 rounded-2xl border-2 flex flex-col items-center justify-center shadow-2xl animate-bounce"
+              className="w-28 h-36 rounded-2xl border-2 flex flex-col items-center justify-center shadow-2xl animate-bounce p-2"
               style={{
                 background: theme.bgGradient,
                 borderColor: theme.accent,
                 boxShadow: theme.borderGlow,
               }}
             >
-              <Sparkles className="w-10 h-10 mb-1.5 animate-spin" style={{ color: theme.accent }} />
+              <img
+                src={iconUrl}
+                alt="App Icon"
+                referrerPolicy="no-referrer"
+                className="w-14 h-14 object-contain mb-1.5 drop-shadow"
+              />
               <span className="font-mono text-[10px] font-bold text-white tracking-widest">
                 DRAWING...
               </span>
