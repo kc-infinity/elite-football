@@ -93,17 +93,21 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState(
-    account?.username || (currentUsername !== 'ChampionElite_10' ? currentUsername : '')
+    account?.username ||
+      (currentUsername && currentUsername !== 'ChampionElite_10' && !currentUsername.startsWith('Player_')
+        ? currentUsername
+        : '')
   );
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [infoMsg, setInfoMsg] = useState('');
 
   useEffect(() => {
     if (account) {
       setEmail(account.email || '');
-      setUsername(account.username || currentUsername);
+      setUsername(account.username || '');
     }
-  }, [account, currentUsername]);
+  }, [account]);
 
   if (!isOpen) return null;
 
@@ -115,6 +119,7 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
   ) => {
     setLoading(true);
     setErrorMsg('');
+    setInfoMsg('');
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -148,38 +153,44 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
     setErrorMsg('');
     setGoogleSignedIn(true);
     const trimmedName = username.trim();
-    if (trimmedName) {
+    if (trimmedName.length > 0) {
       const resolvedEmail =
         email.trim() && email.includes('@')
           ? email.trim().toLowerCase()
-          : `${trimmedName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'player'}@gmail.com`;
+          : `${trimmedName.toLowerCase().replace(/[^a-z0-9._-]/g, '') || 'player'}@gmail.com`;
       performLogin('google', resolvedEmail, trimmedName);
     } else {
-      setUsername('Player_' + Math.floor(100 + Math.random() * 900));
+      setInfoMsg('Google connected! Enter any username you want below, then click Sign In.');
     }
   };
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg('');
+    setInfoMsg('');
     const trimmedName = username.trim();
     if (!trimmedName) {
-      setErrorMsg('Please enter your Username below.');
+      setErrorMsg('Please enter any username you want in the Username field.');
       return;
     }
 
     const trimmedEmail = email.trim().toLowerCase();
-    const hasEmailInput = trimmedEmail.length > 0 || password.length > 0;
+    const trimmedPassword = password.trim();
+    const hasEmailInput = trimmedEmail.length > 0 || trimmedPassword.length > 0;
 
     if (hasEmailInput && !googleSignedIn) {
-      if (!trimmedEmail.includes('@')) {
-        setErrorMsg('Please enter a valid email address.');
+      if (!trimmedEmail) {
+        setErrorMsg('Please enter your email address.');
         return;
       }
-      if (password.length < 4) {
-        setErrorMsg('Password must be at least 4 characters.');
+      if (!trimmedPassword) {
+        setErrorMsg('Please enter your password.');
         return;
       }
-      performLogin('email', trimmedEmail, trimmedName, password);
+      const normalizedEmail = trimmedEmail.includes('@')
+        ? trimmedEmail
+        : `${trimmedEmail}@football-elite.app`;
+      performLogin('email', normalizedEmail, trimmedName, trimmedPassword);
       return;
     }
 
@@ -187,12 +198,12 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
       const resolvedEmail =
         trimmedEmail && trimmedEmail.includes('@')
           ? trimmedEmail
-          : `${trimmedName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'player'}@gmail.com`;
+          : `${trimmedName.toLowerCase().replace(/[^a-z0-9._-]/g, '') || 'player'}@gmail.com`;
       performLogin('google', resolvedEmail, trimmedName);
       return;
     }
 
-    setErrorMsg('Please sign in with Google or enter your Email + Password.');
+    setErrorMsg('Please choose Google Sign-In or enter your Email + Password.');
   };
 
   return (
@@ -201,10 +212,10 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
         <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-5">
           <div>
             <div className="text-[11px] font-mono text-[#10B981] font-bold">
-              PLAYER ACCOUNT & ONLINE ACCESS
+              PLAYER ACCOUNT & ONLINE MATCH ACCESS
             </div>
             <h3 className="font-display text-xl font-bold text-white">
-              {account ? 'Signed In Account' : 'Sign In to Football Elite'}
+              {account ? 'Your Signed-In Account' : 'Sign In to Unlock Online Match'}
             </h3>
           </div>
           <button
@@ -216,11 +227,11 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
         </div>
 
         {account ? (
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div className="p-4 rounded-2xl bg-[#070A0E] border border-[#10B981]/40 flex items-center justify-between">
               <div>
                 <div className="text-xs font-mono text-[#10B981] font-bold flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5" /> SIGNED IN ({(account.authProvider || 'google').toUpperCase()})
+                  <ShieldCheck className="w-3.5 h-3.5" /> ONLINE MATCH UNLOCKED ({(account.authProvider || 'google').toUpperCase()})
                 </div>
                 <div className="font-display text-lg font-bold text-white mt-0.5">
                   @{account.username}
@@ -229,24 +240,64 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
               </div>
               <div className="text-right font-mono text-xs">
                 <div className="text-[#F59E0B] font-bold">MMR {account.mmrRating}</div>
-                <div className="text-[#10B981] mt-0.5">Online Ready</div>
+                <div className="text-[#10B981] mt-0.5">Unlocked ✓</div>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            {/* Allow changing username anytime while signed in */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-mono text-slate-300">CHANGE USERNAME</label>
+                <span className="text-[11px] font-mono text-[#10B981]">Any valid username accepted</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <User className="w-4 h-4 text-[#10B981] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => {
+                      setUsername(e.target.value);
+                      if (errorMsg) setErrorMsg('');
+                    }}
+                    placeholder="Enter any username..."
+                    maxLength={32}
+                    className="w-full bg-[#070A0E] border border-white/15 focus:border-[#10B981] rounded-xl pl-10 pr-3 py-2.5 font-display font-bold text-sm text-white focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={loading || !username.trim()}
+                  onClick={() => {
+                    const nextName = username.trim();
+                    if (!nextName) return;
+                    performLogin(
+                      account.authProvider || 'google',
+                      account.email || `${nextName.toLowerCase().replace(/[^a-z0-9._-]/g, '') || 'player'}@gmail.com`,
+                      nextName
+                    );
+                  }}
+                  className="px-4 py-2.5 bg-[#10B981] hover:bg-[#059669] disabled:opacity-50 text-[#070A0E] font-display font-bold text-xs rounded-xl transition-colors cursor-pointer shrink-0"
+                >
+                  SAVE
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-1">
               <button
                 onClick={onClose}
                 className="flex-1 py-3 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-xs rounded-xl transition-colors cursor-pointer"
               >
-                CONTINUE PLAYING
+                CONTINUE TO GAME
               </button>
               <button
                 onClick={() => {
                   setEmail('');
                   setPassword('');
+                  setUsername('');
                   setGoogleSignedIn(false);
                   onLogout();
-                  onClose();
                 }}
                 className="px-4 py-3 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 font-display font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
               >
@@ -256,7 +307,7 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleFormSubmit} className="space-y-4">
+          <form onSubmit={handleFormSubmit} className="space-y-4" noValidate>
             {/* Option 1: Google Sign-In */}
             <button
               type="button"
@@ -288,7 +339,7 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
                   />
                 </svg>
               </span>
-              <span>{googleSignedIn ? 'Signed in with Google ✓' : 'Sign in with Google'}</span>
+              <span>{googleSignedIn ? 'Google Account Selected ✓' : 'Sign in with Google'}</span>
               {googleSignedIn && <Check className="w-4 h-4 ml-auto" />}
             </button>
 
@@ -303,11 +354,15 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
-                  type="email"
+                  type="text"
+                  inputMode="email"
                   value={email}
                   onChange={(e) => {
                     setEmail(e.target.value);
-                    if (googleSignedIn && e.target.value.trim()) setGoogleSignedIn(false);
+                    if (googleSignedIn && e.target.value.trim()) {
+                      setGoogleSignedIn(false);
+                      setInfoMsg('');
+                    }
                     if (errorMsg) setErrorMsg('');
                   }}
                   placeholder="Email address"
@@ -323,7 +378,10 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
-                    if (googleSignedIn && e.target.value) setGoogleSignedIn(false);
+                    if (googleSignedIn && e.target.value) {
+                      setGoogleSignedIn(false);
+                      setInfoMsg('');
+                    }
                     if (errorMsg) setErrorMsg('');
                   }}
                   placeholder="Password"
@@ -342,7 +400,12 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
 
             {/* Username Field Below Login Options */}
             <div className="pt-2 border-t border-white/10 space-y-1.5">
-              <label className="block text-xs font-mono text-slate-300">USERNAME</label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-mono text-slate-200 font-bold">USERNAME</label>
+                <span className="text-[11px] font-mono text-[#10B981]">
+                  Any valid username accepted
+                </span>
+              </div>
               <div className="relative">
                 <User className="w-4 h-4 text-[#10B981] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
@@ -352,12 +415,16 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
                     setUsername(e.target.value);
                     if (errorMsg) setErrorMsg('');
                   }}
-                  placeholder="Enter your username"
-                  maxLength={24}
+                  placeholder="Enter any username you want..."
+                  maxLength={32}
                   className="w-full bg-[#070A0E] border-2 border-white/15 focus:border-[#10B981] rounded-xl pl-10 pr-4 py-3 font-display font-bold text-sm text-white placeholder:text-slate-500 focus:outline-none"
                 />
               </div>
             </div>
+
+            {infoMsg && !errorMsg && (
+              <p className="text-xs text-[#10B981] font-medium text-center">{infoMsg}</p>
+            )}
 
             {errorMsg && <p className="text-xs text-rose-400 font-medium text-center">{errorMsg}</p>}
 
@@ -366,7 +433,8 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
               disabled={loading}
               className="w-full py-3.5 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer"
             >
-              {loading ? 'SIGNING IN...' : 'SIGN IN'}
+              <ShieldCheck className="w-4 h-4" />
+              {loading ? 'SIGNING IN...' : 'SIGN IN & UNLOCK ONLINE MATCH'}
             </button>
           </form>
         )}
@@ -525,10 +593,11 @@ export const OnlineMatchCenter: React.FC<OnlineMatchCenterProps> = ({
   const [gatePassword, setGatePassword] = useState('');
   const [gateShowPassword, setGateShowPassword] = useState(false);
   const [gateUsername, setGateUsername] = useState(
-    username && username !== 'ChampionElite_10' ? username : ''
+    username && username !== 'ChampionElite_10' && !username.startsWith('Player_') ? username : ''
   );
   const [gateLoading, setGateLoading] = useState(false);
   const [gateError, setGateError] = useState('');
+  const [gateInfo, setGateInfo] = useState('');
 
   useEffect(() => {
     const unsubOpen = FriendRoomService.subscribeOpenRooms((rooms) => {
@@ -547,6 +616,7 @@ export const OnlineMatchCenter: React.FC<OnlineMatchCenterProps> = ({
   ) => {
     setGateLoading(true);
     setGateError('');
+    setGateInfo('');
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -583,47 +653,54 @@ export const OnlineMatchCenter: React.FC<OnlineMatchCenterProps> = ({
         <div className="bg-[#111722] border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
           <div className="text-center space-y-2">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#F59E0B]/15 border border-[#F59E0B]/30 text-[#F59E0B] font-mono text-[11px] font-bold">
-              <Lock className="w-3 h-3" /> SIGN IN REQUIRED FOR ONLINE MATCH
+              <Lock className="w-3 h-3" /> ONLINE MATCH LOCKED · SIGN IN REQUIRED
             </div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold text-white">
-              Sign In to Play Online
+              Sign In to Unlock Online Match
             </h1>
             <p className="text-xs sm:text-sm text-slate-400">
-              Sign in with Google or Email + Password and enter your username to create or join an Online Match room.
+              Sign in with Google or Email + Password and enter any username you want to unlock Online Match.
             </p>
           </div>
 
           <form
+            noValidate
             onSubmit={(e) => {
               e.preventDefault();
+              setGateError('');
+              setGateInfo('');
               const trimmedName = gateUsername.trim();
               if (!trimmedName) {
-                setGateError('Please enter your Username below.');
+                setGateError('Please enter any username you want in the Username field.');
                 return;
               }
               const trimmedEmail = gateEmail.trim().toLowerCase();
-              const hasEmailInput = trimmedEmail.length > 0 || gatePassword.length > 0;
+              const trimmedPass = gatePassword.trim();
+              const hasEmailInput = trimmedEmail.length > 0 || trimmedPass.length > 0;
               if (hasEmailInput && !gateGoogleSignedIn) {
-                if (!trimmedEmail.includes('@')) {
-                  setGateError('Please enter a valid email address.');
+                if (!trimmedEmail) {
+                  setGateError('Please enter your email address.');
                   return;
                 }
-                if (gatePassword.length < 4) {
-                  setGateError('Password must be at least 4 characters.');
+                if (!trimmedPass) {
+                  setGateError('Please enter your password.');
                   return;
                 }
-                handleGateLogin('email', trimmedEmail, trimmedName, gatePassword);
+                const normalizedEmail = trimmedEmail.includes('@')
+                  ? trimmedEmail
+                  : `${trimmedEmail}@football-elite.app`;
+                handleGateLogin('email', normalizedEmail, trimmedName, trimmedPass);
                 return;
               }
               if (gateGoogleSignedIn) {
                 const resolvedEmail =
                   trimmedEmail && trimmedEmail.includes('@')
                     ? trimmedEmail
-                    : `${trimmedName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'player'}@gmail.com`;
+                    : `${trimmedName.toLowerCase().replace(/[^a-z0-9._-]/g, '') || 'player'}@gmail.com`;
                 handleGateLogin('google', resolvedEmail, trimmedName);
                 return;
               }
-              setGateError('Please sign in with Google or enter your Email + Password.');
+              setGateError('Please choose Google Sign-In or enter your Email + Password.');
             }}
             className="space-y-4"
           >
@@ -635,14 +712,14 @@ export const OnlineMatchCenter: React.FC<OnlineMatchCenterProps> = ({
                 setGateError('');
                 setGateGoogleSignedIn(true);
                 const trimmedName = gateUsername.trim();
-                if (trimmedName) {
+                if (trimmedName.length > 0) {
                   const resolvedEmail =
                     gateEmail.trim() && gateEmail.includes('@')
                       ? gateEmail.trim().toLowerCase()
-                      : `${trimmedName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'player'}@gmail.com`;
+                      : `${trimmedName.toLowerCase().replace(/[^a-z0-9._-]/g, '') || 'player'}@gmail.com`;
                   handleGateLogin('google', resolvedEmail, trimmedName);
                 } else {
-                  setGateUsername('Player_' + Math.floor(100 + Math.random() * 900));
+                  setGateInfo('Google connected! Enter any username you want below, then click Sign In.');
                 }
               }}
               disabled={gateLoading}
@@ -672,7 +749,7 @@ export const OnlineMatchCenter: React.FC<OnlineMatchCenterProps> = ({
                   />
                 </svg>
               </span>
-              <span>{gateGoogleSignedIn ? 'Signed in with Google ✓' : 'Sign in with Google'}</span>
+              <span>{gateGoogleSignedIn ? 'Google Account Selected ✓' : 'Sign in with Google'}</span>
               {gateGoogleSignedIn && <Check className="w-4 h-4 ml-auto" />}
             </button>
 
@@ -687,11 +764,15 @@ export const OnlineMatchCenter: React.FC<OnlineMatchCenterProps> = ({
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
-                  type="email"
+                  type="text"
+                  inputMode="email"
                   value={gateEmail}
                   onChange={(e) => {
                     setGateEmail(e.target.value);
-                    if (gateGoogleSignedIn && e.target.value.trim()) setGateGoogleSignedIn(false);
+                    if (gateGoogleSignedIn && e.target.value.trim()) {
+                      setGateGoogleSignedIn(false);
+                      setGateInfo('');
+                    }
                     if (gateError) setGateError('');
                   }}
                   placeholder="Email address"
@@ -707,7 +788,10 @@ export const OnlineMatchCenter: React.FC<OnlineMatchCenterProps> = ({
                   value={gatePassword}
                   onChange={(e) => {
                     setGatePassword(e.target.value);
-                    if (gateGoogleSignedIn && e.target.value) setGateGoogleSignedIn(false);
+                    if (gateGoogleSignedIn && e.target.value) {
+                      setGateGoogleSignedIn(false);
+                      setGateInfo('');
+                    }
                     if (gateError) setGateError('');
                   }}
                   placeholder="Password"
@@ -726,7 +810,12 @@ export const OnlineMatchCenter: React.FC<OnlineMatchCenterProps> = ({
 
             {/* Username Field Below Login Options */}
             <div className="pt-2 border-t border-white/10 space-y-1.5">
-              <label className="block text-xs font-mono text-slate-300">USERNAME</label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-mono text-slate-200 font-bold">USERNAME</label>
+                <span className="text-[11px] font-mono text-[#10B981]">
+                  Any valid username accepted
+                </span>
+              </div>
               <div className="relative">
                 <User className="w-4 h-4 text-[#10B981] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
@@ -736,12 +825,16 @@ export const OnlineMatchCenter: React.FC<OnlineMatchCenterProps> = ({
                     setGateUsername(e.target.value);
                     if (gateError) setGateError('');
                   }}
-                  placeholder="Enter your username"
-                  maxLength={24}
+                  placeholder="Enter any username you want..."
+                  maxLength={32}
                   className="w-full bg-[#070A0E] border-2 border-white/15 focus:border-[#10B981] rounded-xl pl-10 pr-4 py-3 font-display font-bold text-sm text-white placeholder:text-slate-500 focus:outline-none"
                 />
               </div>
             </div>
+
+            {gateInfo && !gateError && (
+              <p className="text-xs text-[#10B981] font-medium text-center">{gateInfo}</p>
+            )}
 
             {gateError && (
               <p className="text-xs text-rose-400 font-medium text-center">{gateError}</p>
@@ -752,7 +845,8 @@ export const OnlineMatchCenter: React.FC<OnlineMatchCenterProps> = ({
               disabled={gateLoading}
               className="w-full py-3.5 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer"
             >
-              {gateLoading ? 'SIGNING IN...' : 'SIGN IN & ACCESS ONLINE MATCH'}
+              <ShieldCheck className="w-4 h-4" />
+              {gateLoading ? 'SIGNING IN...' : 'SIGN IN & UNLOCK ONLINE MATCH'}
             </button>
           </form>
         </div>

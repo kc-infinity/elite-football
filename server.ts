@@ -455,27 +455,25 @@ async function startServer() {
     } = req.body || {};
 
     const authProvider: 'google' | 'email' = provider === 'email' ? 'email' : 'google';
-    const rawUsername = String(username || '').trim().slice(0, 24);
-    const cleanEmail = String(
-      email ||
-        (authProvider === 'google' && rawUsername
-          ? `${rawUsername.toLowerCase().replace(/[^a-z0-9]/g, '') || 'player'}@gmail.com`
-          : '')
-    )
-      .trim()
-      .toLowerCase();
-    const cleanUsername =
-      rawUsername || String(cleanEmail.split('@')[0] || 'Player_10').trim().slice(0, 24);
-
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      res.status(400).json({ error: 'Please enter a valid email address.' });
+    const rawUsername = String(username || '').trim().slice(0, 32);
+    if (!rawUsername) {
+      res.status(400).json({ error: 'Please enter a username.' });
       return;
     }
 
+    const rawEmailInput = String(email || '').trim().toLowerCase();
+    const cleanEmail = rawEmailInput
+      ? rawEmailInput.includes('@')
+        ? rawEmailInput
+        : `${rawEmailInput}@football-elite.app`
+      : `${rawUsername.toLowerCase().replace(/[^a-z0-9._-]/g, '') || 'player'}@gmail.com`;
+
+    const cleanUsername = rawUsername;
+
     if (authProvider === 'email') {
-      const rawPassword = String(password || '');
-      if (rawPassword.length < 4) {
-        res.status(400).json({ error: 'Password must be at least 4 characters.' });
+      const rawPassword = String(password || '').trim();
+      if (!rawPassword) {
+        res.status(400).json({ error: 'Please enter a password.' });
         return;
       }
     }

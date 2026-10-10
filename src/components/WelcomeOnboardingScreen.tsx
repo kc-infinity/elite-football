@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Check, ChevronRight, Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Check, ChevronRight, Eye, EyeOff, Lock, Mail, ShieldCheck, User } from 'lucide-react';
 import { FootballPlayer, TeamData } from '../data/gameDatabase';
 import { useAppIcon } from '../data/appIconStore';
 import { SoundEngine } from '../engine/SoundEngine';
@@ -14,6 +14,7 @@ interface WelcomeOnboardingScreenProps {
   coins: number;
   isGoogleLinked?: boolean;
   onOpenGoogleAuth?: () => void;
+  onContinueAsGuest?: () => void;
   onCompleteOnboarding: (
     username: string,
     favouriteClub: TeamData,
@@ -30,20 +31,24 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
   starterSquad,
   coins,
   isGoogleLinked,
+  onContinueAsGuest,
   onCompleteOnboarding,
 }) => {
   const [googleSignedIn, setGoogleSignedIn] = useState<boolean>(Boolean(isGoogleLinked));
-  const [email, setEmail] = useState<string>(
-    () => localStorage.getItem('fe_user_email') || initialEmail || ''
-  );
+  const [email, setEmail] = useState<string>(initialEmail || '');
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [username, setUsername] = useState<string>(() => {
-    const saved = localStorage.getItem('fe_username');
-    return saved && saved !== 'ChampionElite_10' ? saved : initialUsername || '';
+    const cleanInit = (initialUsername || '').trim();
+    if (cleanInit && cleanInit !== 'ChampionElite_10' && !cleanInit.startsWith('Player_')) {
+      return cleanInit;
+    }
+    return '';
   });
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
+  const [infoMsg, setInfoMsg] = useState<string>('');
+  const usernameInputRef = useRef<HTMLInputElement | null>(null);
   const { iconUrl } = useAppIcon();
 
   const performSignIn = async (
@@ -54,6 +59,7 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
   ) => {
     setIsSubmitting(true);
     setErrorMsg('');
+    setInfoMsg('');
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -83,7 +89,7 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
         data.token
       );
     } catch {
-      // Fallback local session if offline
+      // Fallback local authenticated session if offline
       onCompleteOnboarding(resolvedUsername, initialClub, resolvedEmail);
     } finally {
       setIsSubmitting(false);
@@ -96,15 +102,17 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
     setGoogleSignedIn(true);
 
     const currentName = username.trim();
-    if (currentName) {
+    if (currentName.length > 0) {
       const resolvedEmail =
         email.trim() && email.includes('@')
           ? email.trim().toLowerCase()
-          : `${currentName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'player'}@gmail.com`;
+          : `${currentName.toLowerCase().replace(/[^a-z0-9._-]/g, '') || 'player'}@gmail.com`;
       performSignIn('google', resolvedEmail, currentName);
     } else {
-      const suggested = 'Player_' + Math.floor(100 + Math.random() * 900);
-      setUsername(suggested);
+      setInfoMsg('Google connected! Enter any username you want below, then click Sign In.');
+      setTimeout(() => {
+        usernameInputRef.current?.focus();
+      }, 50);
     }
   };
 
@@ -112,26 +120,32 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
     e.preventDefault();
     SoundEngine.playUIClick();
     setErrorMsg('');
+    setInfoMsg('');
 
     const trimmedUsername = username.trim();
     if (!trimmedUsername) {
-      setErrorMsg('Please enter a Username below to continue.');
+      setErrorMsg('Please enter any username you want in the Username field.');
+      usernameInputRef.current?.focus();
       return;
     }
 
     const trimmedEmail = email.trim().toLowerCase();
-    const hasEmailInput = trimmedEmail.length > 0 || password.length > 0;
+    const trimmedPassword = password.trim();
+    const hasEmailCredentials = trimmedEmail.length > 0 || trimmedPassword.length > 0;
 
-    if (hasEmailInput && !googleSignedIn) {
-      if (!trimmedEmail.includes('@')) {
-        setErrorMsg('Please enter a valid email address.');
+    if (hasEmailCredentials && !googleSignedIn) {
+      if (!trimmedEmail) {
+        setErrorMsg('Please enter your email address.');
         return;
       }
-      if (password.length < 4) {
-        setErrorMsg('Please enter a password (at least 4 characters).');
+      if (!trimmedPassword) {
+        setErrorMsg('Please enter your password.');
         return;
       }
-      performSignIn('email', trimmedEmail, trimmedUsername, password);
+      const normalizedEmail = trimmedEmail.includes('@')
+        ? trimmedEmail
+        : `${trimmedEmail}@football-elite.app`;
+      performSignIn('email', normalizedEmail, trimmedUsername, trimmedPassword);
       return;
     }
 
@@ -139,12 +153,12 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
       const resolvedEmail =
         trimmedEmail && trimmedEmail.includes('@')
           ? trimmedEmail
-          : `${trimmedUsername.toLowerCase().replace(/[^a-z0-9]/g, '') || 'player'}@gmail.com`;
+          : `${trimmedUsername.toLowerCase().replace(/[^a-z0-9._-]/g, '') || 'player'}@gmail.com`;
       performSignIn('google', resolvedEmail, trimmedUsername);
       return;
     }
 
-    setErrorMsg('Please sign in with Google or enter your Email + Password.');
+    setErrorMsg('Please choose Google Sign-In or enter your Email + Password above.');
   };
 
   return (
@@ -160,11 +174,11 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
 
       {/* Simple, Modern, Smooth & Responsive Login Card */}
       <main className="relative z-10 w-full max-w-md">
-        <div className="bg-[#111722]/95 backdrop-blur-2xl border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 transition-all">
+        <div className="bg-[#111722]/95 backdrop-blur-2xl border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5 transition-all">
           {/* Brand Header */}
           <div className="text-center space-y-2">
             <div className="flex flex-col items-center">
-              <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-[#070A0E] border-2 border-[#F59E0B]/60 shadow-[0_0_36px_rgba(245,158,11,0.28)] flex items-center justify-center overflow-hidden mb-1">
+              <div className="relative w-24 h-24 rounded-full bg-[#070A0E] border-2 border-[#F59E0B]/60 shadow-[0_0_36px_rgba(245,158,11,0.28)] flex items-center justify-center overflow-hidden mb-1">
                 <img
                   src={iconUrl}
                   alt="Football Elite App Logo"
@@ -176,12 +190,14 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
             <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-white">
               FOOTBALL ELITE
             </h1>
-            <p className="text-xs sm:text-sm text-slate-400">
-              Sign in with Google or Email + Password to play
+            <p className="text-xs sm:text-sm text-slate-300">
+              Sign in with <span className="text-white font-semibold">Google</span> or{' '}
+              <span className="text-white font-semibold">Email + Password</span> to unlock{' '}
+              <span className="text-[#10B981] font-semibold">Online Match</span>
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {/* Option 1: Google Sign-In Button */}
             <button
               type="button"
@@ -214,7 +230,7 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
                 </svg>
               </span>
               <span>
-                {googleSignedIn ? 'Signed in with Google ✓' : 'Sign in with Google'}
+                {googleSignedIn ? 'Google Account Selected ✓' : 'Sign in with Google'}
               </span>
               {googleSignedIn && <Check className="w-4 h-4 ml-auto" />}
             </button>
@@ -233,12 +249,14 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
-                  type="email"
+                  type="text"
+                  inputMode="email"
                   value={email}
                   onChange={(e) => {
                     setEmail(e.target.value);
                     if (googleSignedIn && e.target.value.trim()) {
                       setGoogleSignedIn(false);
+                      setInfoMsg('');
                     }
                     if (errorMsg) setErrorMsg('');
                   }}
@@ -257,6 +275,7 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
                     setPassword(e.target.value);
                     if (googleSignedIn && e.target.value) {
                       setGoogleSignedIn(false);
+                      setInfoMsg('');
                     }
                     if (errorMsg) setErrorMsg('');
                   }}
@@ -277,24 +296,34 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
 
             {/* Username Field Below the Login Options */}
             <div className="pt-2 border-t border-white/10 space-y-1.5">
-              <label className="block text-xs font-mono text-slate-300 tracking-wide">
-                USERNAME
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-mono text-slate-200 font-bold tracking-wide">
+                  USERNAME
+                </label>
+                <span className="text-[11px] font-mono text-[#10B981]">
+                  Any valid username accepted
+                </span>
+              </div>
               <div className="relative">
                 <User className="w-4 h-4 text-[#10B981] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
+                  ref={usernameInputRef}
                   type="text"
                   value={username}
                   onChange={(e) => {
                     setUsername(e.target.value);
                     if (errorMsg) setErrorMsg('');
                   }}
-                  placeholder="Enter your username"
-                  maxLength={24}
+                  placeholder="Enter any username you want..."
+                  maxLength={32}
                   className="w-full bg-[#070A0E] border-2 border-white/15 focus:border-[#10B981] rounded-2xl pl-11 pr-4 py-3 font-display text-sm font-bold text-white placeholder:text-slate-500 focus:outline-none transition-colors"
                 />
               </div>
             </div>
+
+            {infoMsg && !errorMsg && (
+              <p className="text-xs text-[#10B981] font-medium text-center">{infoMsg}</p>
+            )}
 
             {errorMsg && (
               <p className="text-xs text-rose-400 font-medium text-center">{errorMsg}</p>
@@ -306,9 +335,25 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
               disabled={isSubmitting}
               className="w-full py-3.5 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-sm rounded-2xl transition-all flex items-center justify-center gap-2 shadow-xl cursor-pointer"
             >
-              <span>{isSubmitting ? 'SIGNING IN...' : 'SIGN IN & CONTINUE'}</span>
+              <ShieldCheck className="w-4 h-4" />
+              <span>
+                {isSubmitting ? 'SIGNING IN...' : 'SIGN IN & UNLOCK ONLINE MATCH'}
+              </span>
               <ChevronRight className="w-4 h-4" />
             </button>
+
+            {onContinueAsGuest && (
+              <button
+                type="button"
+                onClick={() => {
+                  SoundEngine.playUIClick();
+                  onContinueAsGuest();
+                }}
+                className="w-full py-2 text-xs font-mono text-slate-400 hover:text-white transition-colors text-center cursor-pointer"
+              >
+                Continue Offline Without Signing In (Online Match Locked 🔒)
+              </button>
+            )}
           </form>
         </div>
       </main>
