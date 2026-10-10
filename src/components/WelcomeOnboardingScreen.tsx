@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Check, ChevronRight, User } from 'lucide-react';
+import { Check, ChevronRight, Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
 import { FootballPlayer, TeamData } from '../data/gameDatabase';
 import { useAppIcon } from '../data/appIconStore';
 import { SoundEngine } from '../engine/SoundEngine';
+import { AuthenticatedAccount } from './OnlineMatchAndAuthModal';
 import heroStadiumImg from '../assets/images/hero_stadium_backdrop_1791305638088.jpg';
 
 interface WelcomeOnboardingScreenProps {
@@ -13,68 +14,137 @@ interface WelcomeOnboardingScreenProps {
   coins: number;
   isGoogleLinked?: boolean;
   onOpenGoogleAuth?: () => void;
-  onCompleteOnboarding: (username: string, favouriteClub: TeamData, email?: string) => void;
+  onCompleteOnboarding: (
+    username: string,
+    favouriteClub: TeamData,
+    email?: string,
+    authenticatedUser?: AuthenticatedAccount,
+    token?: string
+  ) => void;
 }
 
 export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = ({
   initialUsername,
   initialEmail = '',
   initialClub,
+  starterSquad,
+  coins,
   isGoogleLinked,
-  onOpenGoogleAuth,
   onCompleteOnboarding,
 }) => {
-  const [username, setUsername] = useState(() => {
+  const [googleSignedIn, setGoogleSignedIn] = useState<boolean>(Boolean(isGoogleLinked));
+  const [email, setEmail] = useState<string>(
+    () => localStorage.getItem('fe_user_email') || initialEmail || ''
+  );
+  const [password, setPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [username, setUsername] = useState<string>(() => {
     const saved = localStorage.getItem('fe_username');
     return saved && saved !== 'ChampionElite_10' ? saved : initialUsername || '';
   });
-  const [googleSignedIn, setGoogleSignedIn] = useState<boolean>(Boolean(isGoogleLinked));
-  const [googleEmail, setGoogleEmail] = useState<string>(
-    () => localStorage.getItem('fe_user_email') || initialEmail || ''
-  );
-  const [isSigningIn, setIsSigningIn] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = useState<string>('');
   const { iconUrl } = useAppIcon();
+
+  const performSignIn = async (
+    provider: 'google' | 'email',
+    resolvedEmail: string,
+    resolvedUsername: string,
+    rawPassword?: string
+  ) => {
+    setIsSubmitting(true);
+    setErrorMsg('');
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider,
+          email: resolvedEmail,
+          password: rawPassword,
+          username: resolvedUsername,
+          favouriteClubId: initialClub.id,
+          initialUnlockedIds: starterSquad.map((p) => p.id),
+          coins,
+          squadIds: starterSquad.map((p) => p.id),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.user) {
+        setErrorMsg(data?.error || 'Sign-in failed. Please check your details.');
+        setIsSubmitting(false);
+        return;
+      }
+      onCompleteOnboarding(
+        resolvedUsername,
+        initialClub,
+        resolvedEmail,
+        data.user,
+        data.token
+      );
+    } catch {
+      // Fallback local session if offline
+      onCompleteOnboarding(resolvedUsername, initialClub, resolvedEmail);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleGoogleSignInClick = () => {
     SoundEngine.playUIClick();
     setErrorMsg('');
-    const cleanName = username.trim() || 'Player_' + Math.floor(100 + Math.random() * 900);
-    if (!username.trim()) {
-      setUsername(cleanName);
-    }
-    const resolvedEmail =
-      googleEmail.trim() && googleEmail.includes('@')
-        ? googleEmail.trim().toLowerCase()
-        : `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'player'}@gmail.com`;
+    setGoogleSignedIn(true);
 
-    setIsSigningIn(true);
-    setTimeout(() => {
-      setGoogleEmail(resolvedEmail);
-      setGoogleSignedIn(true);
-      setIsSigningIn(false);
-      // If username is already provided, complete sign-in and enter smoothly
-      if (username.trim()) {
-        onCompleteOnboarding(username.trim(), initialClub, resolvedEmail);
-      } else if (onOpenGoogleAuth) {
-        // Account is linked; user can now confirm or customize username and enter
-      }
-    }, 260);
+    const currentName = username.trim();
+    if (currentName) {
+      const resolvedEmail =
+        email.trim() && email.includes('@')
+          ? email.trim().toLowerCase()
+          : `${currentName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'player'}@gmail.com`;
+      performSignIn('google', resolvedEmail, currentName);
+    } else {
+      const suggested = 'Player_' + Math.floor(100 + Math.random() * 900);
+      setUsername(suggested);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = username.trim();
-    if (!trimmed) {
-      setErrorMsg('Please enter your Username to continue.');
+    SoundEngine.playUIClick();
+    setErrorMsg('');
+
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername) {
+      setErrorMsg('Please enter a Username below to continue.');
       return;
     }
-    SoundEngine.playUIClick();
-    const resolvedEmail =
-      googleEmail.trim() && googleEmail.includes('@')
-        ? googleEmail.trim().toLowerCase()
-        : `${trimmed.toLowerCase().replace(/[^a-z0-9]/g, '') || 'player'}@gmail.com`;
-    onCompleteOnboarding(trimmed, initialClub, resolvedEmail);
+
+    const trimmedEmail = email.trim().toLowerCase();
+    const hasEmailInput = trimmedEmail.length > 0 || password.length > 0;
+
+    if (hasEmailInput && !googleSignedIn) {
+      if (!trimmedEmail.includes('@')) {
+        setErrorMsg('Please enter a valid email address.');
+        return;
+      }
+      if (password.length < 4) {
+        setErrorMsg('Please enter a password (at least 4 characters).');
+        return;
+      }
+      performSignIn('email', trimmedEmail, trimmedUsername, password);
+      return;
+    }
+
+    if (googleSignedIn) {
+      const resolvedEmail =
+        trimmedEmail && trimmedEmail.includes('@')
+          ? trimmedEmail
+          : `${trimmedUsername.toLowerCase().replace(/[^a-z0-9]/g, '') || 'player'}@gmail.com`;
+      performSignIn('google', resolvedEmail, trimmedUsername);
+      return;
+    }
+
+    setErrorMsg('Please sign in with Google or enter your Email + Password.');
   };
 
   return (
@@ -88,13 +158,13 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
       />
       <div className="fixed inset-0 bg-gradient-to-b from-[#070A0E]/85 via-[#070A0E]/90 to-[#070A0E] pointer-events-none" />
 
-      {/* Simple, Modern, Smooth & Responsive Welcome Card */}
+      {/* Simple, Modern, Smooth & Responsive Login Card */}
       <main className="relative z-10 w-full max-w-md">
-        <div className="bg-[#111722]/95 backdrop-blur-2xl border border-white/15 rounded-3xl p-7 sm:p-9 shadow-2xl space-y-7 transition-all">
+        <div className="bg-[#111722]/95 backdrop-blur-2xl border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 transition-all">
           {/* Brand Header */}
-          <div className="text-center space-y-2.5">
+          <div className="text-center space-y-2">
             <div className="flex flex-col items-center">
-              <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-[#070A0E] border-2 border-[#F59E0B]/60 shadow-[0_0_40px_rgba(245,158,11,0.28)] flex items-center justify-center overflow-hidden mb-1">
+              <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-[#070A0E] border-2 border-[#F59E0B]/60 shadow-[0_0_36px_rgba(245,158,11,0.28)] flex items-center justify-center overflow-hidden mb-1">
                 <img
                   src={iconUrl}
                   alt="Football Elite App Logo"
@@ -103,72 +173,110 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
                 />
               </div>
             </div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#10B981]/15 border border-[#10B981]/30 text-[#10B981] font-mono text-[11px] font-bold tracking-wider">
-              ONLINE 1V1 & 11V11 MULTIPLAYER
-            </div>
             <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-white">
               FOOTBALL ELITE
             </h1>
             <p className="text-xs sm:text-sm text-slate-400">
-              Sign in with Google and choose your username to play
+              Sign in with Google or Email + Password to play
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* 1. Google Sign-In Button */}
-            <div className="space-y-2">
-              <button
-                type="button"
-                onClick={handleGoogleSignInClick}
-                disabled={isSigningIn}
-                className={`w-full py-3.5 px-5 rounded-2xl font-display font-bold text-sm transition-all flex items-center justify-center gap-3 shadow-lg cursor-pointer ${
-                  googleSignedIn || isGoogleLinked
-                    ? 'bg-[#10B981]/20 border-2 border-[#10B981] text-[#10B981]'
-                    : 'bg-white hover:bg-slate-100 text-[#070A0E] border border-white'
-                }`}
-              >
-                {/* Google Multi-Color G SVG */}
-                <span className="w-5 h-5 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm">
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
-                    <path
-                      fill="#4285F4"
-                      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14z"
-                    />
-                    <path
-                      fill="#EA4335"
-                      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96z"
-                    />
-                  </svg>
-                </span>
-                <span>
-                  {isSigningIn
-                    ? 'Connecting Google Account...'
-                    : googleSignedIn || isGoogleLinked
-                    ? 'Signed in with Google ✓'
-                    : 'Sign in with Google'}
-                </span>
-                {(googleSignedIn || isGoogleLinked) && <Check className="w-4 h-4 ml-auto" />}
-              </button>
-            </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Option 1: Google Sign-In Button */}
+            <button
+              type="button"
+              onClick={handleGoogleSignInClick}
+              disabled={isSubmitting}
+              className={`w-full py-3.5 px-5 rounded-2xl font-display font-bold text-sm transition-all flex items-center justify-center gap-3 shadow-md cursor-pointer ${
+                googleSignedIn
+                  ? 'bg-[#10B981]/20 border-2 border-[#10B981] text-[#10B981]'
+                  : 'bg-white hover:bg-slate-100 text-[#070A0E] border border-white'
+              }`}
+            >
+              <span className="w-5 h-5 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96z"
+                  />
+                </svg>
+              </span>
+              <span>
+                {googleSignedIn ? 'Signed in with Google ✓' : 'Sign in with Google'}
+              </span>
+              {googleSignedIn && <Check className="w-4 h-4 ml-auto" />}
+            </button>
 
+            {/* Divider */}
             <div className="flex items-center gap-3">
               <div className="h-px bg-white/10 flex-1" />
-              <span className="text-[11px] font-mono text-slate-400 uppercase tracking-widest">
-                Player Profile
+              <span className="text-[11px] font-mono text-slate-400">
+                OR EMAIL + PASSWORD
               </span>
               <div className="h-px bg-white/10 flex-1" />
             </div>
 
-            {/* 2. Username Field */}
-            <div className="space-y-2">
+            {/* Option 2: Email + Password Fields */}
+            <div className="space-y-3">
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (googleSignedIn && e.target.value.trim()) {
+                      setGoogleSignedIn(false);
+                    }
+                    if (errorMsg) setErrorMsg('');
+                  }}
+                  placeholder="Email address"
+                  autoComplete="email"
+                  className="w-full bg-[#070A0E] border border-white/15 focus:border-[#38BDF8] rounded-2xl pl-11 pr-4 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none transition-colors"
+                />
+              </div>
+
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (googleSignedIn && e.target.value) {
+                      setGoogleSignedIn(false);
+                    }
+                    if (errorMsg) setErrorMsg('');
+                  }}
+                  placeholder="Password"
+                  autoComplete="current-password"
+                  className="w-full bg-[#070A0E] border border-white/15 focus:border-[#38BDF8] rounded-2xl pl-11 pr-11 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((s) => !s)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Username Field Below the Login Options */}
+            <div className="pt-2 border-t border-white/10 space-y-1.5">
               <label className="block text-xs font-mono text-slate-300 tracking-wide">
                 USERNAME
               </label>
@@ -181,10 +289,9 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
                     setUsername(e.target.value);
                     if (errorMsg) setErrorMsg('');
                   }}
-                  placeholder="Enter your username..."
+                  placeholder="Enter your username"
                   maxLength={24}
-                  autoFocus
-                  className="w-full bg-[#070A0E] border-2 border-white/15 focus:border-[#10B981] rounded-2xl pl-11 pr-4 py-3.5 font-display text-sm font-bold text-white placeholder:text-slate-500 focus:outline-none transition-colors"
+                  className="w-full bg-[#070A0E] border-2 border-white/15 focus:border-[#10B981] rounded-2xl pl-11 pr-4 py-3 font-display text-sm font-bold text-white placeholder:text-slate-500 focus:outline-none transition-colors"
                 />
               </div>
             </div>
@@ -193,12 +300,13 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
               <p className="text-xs text-rose-400 font-medium text-center">{errorMsg}</p>
             )}
 
-            {/* Submit / Enter Button */}
+            {/* Submit / Sign In Button */}
             <button
               type="submit"
-              className="w-full py-4 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-sm rounded-2xl transition-all flex items-center justify-center gap-2 shadow-xl cursor-pointer"
+              disabled={isSubmitting}
+              className="w-full py-3.5 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-sm rounded-2xl transition-all flex items-center justify-center gap-2 shadow-xl cursor-pointer"
             >
-              <span>CONTINUE TO GAME</span>
+              <span>{isSubmitting ? 'SIGNING IN...' : 'SIGN IN & CONTINUE'}</span>
               <ChevronRight className="w-4 h-4" />
             </button>
           </form>

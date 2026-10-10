@@ -15,6 +15,8 @@ export interface ServerUserAccount {
   googleId: string;
   email: string;
   username: string;
+  authProvider?: 'google' | 'email';
+  passwordHash?: string;
   avatarUrl: string;
   coins: number;
   favouriteClubId: string;
@@ -433,11 +435,13 @@ async function startServer() {
   app.use(express.json());
 
   // ============================================================================
-  // 1. SECURE GOOGLE / EMAIL SIGN-IN & PERMANENT SESSION AUTHENTICATION ENDPOINTS
+  // 1. SECURE GOOGLE SIGN-IN & EMAIL + PASSWORD AUTHENTICATION ENDPOINTS
   // ============================================================================
-  app.post('/api/auth/google', (req, res) => {
+  const handleUserSignIn = (req: express.Request, res: express.Response) => {
     const {
+      provider,
       email,
+      password,
       username,
       avatarUrl,
       favouriteClubId,
@@ -449,13 +453,36 @@ async function startServer() {
       preferredCelebration,
       tournamentStageIndex,
     } = req.body || {};
-    const cleanEmail = String(email || '').trim().toLowerCase();
-    const cleanUsername = String(username || cleanEmail.split('@')[0] || 'ChampionElite').trim().slice(0, 24);
+
+    const authProvider: 'google' | 'email' = provider === 'email' ? 'email' : 'google';
+    const rawUsername = String(username || '').trim().slice(0, 24);
+    const cleanEmail = String(
+      email ||
+        (authProvider === 'google' && rawUsername
+          ? `${rawUsername.toLowerCase().replace(/[^a-z0-9]/g, '') || 'player'}@gmail.com`
+          : '')
+    )
+      .trim()
+      .toLowerCase();
+    const cleanUsername =
+      rawUsername || String(cleanEmail.split('@')[0] || 'Player_10').trim().slice(0, 24);
 
     if (!cleanEmail || !cleanEmail.includes('@')) {
       res.status(400).json({ error: 'Please enter a valid email address.' });
       return;
     }
+
+    if (authProvider === 'email') {
+      const rawPassword = String(password || '');
+      if (rawPassword.length < 4) {
+        res.status(400).json({ error: 'Password must be at least 4 characters.' });
+        return;
+      }
+    }
+
+    const passwordHash = password
+      ? crypto.createHash('sha256').update(String(password)).digest('hex')
+      : undefined;
 
     let existingUser = Array.from(usersById.values()).find(
       (u) => u.email.toLowerCase() === cleanEmail
@@ -468,6 +495,8 @@ async function startServer() {
         googleId: `google_${crypto.createHash('sha256').update(cleanEmail).digest('hex').slice(0, 16)}`,
         email: cleanEmail,
         username: cleanUsername,
+        authProvider,
+        passwordHash,
         avatarUrl:
           avatarUrl ||
           `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(cleanUsername)}`,
@@ -477,8 +506,10 @@ async function startServer() {
         squadIds: Array.isArray(squadIds) ? squadIds : undefined,
         formation: typeof formation === 'string' ? formation : '4-3-3',
         captainId: typeof captainId === 'string' ? captainId : undefined,
-        preferredCelebration: typeof preferredCelebration === 'string' ? preferredCelebration : 'Knee Slide Surge',
-        tournamentStageIndex: typeof tournamentStageIndex === 'number' ? tournamentStageIndex : 0,
+        preferredCelebration:
+          typeof preferredCelebration === 'string' ? preferredCelebration : 'Knee Slide Surge',
+        tournamentStageIndex:
+          typeof tournamentStageIndex === 'number' ? tournamentStageIndex : 0,
         mmrRating: 1500,
         matchesPlayed: 18,
         wins: 15,
@@ -495,6 +526,10 @@ async function startServer() {
       if (cleanUsername) {
         existingUser.username = cleanUsername;
       }
+      existingUser.authProvider = authProvider;
+      if (passwordHash) {
+        existingUser.passwordHash = passwordHash;
+      }
       if (Array.isArray(initialUnlockedIds) && initialUnlockedIds.length > 0) {
         existingUser.unlockedPlayerIds = Array.from(
           new Set([...(existingUser.unlockedPlayerIds || []), ...initialUnlockedIds])
@@ -510,7 +545,11 @@ async function startServer() {
       token: sessionToken,
       user: existingUser,
     });
-  });
+  };
+
+  app.post('/api/auth/google', handleUserSignIn);
+  app.post('/api/auth/login', handleUserSignIn);
+  app.post('/api/auth/email', handleUserSignIn);
 
   app.get('/api/auth/me', (req, res) => {
     const user = getAuthenticatedUser(req);
@@ -777,6 +816,7 @@ async function startServer() {
             status: 'online',
           });
           broadcastOnlinePlayers();
+          broadcastOpenRooms();
           return;
         }
 
@@ -1093,6 +1133,9 @@ async function startServer() {
           const code = normalizeRoomCode(msg.roomCode || joinedRoomCode || '');
           const room = rooms.get(code);
           if (!room) return;
+          if (room.matchStarted) {
+            room.matchStarted = false;
+          }
           const targetId = String(msg.clientId || joinedClientId || '');
           const member = room.members.get(targetId);
           if (member) {

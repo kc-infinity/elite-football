@@ -1,27 +1,31 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Check,
   CheckCircle2,
-  Coins,
   Copy,
   CreditCard,
   Eye,
-  Globe,
+  EyeOff,
   Lock,
   LogOut,
+  Mail,
   Play,
-  Send,
-  Shield,
+  RefreshCw,
   ShieldCheck,
-  Sparkles,
   Trophy,
-  UserCheck,
-  UserPlus,
+  User,
   Users,
   X,
   Zap,
 } from 'lucide-react';
-import { FootballPlayer, FORMATIONS, FormationName, PLAYERS_DB, TeamData, TEAMS_DB } from '../data/gameDatabase';
+import {
+  FootballPlayer,
+  FORMATIONS,
+  FormationName,
+  PLAYERS_DB,
+  TeamData,
+  TEAMS_DB,
+} from '../data/gameDatabase';
 import { OpponentSquadInfo, OpponentSquadPopup } from './OpponentSquadPopup';
 import { PlayerPhotoAvatar } from './PlayerPhotoAvatar';
 import {
@@ -30,6 +34,7 @@ import {
   IncomingMatchInvite,
   OnlineMatchLobbyState,
   OnlinePlayerPresence,
+  OpenRoomInfo,
 } from '../engine/FriendRoomService';
 import { SoundEngine } from '../engine/SoundEngine';
 
@@ -38,6 +43,7 @@ export interface AuthenticatedAccount {
   googleId: string;
   email: string;
   username: string;
+  authProvider?: 'google' | 'email';
   avatarUrl: string;
   coins: number;
   favouriteClubId?: string;
@@ -59,7 +65,7 @@ export interface AuthenticatedAccount {
 }
 
 // ============================================================================
-// 1. SECURE EMAIL / GOOGLE LOGIN & PERMANENT SIGN-IN MODAL
+// 1. GOOGLE SIGN-IN OR EMAIL + PASSWORD LOGIN MODAL (WITH USERNAME BELOW)
 // ============================================================================
 interface GoogleAuthModalProps {
   isOpen: boolean;
@@ -82,40 +88,49 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
   onSuccessAuth,
   onLogout,
 }) => {
+  const [googleSignedIn, setGoogleSignedIn] = useState(false);
   const [email, setEmail] = useState(account?.email || '');
-  const [username, setUsername] = useState(account?.username || currentUsername);
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [username, setUsername] = useState(
+    account?.username || (currentUsername !== 'ChampionElite_10' ? currentUsername : '')
+  );
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  useEffect(() => {
+    if (account) {
+      setEmail(account.email || '');
+      setUsername(account.username || currentUsername);
+    }
+  }, [account, currentUsername]);
+
   if (!isOpen) return null;
 
-  const handleGoogleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim().includes('@')) {
-      setErrorMsg('Please enter a valid email address.');
-      return;
-    }
-    if (!username.trim()) {
-      setErrorMsg('Please enter your display username.');
-      return;
-    }
-
+  const performLogin = async (
+    provider: 'google' | 'email',
+    resolvedEmail: string,
+    resolvedUsername: string,
+    rawPassword?: string
+  ) => {
     setLoading(true);
     setErrorMsg('');
     try {
-      const res = await fetch('/api/auth/google', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: email.trim(),
-          username: username.trim(),
+          provider,
+          email: resolvedEmail,
+          password: rawPassword,
+          username: resolvedUsername,
           favouriteClubId: currentClubId,
           initialUnlockedIds: unlockedPlayerIds,
         }),
       });
       const data = await res.json();
-      if (!res.ok || !data.user) {
-        setErrorMsg(data.error || 'Authentication failed.');
+      if (!res.ok || !data?.user) {
+        setErrorMsg(data?.error || 'Authentication failed.');
       } else {
         SoundEngine.playUIClick();
         onSuccessAuth(data.user, data.token);
@@ -128,26 +143,73 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
     }
   };
 
+  const handleGoogleClick = () => {
+    SoundEngine.playUIClick();
+    setErrorMsg('');
+    setGoogleSignedIn(true);
+    const trimmedName = username.trim();
+    if (trimmedName) {
+      const resolvedEmail =
+        email.trim() && email.includes('@')
+          ? email.trim().toLowerCase()
+          : `${trimmedName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'player'}@gmail.com`;
+      performLogin('google', resolvedEmail, trimmedName);
+    } else {
+      setUsername('Player_' + Math.floor(100 + Math.random() * 900));
+    }
+  };
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedName = username.trim();
+    if (!trimmedName) {
+      setErrorMsg('Please enter your Username below.');
+      return;
+    }
+
+    const trimmedEmail = email.trim().toLowerCase();
+    const hasEmailInput = trimmedEmail.length > 0 || password.length > 0;
+
+    if (hasEmailInput && !googleSignedIn) {
+      if (!trimmedEmail.includes('@')) {
+        setErrorMsg('Please enter a valid email address.');
+        return;
+      }
+      if (password.length < 4) {
+        setErrorMsg('Password must be at least 4 characters.');
+        return;
+      }
+      performLogin('email', trimmedEmail, trimmedName, password);
+      return;
+    }
+
+    if (googleSignedIn) {
+      const resolvedEmail =
+        trimmedEmail && trimmedEmail.includes('@')
+          ? trimmedEmail
+          : `${trimmedName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'player'}@gmail.com`;
+      performLogin('google', resolvedEmail, trimmedName);
+      return;
+    }
+
+    setErrorMsg('Please sign in with Google or enter your Email + Password.');
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-[#111722] border border-white/15 rounded-2xl max-w-md w-full p-6 sm:p-7 shadow-2xl">
+      <div className="bg-[#111722] border border-white/15 rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/10 pb-4 mb-5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center font-display font-bold text-lg text-[#070A0E]">
-              G
+          <div>
+            <div className="text-[11px] font-mono text-[#10B981] font-bold">
+              PLAYER ACCOUNT & ONLINE ACCESS
             </div>
-            <div>
-              <div className="text-[11px] font-mono text-[#10B981] font-bold">
-                PERMANENT EMAIL & CLOUD SAVE
-              </div>
-              <h3 className="font-display text-xl font-bold text-white">
-                {account ? 'Account Signed In (Saved)' : 'Sign In With Any Email'}
-              </h3>
-            </div>
+            <h3 className="font-display text-xl font-bold text-white">
+              {account ? 'Signed In Account' : 'Sign In to Football Elite'}
+            </h3>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white"
+            className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -155,19 +217,19 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
 
         {account ? (
           <div className="space-y-5">
-            <div className="p-4 rounded-xl bg-[#070A0E] border border-[#10B981]/40 flex items-center justify-between">
+            <div className="p-4 rounded-2xl bg-[#070A0E] border border-[#10B981]/40 flex items-center justify-between">
               <div>
                 <div className="text-xs font-mono text-[#10B981] font-bold flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5" /> PERMANENTLY SIGNED IN
+                  <ShieldCheck className="w-3.5 h-3.5" /> SIGNED IN ({(account.authProvider || 'google').toUpperCase()})
                 </div>
                 <div className="font-display text-lg font-bold text-white mt-0.5">
-                  {account.username}
+                  @{account.username}
                 </div>
                 <div className="text-xs text-slate-400">{account.email}</div>
               </div>
               <div className="text-right font-mono text-xs">
                 <div className="text-[#F59E0B] font-bold">MMR {account.mmrRating}</div>
-                <div className="text-[#10B981] mt-0.5">Auto-Save Active</div>
+                <div className="text-[#10B981] mt-0.5">Online Ready</div>
               </div>
             </div>
 
@@ -181,6 +243,8 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
               <button
                 onClick={() => {
                   setEmail('');
+                  setPassword('');
+                  setGoogleSignedIn(false);
                   onLogout();
                   onClose();
                 }}
@@ -192,52 +256,117 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleGoogleSignIn} className="space-y-4">
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Enter any email address to stay logged in permanently. Your coins, purchased players, 50-Star Roulette rewards, Dream Team squad, and career progress are saved automatically across desktop and mobile.
-            </p>
+          <form onSubmit={handleFormSubmit} className="space-y-4">
+            {/* Option 1: Google Sign-In */}
+            <button
+              type="button"
+              onClick={handleGoogleClick}
+              disabled={loading}
+              className={`w-full py-3.5 px-4 rounded-2xl font-display font-bold text-sm transition-all flex items-center justify-center gap-3 shadow-md cursor-pointer ${
+                googleSignedIn
+                  ? 'bg-[#10B981]/20 border-2 border-[#10B981] text-[#10B981]'
+                  : 'bg-white hover:bg-slate-100 text-[#070A0E] border border-white'
+              }`}
+            >
+              <span className="w-5 h-5 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96z"
+                  />
+                </svg>
+              </span>
+              <span>{googleSignedIn ? 'Signed in with Google ✓' : 'Sign in with Google'}</span>
+              {googleSignedIn && <Check className="w-4 h-4 ml-auto" />}
+            </button>
 
-            <div>
-              <label className="block text-xs font-mono text-slate-300 mb-1.5">
-                EMAIL ADDRESS (ENTER ANY EMAIL)
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email address..."
-                autoComplete="email"
-                required
-                className="w-full bg-[#070A0E] border border-white/20 focus:border-[#10B981] rounded-xl px-4 py-3 text-sm text-white focus:outline-none"
-              />
+            <div className="flex items-center gap-3">
+              <div className="h-px bg-white/10 flex-1" />
+              <span className="text-[11px] font-mono text-slate-400">OR EMAIL + PASSWORD</span>
+              <div className="h-px bg-white/10 flex-1" />
             </div>
 
-            <div>
-              <label className="block text-xs font-mono text-slate-300 mb-1.5">
-                ONLINE MATCH USERNAME (FRIENDS INVITE YOU BY THIS NAME)
-              </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="ChampionElite_10"
-                maxLength={24}
-                required
-                className="w-full bg-[#070A0E] border border-white/20 focus:border-[#10B981] rounded-xl px-4 py-3 font-display font-bold text-sm text-white focus:outline-none"
-              />
+            {/* Option 2: Email + Password */}
+            <div className="space-y-2.5">
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (googleSignedIn && e.target.value.trim()) setGoogleSignedIn(false);
+                    if (errorMsg) setErrorMsg('');
+                  }}
+                  placeholder="Email address"
+                  autoComplete="email"
+                  className="w-full bg-[#070A0E] border border-white/15 focus:border-[#38BDF8] rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (googleSignedIn && e.target.value) setGoogleSignedIn(false);
+                    if (errorMsg) setErrorMsg('');
+                  }}
+                  placeholder="Password"
+                  autoComplete="current-password"
+                  className="w-full bg-[#070A0E] border border-white/15 focus:border-[#38BDF8] rounded-xl pl-10 pr-10 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((s) => !s)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
-            {errorMsg && <p className="text-xs text-rose-400 font-medium">{errorMsg}</p>}
+            {/* Username Field Below Login Options */}
+            <div className="pt-2 border-t border-white/10 space-y-1.5">
+              <label className="block text-xs font-mono text-slate-300">USERNAME</label>
+              <div className="relative">
+                <User className="w-4 h-4 text-[#10B981] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => {
+                    setUsername(e.target.value);
+                    if (errorMsg) setErrorMsg('');
+                  }}
+                  placeholder="Enter your username"
+                  maxLength={24}
+                  className="w-full bg-[#070A0E] border-2 border-white/15 focus:border-[#10B981] rounded-xl pl-10 pr-4 py-3 font-display font-bold text-sm text-white placeholder:text-slate-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {errorMsg && <p className="text-xs text-rose-400 font-medium text-center">{errorMsg}</p>}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 bg-white hover:bg-slate-100 text-[#070A0E] font-display font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2.5 shadow-lg cursor-pointer"
+              className="w-full py-3.5 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer"
             >
-              <span className="w-5 h-5 rounded-full bg-[#070A0E] text-white flex items-center justify-center text-xs font-bold">
-                G
-              </span>
-              {loading ? 'SIGNING IN & SAVING...' : 'SIGN IN & STAY LOGGED IN'}
+              {loading ? 'SIGNING IN...' : 'SIGN IN'}
             </button>
           </form>
         )}
@@ -280,7 +409,6 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
               <p className="text-xs text-slate-300 mt-0.5">
                 Club: <span className="text-white font-semibold">{invite.fromClubName}</span> · Lead Star:{' '}
                 <span className="text-[#F59E0B] font-semibold">{invite.fromStarPlayer}</span>
-                {invite.fromFormation ? ` · ${invite.fromFormation}` : ''}
               </p>
             </div>
             <button
@@ -302,7 +430,7 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
               className="flex-1 py-2.5 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <Check className="w-4 h-4" />
-              ACCEPT & JOIN LOBBY
+              ACCEPT & JOIN ROOM
             </button>
             <button
               onClick={() => onDecline(invite)}
@@ -330,7 +458,7 @@ export const IncomingInviteModal: React.FC<IncomingInviteModalProps> = ({
 };
 
 // ============================================================================
-// 3. REDESIGNED ONLINE MATCH CENTER (INVITE BY USERNAME, LOBBY, READY & RESULTS)
+// 3. SIMPLE, MODERN & SMOOTH ONLINE MATCH ROOM CODE SYSTEM
 // ============================================================================
 interface OnlineMatchCenterProps {
   username: string;
@@ -355,6 +483,7 @@ interface OnlineMatchCenterProps {
   onSelectOnlineMatchFormat?: (fmt: '11v11' | '1v1') => void;
   onEditDreamTeam?: () => void;
   onOpenGoogleAuth: () => void;
+  onSuccessAuth?: (account: AuthenticatedAccount, token: string) => void;
   onCreateNewRoom: () => void;
   onJoinRoomByCode: (enteredCode: string) => void;
   onInviteByUsername: (friendUsername: string) => void;
@@ -370,30 +499,270 @@ export const OnlineMatchCenter: React.FC<OnlineMatchCenterProps> = ({
   awayTeam,
   leadStar,
   userSquad = [],
-  onlinePlayers,
   activeLobby,
   friendRoomState,
   roomCode,
-  onlineMatchFormat = '11v11',
+  onlineMatchFormat = '1v1',
   userFormation = '4-3-3',
-  userSquadOvr = 92,
   lastMatchResult,
   onSelectOnlineMatchFormat,
-  onEditDreamTeam,
   onOpenGoogleAuth,
+  onSuccessAuth,
   onCreateNewRoom,
   onJoinRoomByCode,
-  onInviteByUsername,
   onToggleLobbyReady,
-  onStartOnlineMatch,
-  onQuickMatchmaking,
 }) => {
-  const [friendUsernameInput, setFriendUsernameInput] = useState('');
   const [joinRoomCodeInput, setJoinRoomCodeInput] = useState('');
-  const [inviteStatusBanner, setInviteStatusBanner] = useState('');
   const [copiedRoom, setCopiedRoom] = useState(false);
+  const [statusFeedback, setStatusFeedback] = useState('');
+  const [openRooms, setOpenRooms] = useState<OpenRoomInfo[]>([]);
+  const [showPositionPicker, setShowPositionPicker] = useState(false);
   const [inspectedOpponent, setInspectedOpponent] = useState<OpponentSquadInfo | null>(null);
 
+  // Inline Login Gate state if user is not signed in yet
+  const [gateGoogleSignedIn, setGateGoogleSignedIn] = useState(false);
+  const [gateEmail, setGateEmail] = useState('');
+  const [gatePassword, setGatePassword] = useState('');
+  const [gateShowPassword, setGateShowPassword] = useState(false);
+  const [gateUsername, setGateUsername] = useState(
+    username && username !== 'ChampionElite_10' ? username : ''
+  );
+  const [gateLoading, setGateLoading] = useState(false);
+  const [gateError, setGateError] = useState('');
+
+  useEffect(() => {
+    const unsubOpen = FriendRoomService.subscribeOpenRooms((rooms) => {
+      setOpenRooms(rooms);
+    });
+    return () => {
+      unsubOpen();
+    };
+  }, []);
+
+  const handleGateLogin = async (
+    provider: 'google' | 'email',
+    resolvedEmail: string,
+    resolvedUsername: string,
+    rawPassword?: string
+  ) => {
+    setGateLoading(true);
+    setGateError('');
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider,
+          email: resolvedEmail,
+          password: rawPassword,
+          username: resolvedUsername,
+          favouriteClubId: userTeam.id,
+          initialUnlockedIds: userSquad.map((p) => p.id),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.user) {
+        setGateError(data?.error || 'Sign-in failed.');
+      } else {
+        SoundEngine.playUIClick();
+        onSuccessAuth?.(data.user, data.token);
+      }
+    } catch {
+      setGateError('Unable to reach authentication server.');
+    } finally {
+      setGateLoading(false);
+    }
+  };
+
+  // ============================================================================
+  // AUTH GATE: USERS MUST SIGN IN BEFORE ACCESSING ONLINE MATCH
+  // ============================================================================
+  if (!account) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-12">
+        <div className="bg-[#111722] border border-white/15 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+          <div className="text-center space-y-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#F59E0B]/15 border border-[#F59E0B]/30 text-[#F59E0B] font-mono text-[11px] font-bold">
+              <Lock className="w-3 h-3" /> SIGN IN REQUIRED FOR ONLINE MATCH
+            </div>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold text-white">
+              Sign In to Play Online
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-400">
+              Sign in with Google or Email + Password and enter your username to create or join an Online Match room.
+            </p>
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const trimmedName = gateUsername.trim();
+              if (!trimmedName) {
+                setGateError('Please enter your Username below.');
+                return;
+              }
+              const trimmedEmail = gateEmail.trim().toLowerCase();
+              const hasEmailInput = trimmedEmail.length > 0 || gatePassword.length > 0;
+              if (hasEmailInput && !gateGoogleSignedIn) {
+                if (!trimmedEmail.includes('@')) {
+                  setGateError('Please enter a valid email address.');
+                  return;
+                }
+                if (gatePassword.length < 4) {
+                  setGateError('Password must be at least 4 characters.');
+                  return;
+                }
+                handleGateLogin('email', trimmedEmail, trimmedName, gatePassword);
+                return;
+              }
+              if (gateGoogleSignedIn) {
+                const resolvedEmail =
+                  trimmedEmail && trimmedEmail.includes('@')
+                    ? trimmedEmail
+                    : `${trimmedName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'player'}@gmail.com`;
+                handleGateLogin('google', resolvedEmail, trimmedName);
+                return;
+              }
+              setGateError('Please sign in with Google or enter your Email + Password.');
+            }}
+            className="space-y-4"
+          >
+            {/* Google Sign-In Button */}
+            <button
+              type="button"
+              onClick={() => {
+                SoundEngine.playUIClick();
+                setGateError('');
+                setGateGoogleSignedIn(true);
+                const trimmedName = gateUsername.trim();
+                if (trimmedName) {
+                  const resolvedEmail =
+                    gateEmail.trim() && gateEmail.includes('@')
+                      ? gateEmail.trim().toLowerCase()
+                      : `${trimmedName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'player'}@gmail.com`;
+                  handleGateLogin('google', resolvedEmail, trimmedName);
+                } else {
+                  setGateUsername('Player_' + Math.floor(100 + Math.random() * 900));
+                }
+              }}
+              disabled={gateLoading}
+              className={`w-full py-3.5 px-4 rounded-2xl font-display font-bold text-sm transition-all flex items-center justify-center gap-3 shadow-md cursor-pointer ${
+                gateGoogleSignedIn
+                  ? 'bg-[#10B981]/20 border-2 border-[#10B981] text-[#10B981]'
+                  : 'bg-white hover:bg-slate-100 text-[#070A0E] border border-white'
+              }`}
+            >
+              <span className="w-5 h-5 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96z"
+                  />
+                </svg>
+              </span>
+              <span>{gateGoogleSignedIn ? 'Signed in with Google ✓' : 'Sign in with Google'}</span>
+              {gateGoogleSignedIn && <Check className="w-4 h-4 ml-auto" />}
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="h-px bg-white/10 flex-1" />
+              <span className="text-[11px] font-mono text-slate-400">OR EMAIL + PASSWORD</span>
+              <div className="h-px bg-white/10 flex-1" />
+            </div>
+
+            {/* Email + Password Fields */}
+            <div className="space-y-2.5">
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="email"
+                  value={gateEmail}
+                  onChange={(e) => {
+                    setGateEmail(e.target.value);
+                    if (gateGoogleSignedIn && e.target.value.trim()) setGateGoogleSignedIn(false);
+                    if (gateError) setGateError('');
+                  }}
+                  placeholder="Email address"
+                  autoComplete="email"
+                  className="w-full bg-[#070A0E] border border-white/15 focus:border-[#38BDF8] rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type={gateShowPassword ? 'text' : 'password'}
+                  value={gatePassword}
+                  onChange={(e) => {
+                    setGatePassword(e.target.value);
+                    if (gateGoogleSignedIn && e.target.value) setGateGoogleSignedIn(false);
+                    if (gateError) setGateError('');
+                  }}
+                  placeholder="Password"
+                  autoComplete="current-password"
+                  className="w-full bg-[#070A0E] border border-white/15 focus:border-[#38BDF8] rounded-xl pl-10 pr-10 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setGateShowPassword((s) => !s)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                >
+                  {gateShowPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Username Field Below Login Options */}
+            <div className="pt-2 border-t border-white/10 space-y-1.5">
+              <label className="block text-xs font-mono text-slate-300">USERNAME</label>
+              <div className="relative">
+                <User className="w-4 h-4 text-[#10B981] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={gateUsername}
+                  onChange={(e) => {
+                    setGateUsername(e.target.value);
+                    if (gateError) setGateError('');
+                  }}
+                  placeholder="Enter your username"
+                  maxLength={24}
+                  className="w-full bg-[#070A0E] border-2 border-white/15 focus:border-[#10B981] rounded-xl pl-10 pr-4 py-3 font-display font-bold text-sm text-white placeholder:text-slate-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {gateError && (
+              <p className="text-xs text-rose-400 font-medium text-center">{gateError}</p>
+            )}
+
+            <button
+              type="submit"
+              disabled={gateLoading}
+              className="w-full py-3.5 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+            >
+              {gateLoading ? 'SIGNING IN...' : 'SIGN IN & ACCESS ONLINE MATCH'}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // SIGNED-IN ONLINE MATCH ROOM CODE VIEW
+  // ============================================================================
   const myClientId = FriendRoomService.getClientId();
   const activeRoomCode = friendRoomState.roomCode || roomCode;
   const activeFormat = friendRoomState.matchFormat || onlineMatchFormat;
@@ -413,12 +782,12 @@ export const OnlineMatchCenter: React.FC<OnlineMatchCenterProps> = ({
     : myRoomReady;
 
   const readyPlayersCount = friendRoomState.members.filter((m) => m.isReady).length;
-  const allRoomPlayersReady =
-    friendRoomState.members.length >= requiredPlayers &&
-    friendRoomState.members.every((m) => m.isReady);
-
+  const connectedPlayersCount = Math.max(1, friendRoomState.members.length);
+  const bothConnected =
+    connectedPlayersCount >= requiredPlayers || Boolean(activeLobby?.guest);
   const bothPlayersReady = Boolean(
-    allRoomPlayersReady ||
+    (connectedPlayersCount >= requiredPlayers &&
+      friendRoomState.members.every((m) => m.isReady)) ||
       (activeLobby && activeLobby.host.isReady && activeLobby.guest?.isReady)
   );
 
@@ -435,876 +804,487 @@ export const OnlineMatchCenter: React.FC<OnlineMatchCenterProps> = ({
     (_, idx) => userSquad[idx] || PLAYERS_DB[idx % PLAYERS_DB.length]
   );
 
-  const rawStatus = friendRoomState.status || 'waiting_for_opponent';
-  const statusDisplay =
-    rawStatus === 'match_starting'
-      ? {
-          label: 'All Required Players Ready — Starting Match Automatically!',
-          desc: `Launching synchronized 3D ${activeFormat === '11v11' ? 'Online 11v11 Multiplayer' : 'Online 1v1'} match in Room ${activeRoomCode}...`,
-          badgeClass: 'bg-[#10B981] text-[#070A0E]',
-          dotClass: 'bg-[#070A0E] animate-ping',
-        }
-      : rawStatus === 'opponent_connected' || friendRoomState.members.length >= 2
-      ? {
-          label: `${friendRoomState.members.length} Players in Match (${readyPlayersCount}/${requiredPlayers} Ready)`,
-          desc: `Players connected in Match Code ${activeRoomCode}. Click READY below — the match starts automatically when all ${requiredPlayers} required players are ready!`,
-          badgeClass: 'bg-[#38BDF8] text-[#070A0E]',
-          dotClass: 'bg-[#070A0E] animate-ping',
-        }
-      : rawStatus === 'opponent_disconnected'
-      ? {
-          label: 'Player Disconnected',
-          desc: 'A player disconnected from the match room. Share your Match Code or create a new match.',
-          badgeClass: 'bg-rose-500 text-white',
-          dotClass: 'bg-white',
-        }
-      : {
-          label: `Waiting for Friends (${Math.max(1, friendRoomState.members.length)}/${requiredPlayers} Joined)`,
-          desc: `Private Match Code ${activeRoomCode} (${activeFormat.toUpperCase()}) is active. Friends can enter this code to join and Ready Up!`,
-          badgeClass: 'bg-[#F59E0B]/20 text-[#F59E0B] border border-[#F59E0B]/50',
-          dotClass: 'bg-[#F59E0B] animate-pulse',
-        };
-
   const handleJoinRoomSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const clean = joinRoomCodeInput.trim().toUpperCase();
     if (!clean) return;
     SoundEngine.playUIClick();
     onJoinRoomByCode(clean);
-    setInviteStatusBanner(`Connecting to Room ${clean.startsWith('PLAY-') ? clean : `PLAY-${clean}`}...`);
+    const formatted = clean.startsWith('PLAY-') ? clean : `PLAY-${clean}`;
+    setStatusFeedback(`Joined Room ${formatted}`);
+    setJoinRoomCodeInput('');
   };
 
-  const handleSendUsernameInvite = (e: React.FormEvent) => {
-    e.preventDefault();
-    const target = friendUsernameInput.trim();
-    if (!target) return;
-    SoundEngine.playUIClick();
-    onInviteByUsername(target);
-    setInviteStatusBanner(`Invitation sent to @${target}! Entering Online Match Lobby...`);
-    setFriendUsernameInput('');
-  };
-
-  const handleQuickInviteClick = (targetUsername: string) => {
-    SoundEngine.playUIClick();
-    onInviteByUsername(targetUsername);
-    setInviteStatusBanner(`Invitation sent to @${targetUsername}! Entering Online Match Lobby...`);
-  };
-
-  const otherOnlinePlayers = onlinePlayers.filter(
-    (p) => p.clientId !== myClientId && p.username.toLowerCase() !== username.toLowerCase()
-  );
+  const otherOpenRooms = openRooms.filter((r) => r.roomCode !== activeRoomCode);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-[#111722] via-[#132030] to-[#111722] border border-white/15 rounded-2xl p-6 sm:p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-6 shadow-2xl">
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-[#10B981]">
-            <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
-            ONLINE VS MULTIPLAYER · 11V11 DREAM TEAM & 1V1 DUEL · REAL-TIME SYNC
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      {/* Clean Header Bar */}
+      <div className="bg-[#111722] border border-white/15 rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-xs font-mono text-[#10B981]">
+            <span className="w-2 h-2 rounded-full bg-[#10B981]" />
+            ONLINE MULTIPLAYER · PRO CHALLENGER DIFFICULTY
           </div>
-          <h1 className="font-display text-3xl sm:text-4xl font-bold text-white">
-            ONLINE VS — {onlineMatchFormat === '11v11' ? '11V11 DREAM TEAM ARENA' : '1V1 MULTIPLAYER ARENA'}
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-white">
+            Online Match — Room Code
           </h1>
-          <p className="text-xs sm:text-sm text-slate-300 max-w-2xl">
-            Play with your full <span className="text-white font-semibold">11v11 Dream Team Starting XI ({userFormation}, OVR {userSquadOvr})</span> or a 1v1 World Star Duel against real online opponents! Create a Room Code or join your friend’s room for instant synchronized kick-off.
+          <p className="text-xs sm:text-sm text-slate-400">
+            One player creates a room code and the other player enters the code to join.
           </p>
+        </div>
 
-          {/* 11v11 Multiplayer vs 1v1 Format Selector + Required Players */}
-          <div className="flex flex-wrap items-center gap-2.5 pt-1">
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {/* Mode Selector (1v1 / 11v11) */}
+          <div className="flex items-center bg-[#070A0E] p-1 rounded-xl border border-white/10">
             <button
-              onClick={() => {
-                SoundEngine.playUIClick();
-                onSelectOnlineMatchFormat?.('11v11');
-                FriendRoomService.configureRoom(activeRoomCode, '11v11', requiredPlayers);
-              }}
-              className={`px-4 py-2.5 rounded-xl font-display font-bold text-xs transition-all cursor-pointer flex items-center gap-2 ${
-                activeFormat === '11v11'
-                  ? 'bg-[#10B981] text-[#070A0E] shadow-lg'
-                  : 'bg-[#070A0E] text-slate-300 border border-white/15 hover:border-white/30'
-              }`}
-            >
-              <Users className="w-4 h-4" />
-              ONLINE 11V11 MULTIPLAYER (CONTROL YOUR OWN PLAYER)
-            </button>
-            <button
+              type="button"
               onClick={() => {
                 SoundEngine.playUIClick();
                 onSelectOnlineMatchFormat?.('1v1');
                 FriendRoomService.configureRoom(activeRoomCode, '1v1', 2);
               }}
-              className={`px-4 py-2.5 rounded-xl font-display font-bold text-xs transition-all cursor-pointer flex items-center gap-2 ${
+              className={`px-3 py-1.5 rounded-lg font-display font-bold text-xs transition-colors cursor-pointer flex items-center gap-1.5 ${
                 activeFormat === '1v1'
-                  ? 'bg-[#F59E0B] text-[#070A0E] shadow-lg'
-                  : 'bg-[#070A0E] text-slate-300 border border-white/15 hover:border-white/30'
+                  ? 'bg-[#10B981] text-[#070A0E]'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Zap className="w-4 h-4" />
-              ONLINE 1V1 MULTIPLAYER
+              <Zap className="w-3.5 h-3.5" />
+              1v1
             </button>
-
-            {activeFormat === '11v11' && (
-              <div className="flex items-center gap-1.5 bg-[#070A0E] border border-white/15 rounded-xl px-3 py-1.5">
-                <span className="text-[11px] font-mono text-slate-400">Required Players:</span>
-                {[2, 3, 4, 6, 11, 22].map((cnt) => (
-                  <button
-                    key={cnt}
-                    type="button"
-                    onClick={() => {
-                      SoundEngine.playUIClick();
-                      FriendRoomService.configureRoom(activeRoomCode, '11v11', cnt);
-                    }}
-                    className={`px-2 py-0.5 rounded font-mono text-xs font-bold cursor-pointer transition-colors ${
-                      requiredPlayers === cnt
-                        ? 'bg-[#10B981] text-[#070A0E]'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {cnt}P
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {onEditDreamTeam && (
-              <button
-                onClick={() => {
-                  SoundEngine.playUIClick();
-                  onEditDreamTeam();
-                }}
-                className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-xs font-mono text-white transition-colors cursor-pointer"
-              >
-                Edit Squad →
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Account & Online Identity Card */}
-        <div className="bg-[#070A0E]/90 border border-white/15 rounded-xl p-4 flex items-center justify-between gap-4 shrink-0">
-          <div>
-            <div className="text-[11px] font-mono text-[#10B981] font-bold">
-              YOUR ONLINE USERNAME
-            </div>
-            <div className="font-display text-lg font-bold text-white flex items-center gap-1.5">
-              @{username}
-              {account && <ShieldCheck className="w-4 h-4 text-[#38BDF8]" />}
-            </div>
-            <div className="text-xs text-slate-400">
-              {userTeam.name} · Star: {leadStar.name}
-            </div>
-          </div>
-
-          <button
-            onClick={onOpenGoogleAuth}
-            className="px-3.5 py-2 bg-white/10 hover:bg-white/15 border border-white/15 rounded-lg text-xs font-display font-bold text-white transition-colors whitespace-nowrap cursor-pointer"
-          >
-            {account ? 'Google Linked ✓' : 'Sign in with Google'}
-          </button>
-        </div>
-      </div>
-
-      {/* LIVE MULTIPLAYER CONNECTION STATUS BAR ("Waiting for Opponent" / "Opponent Connected" / "Match Starting") */}
-      <div className="bg-[#111722] border-2 border-[#10B981]/50 rounded-2xl p-5 sm:p-6 shadow-2xl space-y-5">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <span
-              className={`px-3.5 py-1.5 rounded-lg font-display font-bold text-xs sm:text-sm flex items-center gap-2 ${statusDisplay.badgeClass}`}
-            >
-              <span className={`w-2.5 h-2.5 rounded-full ${statusDisplay.dotClass}`} />
-              {statusDisplay.label}
-            </span>
-            <div>
-              <div className="text-xs sm:text-sm font-semibold text-white">
-                {statusDisplay.desc}
-              </div>
-              <div className="text-[11px] font-mono text-slate-400">
-                Active Room Code: <span className="text-[#F59E0B] font-bold">{activeRoomCode}</span> · Players in Room: {Math.max(1, friendRoomState.members.length)}/2
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2.5 shrink-0">
             <button
               type="button"
               onClick={() => {
                 SoundEngine.playUIClick();
-                const opp = activeLobby?.guest || guestMember;
-                setInspectedOpponent({
-                  username: opp?.username || awayTeam.name,
-                  clubName: opp?.clubName || awayTeam.name,
-                  clubPrimaryColor: awayTeam.primaryColor,
-                  clubSecondaryColor: awayTeam.secondaryColor,
-                  starPlayerName: opp?.starPlayerName || 'Lionel Messi',
-                  squadIds: opp?.squadIds,
-                  formation: opp?.formation || '4-3-3',
-                });
+                onSelectOnlineMatchFormat?.('11v11');
+                FriendRoomService.configureRoom(activeRoomCode, '11v11', 2);
               }}
-              className="px-3.5 py-2.5 bg-white/10 hover:bg-white/15 border border-white/20 text-white font-display font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+              className={`px-3 py-1.5 rounded-lg font-display font-bold text-xs transition-colors cursor-pointer flex items-center gap-1.5 ${
+                activeFormat === '11v11'
+                  ? 'bg-[#10B981] text-[#070A0E]'
+                  : 'text-slate-400 hover:text-white'
+              }`}
             >
-              <Eye className="w-4 h-4 text-[#38BDF8]" />
-              VIEW OPPONENT SQUAD (XI)
-            </button>
-            <button
-              onClick={() => {
-                SoundEngine.playUIClick();
-                onQuickMatchmaking();
-                setInviteStatusBanner('Searching for online opponent in Quick Matchmaking Queue...');
-              }}
-              className="px-4 py-2.5 bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E] font-display font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-md"
-            >
-              <Zap className="w-4 h-4" />
-              QUICK MATCHMAKING
+              <Users className="w-3.5 h-3.5" />
+              11v11
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={onOpenGoogleAuth}
+            className="px-3.5 py-2 bg-[#070A0E] hover:bg-white/5 border border-white/15 rounded-xl text-xs font-display font-bold text-white flex items-center gap-1.5 cursor-pointer"
+          >
+            <ShieldCheck className="w-4 h-4 text-[#10B981]" />@{account.username}
+          </button>
         </div>
-
-        {/* CREATE PRIVATE MATCH (UNIQUE MATCH CODE) vs JOIN MATCH BY CODE */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-          {/* Create Private Match & Share Unique Match Code */}
-          <div className="lg:col-span-6 bg-[#070A0E] border border-white/15 rounded-xl p-5 flex flex-col justify-between space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-[11px] font-mono text-[#10B981] font-bold">
-                  CREATE PRIVATE MATCH · UNIQUE MATCH CODE
-                </div>
-                <h3 className="font-display text-lg font-bold text-white">
-                  Your Private Match Code ({activeFormat.toUpperCase()})
-                </h3>
-              </div>
-              <button
-                onClick={onCreateNewRoom}
-                className="px-3 py-1.5 bg-white/10 hover:bg-white/15 text-xs font-display font-bold text-white rounded-lg transition-colors cursor-pointer"
-              >
-                NEW MATCH CODE
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 bg-[#111722] border border-[#10B981]/40 rounded-xl px-4 py-3.5">
-              <div>
-                <div className="text-[10px] font-mono text-slate-400">
-                  SHARE THIS MATCH CODE WITH FRIENDS TO JOIN
-                </div>
-                <div className="font-mono text-2xl sm:text-3xl font-bold text-[#10B981] tracking-wider">
-                  {activeRoomCode}
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  navigator.clipboard?.writeText(activeRoomCode).catch(() => {});
-                  setCopiedRoom(true);
-                  setTimeout(() => setCopiedRoom(false), 1800);
-                }}
-                className="px-4 py-2.5 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
-              >
-                {copiedRoom ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                {copiedRoom ? 'COPIED!' : 'COPY CODE'}
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-400">
-              Friends can enter <span className="text-white font-mono font-bold">{activeRoomCode}</span> to join this match. The match starts automatically when all {requiredPlayers} required players are Ready!
-            </p>
-          </div>
-
-          {/* Join Private Match by Entering Unique Match Code */}
-          <div className="lg:col-span-6 bg-[#070A0E] border border-white/15 rounded-xl p-5 flex flex-col justify-between space-y-4">
-            <div>
-              <div className="text-[11px] font-mono text-[#F59E0B] font-bold">
-                JOIN PRIVATE MATCH · ENTER FRIEND’S CODE
-              </div>
-              <h3 className="font-display text-lg font-bold text-white">
-                Enter Match Code to Join Same Match
-              </h3>
-            </div>
-
-            <form onSubmit={handleJoinRoomSubmit} className="flex flex-col sm:flex-row gap-2.5">
-              <input
-                type="text"
-                value={joinRoomCodeInput}
-                onChange={(e) => setJoinRoomCodeInput(e.target.value.toUpperCase())}
-                placeholder="Enter Match Code (e.g. PLAY-7492 or 7492)"
-                className="flex-1 bg-[#111722] border border-white/20 focus:border-[#F59E0B] rounded-xl px-4 py-3.5 font-mono text-base font-bold text-white uppercase tracking-wider placeholder:text-slate-500 placeholder:font-sans placeholder:text-xs focus:outline-none"
-              />
-              <button
-                type="submit"
-                className="px-6 py-3.5 bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E] font-display font-bold text-xs sm:text-sm rounded-xl transition-colors flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer shadow-lg"
-              >
-                <Play className="w-4 h-4 fill-current" />
-                JOIN MATCH
-              </button>
-            </form>
-
-            <p className="text-xs text-slate-400">
-              Enter your friend’s Match Code above to join their lobby, pick your player in 11v11 mode, and Ready Up!
-            </p>
-          </div>
-        </div>
-
-        {/* 11V11 MULTIPLAYER: SELECT YOUR TEAM & CONTROL YOUR OWN PLAYER ON THE TEAM */}
-        {activeFormat === '11v11' && (
-          <div className="bg-[#070A0E] border border-[#10B981]/30 rounded-xl p-5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
-              <div>
-                <div className="text-[11px] font-mono text-[#10B981] font-bold">
-                  ONLINE 11V11 MULTIPLAYER · CONTROL YOUR OWN PLAYER ON THE TEAM
-                </div>
-                <h3 className="font-display text-base sm:text-lg font-bold text-white">
-                  Choose Your Team & Select Which Player You Control ({formationSlots[myAssignedSlotIdx]?.role || 'ST'} · {startingXI[myAssignedSlotIdx]?.name})
-                </h3>
-              </div>
-
-              {/* Team Selector (Home vs Away) */}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    SoundEngine.playUIClick();
-                    const p = startingXI[myAssignedSlotIdx] || leadStar;
-                    FriendRoomService.selectRoomPlayerSlot(
-                      activeRoomCode,
-                      'home',
-                      myAssignedSlotIdx,
-                      p.id,
-                      p.name
-                    );
-                  }}
-                  className={`px-3.5 py-1.5 rounded-lg font-display font-bold text-xs cursor-pointer transition-colors ${
-                    myTeamSide === 'home'
-                      ? 'bg-[#10B981] text-[#070A0E]'
-                      : 'bg-[#111722] text-slate-300 border border-white/15'
-                  }`}
-                >
-                  HOME TEAM ({userTeam.shortName})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    SoundEngine.playUIClick();
-                    const p = startingXI[myAssignedSlotIdx] || leadStar;
-                    FriendRoomService.selectRoomPlayerSlot(
-                      activeRoomCode,
-                      'away',
-                      myAssignedSlotIdx,
-                      p.id,
-                      p.name
-                    );
-                  }}
-                  className={`px-3.5 py-1.5 rounded-lg font-display font-bold text-xs cursor-pointer transition-colors ${
-                    myTeamSide === 'away'
-                      ? 'bg-[#F59E0B] text-[#070A0E]'
-                      : 'bg-[#111722] text-slate-300 border border-white/15'
-                  }`}
-                >
-                  AWAY TEAM ({awayTeam.shortName})
-                </button>
-              </div>
-            </div>
-
-            {/* 11-Player Position Grid so Multiple Players Can Each Control Their Own Player */}
-            <div className="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-11 gap-2">
-              {startingXI.map((p, slotIdx) => {
-                const roleLabel = formationSlots[slotIdx]?.role || p.position;
-                const isMySlot = myAssignedSlotIdx === slotIdx;
-                const otherController = friendRoomState.members.find(
-                  (m) =>
-                    m.clientId !== myClientId &&
-                    (m.teamSide || 'home') === myTeamSide &&
-                    (m.assignedSlotIdx ?? 9) === slotIdx
-                );
-                return (
-                  <button
-                    type="button"
-                    key={`${p.id}_${slotIdx}`}
-                    onClick={() => {
-                      SoundEngine.playUIClick();
-                      FriendRoomService.selectRoomPlayerSlot(
-                        activeRoomCode,
-                        myTeamSide,
-                        slotIdx,
-                        p.id,
-                        p.name
-                      );
-                    }}
-                    className={`p-2 rounded-xl border flex flex-col items-center text-center transition-all cursor-pointer ${
-                      isMySlot
-                        ? 'bg-[#192231] border-[#10B981] ring-2 ring-[#10B981]'
-                        : otherController
-                        ? 'bg-[#111722] border-[#38BDF8]'
-                        : 'bg-[#111722]/70 border-white/10 hover:border-white/30'
-                    }`}
-                  >
-                    <PlayerPhotoAvatar
-                      player={p}
-                      className="w-11 h-11 rounded-lg border border-white/20"
-                      showPositionBadge={false}
-                      showRatingBadge={true}
-                    />
-                    <span className="text-[10px] font-sans font-bold text-white truncate w-full mt-1 leading-tight">
-                      {p.name}
-                    </span>
-                    <span className="mt-0.5 px-1.5 py-0.5 rounded bg-black/60 font-mono text-[9px] font-bold text-[#10B981]">
-                      {roleLabel}
-                    </span>
-                    <span className="text-[10px] font-display font-bold text-[#F59E0B] truncate w-full mt-0.5">
-                      {isMySlot
-                        ? 'YOU'
-                        : otherController
-                        ? `@${otherController.username}`
-                        : `#${p.number}`}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Latest Online Match Result Banner (if completed) */}
+      {/* Latest Match Result (if any) */}
       {lastMatchResult && (
-        <div className="bg-[#111722] border border-[#F59E0B]/40 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
+        <div className="bg-[#111722] border border-[#F59E0B]/40 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Trophy className="w-6 h-6 text-[#F59E0B]" />
-            <div>
-              <div className="text-xs font-mono text-[#F59E0B] font-bold">
-                LATEST ONLINE MATCH RESULT RECORDED
-              </div>
-              <div className="font-display text-lg font-bold text-white">
-                YOU ({username}) {lastMatchResult.homeScore} - {lastMatchResult.awayScore}{' '}
-                {lastMatchResult.opponentName}
-              </div>
+            <Trophy className="w-5 h-5 text-[#F59E0B]" />
+            <div className="font-display text-base font-bold text-white">
+              Last Match: @{username} {lastMatchResult.homeScore} - {lastMatchResult.awayScore}{' '}
+              {lastMatchResult.opponentName}
             </div>
           </div>
           <div className="font-mono text-xs text-[#10B981] font-bold">
-            +{lastMatchResult.coinsEarned.toLocaleString()} Coins · Rating Updated
+            +{lastMatchResult.coinsEarned.toLocaleString()} Coins
           </div>
         </div>
       )}
 
-      {/* Main 12-Col Grid: Left = Invite by Username & Online Directory | Right = Live Ready Lobby */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Left 6 Cols: Invite Friend by Username + Live Online Players + Quick Matchmaking */}
-        <div className="lg:col-span-6 space-y-6">
-          {/* Card 1: Invite a Friend by Username */}
-          <div className="bg-[#111722] border border-white/15 rounded-2xl p-6 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs font-mono text-[#10B981] font-bold">
-                  DIRECT USERNAME INVITATION
-                </div>
-                <h2 className="font-display text-xl font-bold text-white">
-                  Invite Friend by Username
-                </h2>
+      {/* STEP 1: CREATE OR JOIN ROOM CODE (2 Simple Side-by-Side Cards) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Card 1: Create Room Code */}
+        <div className="bg-[#111722] border border-white/15 rounded-2xl p-6 flex flex-col justify-between space-y-4 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-[11px] font-mono text-[#10B981] font-bold">
+                PLAYER 1 · CREATE ROOM
               </div>
-              <UserPlus className="w-5 h-5 text-[#10B981]" />
+              <h2 className="font-display text-lg font-bold text-white">Your Room Code</h2>
             </div>
-
-            <p className="text-xs text-slate-300">
-              Enter your friend’s exact username below to invite them to a real-time 1v1 Online Match lobby.
-            </p>
-
-            <form onSubmit={handleSendUsernameInvite} className="flex flex-col sm:flex-row gap-2.5">
-              <input
-                type="text"
-                value={friendUsernameInput}
-                onChange={(e) => setFriendUsernameInput(e.target.value)}
-                placeholder="Enter friend's username (e.g. Alex_10)..."
-                className="flex-1 bg-[#070A0E] border border-white/20 focus:border-[#10B981] rounded-xl px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none"
-              />
-              <button
-                type="submit"
-                className="px-5 py-3 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-xs sm:text-sm rounded-xl transition-colors flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer shadow-md"
-              >
-                <Send className="w-4 h-4" />
-                INVITE FRIEND
-              </button>
-            </form>
-
-            {inviteStatusBanner && (
-              <div className="p-3 rounded-xl bg-[#10B981]/15 border border-[#10B981]/40 text-xs text-[#10B981] font-medium">
-                {inviteStatusBanner}
-              </div>
-            )}
-
-            {/* Quick Online Matchmaking & Room Code Join */}
-            <div className="pt-4 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button
-                onClick={onQuickMatchmaking}
-                className="py-3 px-4 bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E] font-display font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Zap className="w-4 h-4" />
-                QUICK ONLINE MATCHMAKING
-              </button>
-
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="text"
-                  value={joinRoomCodeInput}
-                  onChange={(e) => setJoinRoomCodeInput(e.target.value.toUpperCase())}
-                  placeholder="PLAY-7492"
-                  className="w-full bg-[#070A0E] border border-white/15 rounded-xl px-3 py-2.5 font-mono text-xs font-bold text-white uppercase"
-                />
-                <button
-                  onClick={() => {
-                    const code = joinRoomCodeInput.trim() || roomCode;
-                    onStartOnlineMatch(awayTeam, code);
-                  }}
-                  className="px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white font-display font-bold text-xs rounded-xl whitespace-nowrap cursor-pointer"
-                >
-                  PLAY CODE
-                </button>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                SoundEngine.playUIClick();
+                onCreateNewRoom();
+                setStatusFeedback('Created a new Room Code');
+              }}
+              className="px-3 py-1.5 bg-white/10 hover:bg-white/15 rounded-lg text-xs font-display font-bold text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              New Code
+            </button>
           </div>
 
-          {/* Card 2: Live Online Players Directory */}
-          <div className="bg-[#111722] border border-white/15 rounded-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs font-mono text-[#38BDF8] font-bold">
-                  ACTIVE PLAYERS ONLINE NOW
-                </div>
-                <h3 className="font-display text-lg font-bold text-white">
-                  Click Any Online Player to Invite
-                </h3>
+          <div className="bg-[#070A0E] border border-[#10B981]/40 rounded-2xl px-4 py-4 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[10px] font-mono text-slate-400">SHARE CODE WITH FRIEND</div>
+              <div className="font-mono text-2xl sm:text-3xl font-bold text-[#10B981] tracking-wider">
+                {activeRoomCode}
               </div>
-              <span className="font-mono text-xs text-[#10B981] font-bold">
-                {otherOnlinePlayers.length + 1} Online
-              </span>
             </div>
-
-            <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
-              {otherOnlinePlayers.map((p) => (
-                <div
-                  key={p.clientId}
-                  className="p-3.5 rounded-xl bg-[#070A0E] border border-white/10 flex items-center justify-between gap-3"
-                >
-                  <div>
-                    <div className="font-display font-bold text-sm text-white flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-[#10B981]" />@{p.username}
-                    </div>
-                    <div className="text-xs text-slate-400">
-                      {p.clubName} · {p.formation || '4-3-3'} · Star: {p.starPlayerName} · OVR {p.rating}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        SoundEngine.playUIClick();
-                        setInspectedOpponent({
-                          username: p.username,
-                          clubName: p.clubName,
-                          starPlayerName: p.starPlayerName,
-                          squadIds: p.squadIds,
-                          formation: p.formation || '4-3-3',
-                        });
-                      }}
-                      className="px-2.5 py-2 bg-white/5 hover:bg-white/15 border border-white/15 text-slate-200 hover:text-white font-mono font-bold text-xs rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-                      title="View Opponent Starting XI & Formation"
-                    >
-                      <Eye className="w-3.5 h-3.5 text-[#38BDF8]" />
-                      XI
-                    </button>
-                    <button
-                      onClick={() => handleQuickInviteClick(p.username)}
-                      className="px-3.5 py-2 bg-[#10B981]/20 hover:bg-[#10B981] text-[#10B981] hover:text-[#070A0E] border border-[#10B981]/40 font-display font-bold text-xs rounded-lg transition-colors cursor-pointer whitespace-nowrap"
-                    >
-                      INVITE
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {/* Featured Online Rivals Always Available to Challenge */}
-              {[
-                { username: 'SambaKing_BR', club: 'Brazil', star: 'Neymar Jr.', ovr: 94, formation: '4-3-3' },
-                { username: 'Madridista_99', club: 'Real Madrid', star: 'Kylian Mbappé', ovr: 96, formation: '4-3-3' },
-                { username: 'Albiceleste_10', club: 'Argentina', star: 'Lionel Messi', ovr: 96, formation: '4-2-3-1' },
-              ].map((rival) => (
-                <div
-                  key={rival.username}
-                  className="p-3.5 rounded-xl bg-[#070A0E]/80 border border-white/10 flex items-center justify-between gap-3"
-                >
-                  <div>
-                    <div className="font-display font-bold text-sm text-white flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-[#38BDF8]" />@{rival.username}
-                    </div>
-                    <div className="text-xs text-slate-400">
-                      {rival.club} · {rival.formation} · Star: {rival.star} · OVR {rival.ovr}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        SoundEngine.playUIClick();
-                        setInspectedOpponent({
-                          username: rival.username,
-                          clubName: rival.club,
-                          starPlayerName: rival.star,
-                          formation: rival.formation,
-                        });
-                      }}
-                      className="px-2.5 py-2 bg-white/5 hover:bg-white/15 border border-white/15 text-slate-200 hover:text-white font-mono font-bold text-xs rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-                      title="View Opponent Starting XI & Formation"
-                    >
-                      <Eye className="w-3.5 h-3.5 text-[#38BDF8]" />
-                      XI
-                    </button>
-                    <button
-                      onClick={() => handleQuickInviteClick(rival.username)}
-                      className="px-3.5 py-2 bg-white/10 hover:bg-[#10B981] text-white hover:text-[#070A0E] font-display font-bold text-xs rounded-lg transition-colors cursor-pointer whitespace-nowrap"
-                    >
-                      INVITE
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard?.writeText(activeRoomCode).catch(() => {});
+                setCopiedRoom(true);
+                setTimeout(() => setCopiedRoom(false), 1800);
+              }}
+              className="px-4 py-2.5 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+            >
+              {copiedRoom ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copiedRoom ? 'COPIED' : 'COPY'}
+            </button>
           </div>
+
+          <p className="text-xs text-slate-400">
+            Share <span className="text-white font-mono font-bold">{activeRoomCode}</span> with the other player so they can join your room.
+          </p>
         </div>
 
-        {/* Right 6 Cols: Interactive Online Match Lobby with READY Button */}
-        <div className="lg:col-span-6">
-          <div className="bg-[#111722] border border-white/15 rounded-2xl p-6 sm:p-7 space-y-6 shadow-2xl h-full flex flex-col justify-between">
-            <div className="space-y-5">
-              <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                <div>
-                  <div className="text-xs font-mono text-[#F59E0B] font-bold">
-                    PRE-MATCH READY CHECK LOBBY
-                  </div>
-                  <h2 className="font-display text-2xl font-bold text-white">
-                    ONLINE MATCH LOBBY ({activeLobby?.roomCode || roomCode})
-                  </h2>
-                </div>
-                <button
-                  onClick={() => {
-                    navigator.clipboard?.writeText(activeLobby?.roomCode || roomCode).catch(() => {});
-                    setCopiedRoom(true);
-                    setTimeout(() => setCopiedRoom(false), 1800);
-                  }}
-                  className="px-3 py-1.5 bg-white/10 hover:bg-white/15 rounded-lg text-xs font-mono text-white flex items-center gap-1.5 cursor-pointer"
-                >
-                  {copiedRoom ? <Check className="w-3.5 h-3.5 text-[#10B981]" /> : <Copy className="w-3.5 h-3.5" />}
-                  {copiedRoom ? 'Copied' : 'Copy Code'}
-                </button>
-              </div>
-
-              {/* Head-to-Head Player Cards with Ready / Connection Status */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Player 1 (Host / You) */}
-                <div
-                  className={`p-5 rounded-2xl bg-[#070A0E] border-2 transition-all ${
-                    (activeLobby ? activeLobby.host.isReady : true)
-                      ? 'border-[#10B981]'
-                      : 'border-white/15'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-mono font-bold text-[#10B981]">
-                      PLAYER 1 (HOST)
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded text-[11px] font-mono font-bold bg-[#10B981]/20 text-[#10B981]">
-                      {activeLobby ? (activeLobby.host.isReady ? 'READY ✓' : 'HOST CONNECTED') : 'CONNECTED ✓'}
-                    </span>
-                  </div>
-                  <div className="font-display text-xl font-bold text-white truncate">
-                    @{activeLobby ? activeLobby.host.username : hostMember?.username || username}
-                  </div>
-                  <div className="text-xs text-slate-300 mt-1">
-                    Club:{' '}
-                    <span className="text-white font-semibold">
-                      {activeLobby ? activeLobby.host.clubName : hostMember?.clubName || userTeam.name}
-                    </span>
-                  </div>
-                  <div className="text-xs text-[#F59E0B] font-mono mt-1">
-                    Star: {activeLobby ? activeLobby.host.starPlayerName : hostMember?.starPlayerName || leadStar.name}
-                  </div>
-                </div>
-
-                {/* Player 2 (Invited Friend / Room Code Opponent) */}
-                {(() => {
-                  const p2 = activeLobby?.guest || guestMember;
-                  return (
-                    <div
-                      className={`p-5 rounded-2xl bg-[#070A0E] border-2 transition-all ${
-                        p2 ? 'border-[#10B981]' : 'border-white/15'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-mono font-bold text-[#F59E0B]">
-                          PLAYER 2 (OPPONENT)
-                        </span>
-                        <span
-                          className={`px-2.5 py-0.5 rounded text-[11px] font-mono font-bold ${
-                            p2
-                              ? 'bg-[#10B981]/20 text-[#10B981]'
-                              : 'bg-white/10 text-slate-400'
-                          }`}
-                        >
-                          {p2 ? 'OPPONENT CONNECTED ✓' : 'WAITING FOR OPPONENT'}
-                        </span>
-                      </div>
-                      {p2 ? (
-                        <>
-                          <div className="font-display text-xl font-bold text-white truncate">
-                            @{p2.username}
-                          </div>
-                          <div className="text-xs text-slate-300 mt-1">
-                            Club: <span className="text-white font-semibold">{p2.clubName}</span> ·{' '}
-                            <span className="text-[#10B981] font-mono font-bold">
-                              {p2.formation || '4-3-3'}
-                            </span>
-                          </div>
-                          <div className="text-xs text-[#F59E0B] font-mono mt-1">
-                            Star: {p2.starPlayerName}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              SoundEngine.playUIClick();
-                              setInspectedOpponent({
-                                username: p2.username,
-                                clubName: p2.clubName,
-                                starPlayerName: p2.starPlayerName,
-                                squadIds: p2.squadIds,
-                                formation: p2.formation || '4-3-3',
-                              });
-                            }}
-                            className="mt-3 w-full py-2 px-3 rounded-lg bg-[#38BDF8]/15 hover:bg-[#38BDF8]/25 border border-[#38BDF8]/40 text-[#38BDF8] font-display font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            VIEW OPPONENT SQUAD & STARTING XI
-                          </button>
-                        </>
-                      ) : (
-                        <div className="py-2 space-y-2.5">
-                          <div className="text-xs text-slate-400">
-                            Waiting for Opponent... Share Room Code{' '}
-                            <span className="text-[#10B981] font-mono font-bold">
-                              {activeRoomCode}
-                            </span>{' '}
-                            with Player 2 or preview rival squad below.
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              SoundEngine.playUIClick();
-                              setInspectedOpponent({
-                                username: awayTeam.name,
-                                clubName: awayTeam.name,
-                                clubPrimaryColor: awayTeam.primaryColor,
-                                clubSecondaryColor: awayTeam.secondaryColor,
-                                formation: '4-3-3',
-                              });
-                            }}
-                            className="w-full py-1.5 px-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-slate-300 hover:text-white font-mono font-bold text-[11px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                          >
-                            <Eye className="w-3.5 h-3.5 text-[#38BDF8]" />
-                            PREVIEW OPPONENT STARTING XI
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-              </div>
+        {/* Card 2: Enter Room Code to Join */}
+        <div className="bg-[#111722] border border-white/15 rounded-2xl p-6 flex flex-col justify-between space-y-4 shadow-lg">
+          <div>
+            <div className="text-[11px] font-mono text-[#F59E0B] font-bold">
+              PLAYER 2 · JOIN ROOM
             </div>
-
-            {/* Lobby Action Bar: READY Toggle Button (Auto-Starts Match When All Required Players Are Ready!) */}
-            <div className="pt-6 border-t border-white/10 space-y-3">
-              {/* Connected Players List in Room for 11v11 Multi-Player */}
-              {friendRoomState.members.length > 0 && (
-                <div className="p-3.5 rounded-xl bg-[#070A0E] border border-white/10 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="text-slate-400">
-                      PLAYERS IN MATCH ({friendRoomState.members.length}/{requiredPlayers} REQUIRED)
-                    </span>
-                    <span className="text-[#10B981] font-bold">
-                      {readyPlayersCount}/{requiredPlayers} READY (AUTO-STARTS WHEN ALL READY)
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {friendRoomState.members.map((m) => (
-                      <div
-                        key={m.clientId}
-                        className={`px-3 py-1.5 rounded-lg border text-xs flex items-center gap-2 ${
-                          m.isReady
-                            ? 'bg-[#10B981]/15 border-[#10B981] text-white'
-                            : 'bg-[#111722] border-white/15 text-slate-300'
-                        }`}
-                      >
-                        <span className="font-display font-bold">@{m.username}</span>
-                        <span className="font-mono text-[10px] text-[#38BDF8] uppercase">
-                          {m.teamSide || 'home'} · {formationSlots[m.assignedSlotIdx ?? 9]?.role || 'ST'}
-                        </span>
-                        <span
-                          className={`font-mono text-[10px] font-bold ${
-                            m.isReady ? 'text-[#10B981]' : 'text-[#F59E0B]'
-                          }`}
-                        >
-                          {m.isReady ? 'READY ✓' : 'NOT READY'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  onClick={() => {
-                    SoundEngine.playUIClick();
-                    const nextReady = !myReadyState;
-                    FriendRoomService.setRoomReady(activeRoomCode, nextReady);
-                    if (activeLobby) {
-                      onToggleLobbyReady(activeLobby.lobbyId, nextReady);
-                    }
-                  }}
-                  className={`py-3.5 px-5 font-display font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                    myReadyState
-                      ? 'bg-[#10B981] text-[#070A0E] shadow-lg'
-                      : 'bg-white/10 hover:bg-white/15 border-2 border-[#10B981] text-[#10B981]'
-                  }`}
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  {myReadyState
-                    ? `READY ✓ (${readyPlayersCount}/${requiredPlayers} READY)`
-                    : `MARK READY (${readyPlayersCount}/${requiredPlayers} READY)`}
-                </button>
-
-                <button
-                  onClick={() => {
-                    SoundEngine.playUIClick();
-                    if (activeLobby) {
-                      FriendRoomService.startLobbyMatch(activeLobby.lobbyId);
-                      const oppClub =
-                        TEAMS_DB.find((t) => t.id === activeLobby.guest?.clubId) || awayTeam;
-                      onStartOnlineMatch(oppClub, activeLobby.roomCode, activeLobby.lobbyId);
-                    } else {
-                      onStartOnlineMatch(awayTeam, activeRoomCode);
-                    }
-                  }}
-                  className={`py-3.5 px-5 font-display font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer ${
-                    bothPlayersReady
-                      ? 'bg-[#10B981] hover:bg-[#059669] text-[#070A0E]'
-                      : 'bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E]'
-                  }`}
-                >
-                  <Play className="w-4 h-4 fill-current" />
-                  {bothPlayersReady
-                    ? 'STARTING MATCH AUTOMATICALLY...'
-                    : `START ${activeFormat.toUpperCase()} MATCH NOW`}
-                </button>
-              </div>
-            </div>
+            <h2 className="font-display text-lg font-bold text-white">Enter Room Code</h2>
           </div>
+
+          <form onSubmit={handleJoinRoomSubmit} className="flex flex-col sm:flex-row gap-2.5">
+            <input
+              type="text"
+              value={joinRoomCodeInput}
+              onChange={(e) => setJoinRoomCodeInput(e.target.value.toUpperCase())}
+              placeholder="e.g. PLAY-7492 or 7492"
+              className="flex-1 bg-[#070A0E] border border-white/20 focus:border-[#F59E0B] rounded-xl px-4 py-3.5 font-mono text-base font-bold text-white uppercase tracking-wider placeholder:text-slate-500 placeholder:font-sans placeholder:text-xs focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="px-5 py-3.5 bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E] font-display font-bold text-xs sm:text-sm rounded-xl transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer shadow-md"
+            >
+              <Play className="w-4 h-4 fill-current" />
+              JOIN ROOM
+            </button>
+          </form>
+
+          {otherOpenRooms.length > 0 ? (
+            <div className="space-y-1.5">
+              <div className="text-[10px] font-mono text-slate-400">
+                ACTIVE ROOMS AVAILABLE TO JOIN:
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {otherOpenRooms.slice(0, 3).map((r) => (
+                  <button
+                    key={r.roomCode}
+                    type="button"
+                    onClick={() => {
+                      SoundEngine.playUIClick();
+                      onJoinRoomByCode(r.roomCode);
+                      setStatusFeedback(`Joined Room ${r.roomCode}`);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-[#070A0E] hover:bg-white/10 border border-[#F59E0B]/40 text-xs font-mono text-[#F59E0B] font-bold cursor-pointer"
+                  >
+                    {r.roomCode} (@{r.hostUsername}) →
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400">
+              Enter your friend’s Room Code above to connect to the same match room.
+            </p>
+          )}
         </div>
       </div>
 
-      {/* Opponent Squad Compact Popup (Pre-Match Lobby & Online Directory) */}
+      {statusFeedback && (
+        <div className="px-4 py-2.5 rounded-xl bg-[#10B981]/15 border border-[#10B981]/30 text-xs text-[#10B981] font-medium text-center">
+          {statusFeedback}
+        </div>
+      )}
+
+      {/* STEP 2: CONNECTED PLAYERS & READY LOBBY (Starts When Both Are Connected & Ready) */}
+      <div className="bg-[#111722] border border-white/15 rounded-2xl p-6 space-y-6 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+          <div>
+            <div className="text-xs font-mono text-slate-400">
+              ROOM <span className="text-[#10B981] font-bold">{activeRoomCode}</span> ·{' '}
+              {activeFormat.toUpperCase()} MATCH
+            </div>
+            <h2 className="font-display text-xl font-bold text-white mt-0.5">
+              {friendRoomState.status === 'match_starting' || bothPlayersReady
+                ? 'Both Players Ready — Starting Match!'
+                : bothConnected
+                ? 'Both Players Connected — Click Ready to Start'
+                : 'Waiting for Second Player to Join Room...'}
+            </h2>
+          </div>
+
+          <span
+            className={`px-3.5 py-1.5 rounded-xl font-mono text-xs font-bold self-start sm:self-auto ${
+              bothPlayersReady
+                ? 'bg-[#10B981] text-[#070A0E]'
+                : bothConnected
+                ? 'bg-[#38BDF8]/20 text-[#38BDF8] border border-[#38BDF8]/40'
+                : 'bg-[#F59E0B]/15 text-[#F59E0B] border border-[#F59E0B]/30'
+            }`}
+          >
+            {readyPlayersCount}/{requiredPlayers} READY
+          </span>
+        </div>
+
+        {/* Player 1 vs Player 2 Connection Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Player 1 (Host) */}
+          <div
+            className={`p-5 rounded-2xl bg-[#070A0E] border-2 transition-all ${
+              hostMember?.isReady ? 'border-[#10B981]' : 'border-white/10'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-mono font-bold text-[#10B981]">PLAYER 1 (HOST)</span>
+              <span
+                className={`px-2.5 py-0.5 rounded text-[11px] font-mono font-bold ${
+                  hostMember?.isReady
+                    ? 'bg-[#10B981] text-[#070A0E]'
+                    : 'bg-white/10 text-slate-300'
+                }`}
+              >
+                {hostMember?.isReady ? 'READY ✓' : 'CONNECTED'}
+              </span>
+            </div>
+            <div className="font-display text-xl font-bold text-white truncate">
+              @{hostMember?.username || account.username}
+            </div>
+            <div className="text-xs text-slate-400 mt-1">
+              {hostMember?.clubName || userTeam.name} · Star:{' '}
+              <span className="text-[#F59E0B]">
+                {hostMember?.starPlayerName || leadStar.name}
+              </span>
+            </div>
+          </div>
+
+          {/* Player 2 (Opponent) */}
+          {(() => {
+            const p2 = activeLobby?.guest || guestMember;
+            const p2Ready = Boolean(p2?.isReady);
+            return (
+              <div
+                className={`p-5 rounded-2xl bg-[#070A0E] border-2 transition-all ${
+                  p2Ready
+                    ? 'border-[#10B981]'
+                    : p2
+                    ? 'border-[#38BDF8]/60'
+                    : 'border-dashed border-white/15'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-mono font-bold text-[#F59E0B]">
+                    PLAYER 2 (OPPONENT)
+                  </span>
+                  <span
+                    className={`px-2.5 py-0.5 rounded text-[11px] font-mono font-bold ${
+                      p2Ready
+                        ? 'bg-[#10B981] text-[#070A0E]'
+                        : p2
+                        ? 'bg-[#38BDF8]/20 text-[#38BDF8]'
+                        : 'bg-white/5 text-slate-400'
+                    }`}
+                  >
+                    {p2Ready ? 'READY ✓' : p2 ? 'CONNECTED' : 'WAITING...'}
+                  </span>
+                </div>
+
+                {p2 ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-display text-xl font-bold text-white truncate">
+                        @{p2.username}
+                      </div>
+                      <div className="text-xs text-slate-400 mt-1 truncate">
+                        {p2.clubName} · Star:{' '}
+                        <span className="text-[#F59E0B]">{p2.starPlayerName}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SoundEngine.playUIClick();
+                        setInspectedOpponent({
+                          username: p2.username,
+                          clubName: p2.clubName,
+                          starPlayerName: p2.starPlayerName,
+                          squadIds: p2.squadIds,
+                          formation: p2.formation || '4-3-3',
+                        });
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/15 text-[11px] font-mono text-[#38BDF8] flex items-center gap-1 shrink-0 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      XI
+                    </button>
+                  </div>
+                ) : (
+                  <div className="py-2 text-xs text-slate-400">
+                    Waiting for second player to enter Room Code{' '}
+                    <span className="text-white font-mono font-bold">{activeRoomCode}</span>...
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* Optional 11v11 Player Slot Picker Toggle */}
+        {activeFormat === '11v11' && (
+          <div className="bg-[#070A0E] border border-white/10 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-slate-300">
+                Your 11v11 Controlled Player:{' '}
+                <span className="text-[#10B981] font-bold">
+                  {formationSlots[myAssignedSlotIdx]?.role || 'ST'} ·{' '}
+                  {startingXI[myAssignedSlotIdx]?.name}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPositionPicker((v) => !v)}
+                className="text-xs font-mono text-[#38BDF8] hover:underline cursor-pointer"
+              >
+                {showPositionPicker ? 'Hide Positions' : 'Change Player / Team'}
+              </button>
+            </div>
+
+            {showPositionPicker && (
+              <div className="space-y-3 pt-2 border-t border-white/10">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      SoundEngine.playUIClick();
+                      const p = startingXI[myAssignedSlotIdx] || leadStar;
+                      FriendRoomService.selectRoomPlayerSlot(
+                        activeRoomCode,
+                        'home',
+                        myAssignedSlotIdx,
+                        p.id,
+                        p.name
+                      );
+                    }}
+                    className={`px-3 py-1 rounded-lg font-display font-bold text-xs cursor-pointer ${
+                      myTeamSide === 'home'
+                        ? 'bg-[#10B981] text-[#070A0E]'
+                        : 'bg-[#111722] text-slate-300 border border-white/15'
+                    }`}
+                  >
+                    Home ({userTeam.shortName})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      SoundEngine.playUIClick();
+                      const p = startingXI[myAssignedSlotIdx] || leadStar;
+                      FriendRoomService.selectRoomPlayerSlot(
+                        activeRoomCode,
+                        'away',
+                        myAssignedSlotIdx,
+                        p.id,
+                        p.name
+                      );
+                    }}
+                    className={`px-3 py-1 rounded-lg font-display font-bold text-xs cursor-pointer ${
+                      myTeamSide === 'away'
+                        ? 'bg-[#F59E0B] text-[#070A0E]'
+                        : 'bg-[#111722] text-slate-300 border border-white/15'
+                    }`}
+                  >
+                    Away ({awayTeam.shortName})
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-11 gap-2">
+                  {startingXI.map((p, slotIdx) => {
+                    const roleLabel = formationSlots[slotIdx]?.role || p.position;
+                    const isMySlot = myAssignedSlotIdx === slotIdx;
+                    return (
+                      <button
+                        type="button"
+                        key={`${p.id}_${slotIdx}`}
+                        onClick={() => {
+                          SoundEngine.playUIClick();
+                          FriendRoomService.selectRoomPlayerSlot(
+                            activeRoomCode,
+                            myTeamSide,
+                            slotIdx,
+                            p.id,
+                            p.name
+                          );
+                        }}
+                        className={`p-2 rounded-xl border flex flex-col items-center text-center transition-all cursor-pointer ${
+                          isMySlot
+                            ? 'bg-[#192231] border-[#10B981]'
+                            : 'bg-[#111722]/70 border-white/10 hover:border-white/30'
+                        }`}
+                      >
+                        <PlayerPhotoAvatar
+                          player={p}
+                          className="w-10 h-10 rounded-lg border border-white/20"
+                          showPositionBadge={false}
+                          showRatingBadge={true}
+                        />
+                        <span className="text-[10px] font-sans font-bold text-white truncate w-full mt-1">
+                          {p.name}
+                        </span>
+                        <span className="text-[9px] font-mono text-[#10B981] font-bold">
+                          {roleLabel}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Primary READY Button — Starts Match Automatically When Both Players Are Connected & Ready */}
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={() => {
+              SoundEngine.playUIClick();
+              const nextReady = !myReadyState;
+              FriendRoomService.setRoomReady(activeRoomCode, nextReady);
+              if (activeLobby) {
+                onToggleLobbyReady(activeLobby.lobbyId, nextReady);
+              }
+            }}
+            className={`w-full py-4 px-6 font-display font-bold text-sm sm:text-base rounded-2xl transition-all flex items-center justify-center gap-2.5 shadow-xl cursor-pointer ${
+              myReadyState
+                ? 'bg-[#10B981] text-[#070A0E]'
+                : 'bg-white hover:bg-slate-100 text-[#070A0E]'
+            }`}
+          >
+            <CheckCircle2 className="w-5 h-5" />
+            {bothPlayersReady
+              ? 'BOTH PLAYERS READY — STARTING MATCH...'
+              : myReadyState
+              ? `YOU ARE READY ✓ — WAITING FOR OTHER PLAYER (${readyPlayersCount}/${requiredPlayers})`
+              : `CLICK WHEN READY (${readyPlayersCount}/${requiredPlayers} READY)`}
+          </button>
+          <p className="text-center text-xs text-slate-400 mt-2.5">
+            The match starts automatically as soon as both connected players mark <span className="text-white font-semibold">READY</span>.
+          </p>
+        </div>
+      </div>
+
       {inspectedOpponent && (
         <OpponentSquadPopup
           isOpen={Boolean(inspectedOpponent)}
@@ -1348,7 +1328,9 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
   onClose,
   onPaymentSuccess,
 }) => {
-  const [paymentMethod, setPaymentMethod] = useState<'Google Pay' | 'Credit / Debit Card' | 'App Instant Wallet'>('Google Pay');
+  const [paymentMethod, setPaymentMethod] = useState<
+    'Google Pay' | 'Credit / Debit Card' | 'App Instant Wallet'
+  >('Google Pay');
   const [cardHolder, setCardHolder] = useState(username);
   const [processing, setProcessing] = useState(false);
   const [receiptId, setReceiptId] = useState<string | null>(null);
@@ -1377,7 +1359,8 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
         }),
       });
       const data = await res.json();
-      const txId = data.transaction?.transactionId || `TX-${Math.floor(100000 + Math.random() * 900000)}`;
+      const txId =
+        data.transaction?.transactionId || `TX-${Math.floor(100000 + Math.random() * 900000)}`;
       SoundEngine.playPackOpen();
       setReceiptId(txId);
       onPaymentSuccess({
@@ -1444,7 +1427,6 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
           </div>
         ) : (
           <form onSubmit={handleConfirmPayment} className="space-y-4">
-            {/* Order Summary */}
             <div className="p-4 rounded-xl bg-[#070A0E] border border-white/10 flex items-center justify-between">
               <div>
                 <div className="font-display font-bold text-base text-white">{item.itemName}</div>
@@ -1456,7 +1438,6 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
               </div>
             </div>
 
-            {/* Payment Method Selector */}
             <div>
               <label className="block text-xs font-mono text-slate-300 mb-2">
                 SELECT PAYMENT METHOD
@@ -1498,7 +1479,9 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
               className="w-full py-3.5 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer"
             >
               <CreditCard className="w-4 h-4" />
-              {processing ? 'PROCESSING SECURE PAYMENT...' : `PAY $${item.amountUsd.toFixed(2)} & UNLOCK NOW`}
+              {processing
+                ? 'PROCESSING SECURE PAYMENT...'
+                : `PAY $${item.amountUsd.toFixed(2)} & UNLOCK NOW`}
             </button>
           </form>
         )}

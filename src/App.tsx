@@ -96,11 +96,10 @@ type ActiveScreen =
 export default function App() {
   const { iconUrl } = useAppIcon();
   const [screen, setScreen] = useState<ActiveScreen>(() => {
-    const hasSession =
+    const isSignedIn =
       Boolean(localStorage.getItem('fe_auth_token')) ||
-      Boolean(localStorage.getItem('fe_user_email')) ||
-      localStorage.getItem('fe_has_onboarded') === 'true';
-    return hasSession ? 'home' : 'welcome';
+      Boolean(localStorage.getItem('fe_saved_account'));
+    return isSignedIn ? 'home' : 'welcome';
   });
 
   // Persistent / Session Club & Match State
@@ -333,7 +332,9 @@ export default function App() {
   const handleCompleteOnboarding = (
     enteredUsername: string,
     chosenClub: TeamData,
-    enteredEmail?: string
+    enteredEmail?: string,
+    authenticatedUser?: AuthenticatedAccount,
+    token?: string
   ) => {
     localStorage.setItem('fe_has_onboarded', 'true');
     localStorage.setItem('fe_username', enteredUsername);
@@ -344,34 +345,60 @@ export default function App() {
       const alt = TEAMS_DB.find((t) => t.id !== chosenClub.id) || TEAMS_DB[1];
       setAwayTeam(alt);
     }
-    if (enteredEmail && enteredEmail.includes('@')) {
-      localStorage.setItem('fe_user_email', enteredEmail.trim());
-      fetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: enteredEmail.trim(),
-          username: enteredUsername,
-          favouriteClubId: chosenClub.id,
-          initialUnlockedIds: unlockedPlayerIds,
-          coins,
-          squadIds: userSquad.map((p) => p.id),
-          formation: userFormation,
-          captainId,
-          preferredCelebration,
-          tournamentStageIndex,
-        }),
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (data?.user && data?.token) {
-            setAuthToken(data.token);
-            localStorage.setItem('fe_auth_token', data.token);
-            applyServerUserProgress(data.user);
-          }
-        })
-        .catch(() => {});
+
+    if (authenticatedUser && token) {
+      setAuthToken(token);
+      localStorage.setItem('fe_auth_token', token);
+      applyServerUserProgress(authenticatedUser);
+      setScreen('home');
+      return;
     }
+
+    const resolvedEmail =
+      enteredEmail && enteredEmail.includes('@')
+        ? enteredEmail.trim().toLowerCase()
+        : `${enteredUsername.toLowerCase().replace(/[^a-z0-9]/g, '') || 'player'}@gmail.com`;
+
+    const fallbackAccount: AuthenticatedAccount = {
+      id: `usr_${Date.now()}`,
+      googleId: `google_${enteredUsername}`,
+      email: resolvedEmail,
+      username: enteredUsername,
+      avatarUrl: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(enteredUsername)}`,
+      coins,
+      favouriteClubId: chosenClub.id,
+      unlockedPlayerIds,
+      mmrRating: 1500,
+    };
+    applyServerUserProgress(fallbackAccount);
+
+    fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider: 'google',
+        email: resolvedEmail,
+        username: enteredUsername,
+        favouriteClubId: chosenClub.id,
+        initialUnlockedIds: unlockedPlayerIds,
+        coins,
+        squadIds: userSquad.map((p) => p.id),
+        formation: userFormation,
+        captainId,
+        preferredCelebration,
+        tournamentStageIndex,
+      }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.user && data?.token) {
+          setAuthToken(data.token);
+          localStorage.setItem('fe_auth_token', data.token);
+          applyServerUserProgress(data.user);
+        }
+      })
+      .catch(() => {});
+
     setScreen('home');
   };
 
@@ -388,22 +415,28 @@ export default function App() {
     joinCode?: string
   ) => {
     SoundEngine.playUIClick();
+    const isOnlineMode =
+      modeOverride === 'dream_team_11v11_online' ||
+      modeOverride === 'join_code_match' ||
+      Boolean(joinCode);
+
+    // Users must successfully sign in before they can access Online Match
+    if (isOnlineMode && !account) {
+      setScreen('online_match');
+      setShowGoogleAuthModal(true);
+      return;
+    }
+
     if (modeOverride === 'dream_team_11v11_online') {
       setOnlineMatchFormat('11v11');
       if (friendRoomState.members.length < 2 && !activeOnlineLobby?.guest) {
-        FriendRoomService.joinMatchmakingQueue({
-          username: profile.username,
-          clubId: userTeam.id,
-          clubName: userTeam.name,
-          starPlayerId: userSquad[9]?.id,
-          starPlayerName: userSquad[9]?.name || 'Mbappé',
-          squadIds: userSquad.slice(0, 11).map((p) => p.id),
-          formation: userFormation,
-          matchFormat: '11v11',
-        });
         setScreen('online_match');
         return;
       }
+    }
+    if (modeOverride === 'join_code_match' && friendRoomState.members.length < 2 && !activeOnlineLobby?.guest) {
+      setScreen('online_match');
+      return;
     }
     if (modeOverride) setSelectedMode(modeOverride);
     if (opponentOverride) setAwayTeam(opponentOverride);
@@ -897,7 +930,13 @@ export default function App() {
         stadium={selectedStadium}
         weather={selectedWeather}
         mode={selectedMode}
-        difficulty={difficulty}
+        difficulty={
+          isOnline1v1 ||
+          selectedMode === 'join_code_match' ||
+          selectedMode === 'dream_team_11v11_online'
+            ? 'World Class'
+            : difficulty
+        }
         initialCamera={cameraMode}
         controlScheme={controlScheme}
         graphicsQuality={graphicsQuality}
@@ -1028,7 +1067,7 @@ export default function App() {
           </button>
         </nav>
 
-        {/* Zone 3: 2 Primary Actions (Google Sign-In + ONLINE VS) */}
+        {/* Zone 3: 2 Primary Actions (Sign-In + ONLINE MATCH) */}
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => setShowGoogleAuthModal(true)}
@@ -1037,13 +1076,13 @@ export default function App() {
             <span className="w-4 h-4 rounded-full bg-white text-[#070A0E] flex items-center justify-center text-[10px] font-bold">
               G
             </span>
-            {account ? `@${account.username} ✓` : 'Sign in with Google'}
+            {account ? `@${account.username} ✓` : 'Sign In'}
           </button>
           <button
             onClick={() => navigateTo('online_match')}
             className="px-4 py-2 text-xs font-display font-bold text-[#070A0E] bg-[#10B981] rounded-lg hover:bg-[#059669] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           >
-            ONLINE VS
+            ONLINE MATCH
           </button>
         </div>
       </header>
@@ -1241,304 +1280,146 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Right 5 Cols: ONLINE VS 1V1 MULTIPLAYER ROOM CODE & LIVE STATUS CARD */}
+                {/* Right 5 Cols: SIMPLE ROOM CODE ONLINE MATCH CARD */}
                 <div className="lg:col-span-5">
                   <div className="bg-[#111722]/95 backdrop-blur-xl border border-white/15 rounded-2xl p-6 space-y-4 shadow-2xl">
                     <div className="flex items-center justify-between border-b border-white/10 pb-3.5">
                       <div>
                         <div className="text-xs font-mono text-[#10B981] flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
-                          ONLINE VS · {onlineMatchFormat === '11v11' ? '11V11 DREAM TEAM' : '1V1 DUEL'}
+                          <span className="w-2 h-2 rounded-full bg-[#10B981]" />
+                          ONLINE MATCH · ROOM CODE
                         </div>
                         <h2 className="font-display text-xl font-bold text-white">
-                          ONLINE VS ({onlineMatchFormat === '11v11' ? '11V11 DREAM TEAM' : '1V1 ROOM CODE'})
+                          Online Match Lobby
                         </h2>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() =>
-                            setOnlineMatchFormat((f) => (f === '11v11' ? '1v1' : '11v11'))
-                          }
-                          className="px-2.5 py-1.5 bg-[#070A0E] border border-white/20 rounded-lg font-mono font-bold text-[11px] text-[#F59E0B] cursor-pointer"
-                        >
-                          {onlineMatchFormat.toUpperCase()}
-                        </button>
-                        <button
-                          onClick={() => navigateTo('online_match')}
-                          className="px-3 py-1.5 bg-[#10B981]/20 hover:bg-[#10B981] text-[#10B981] hover:text-[#070A0E] border border-[#10B981]/40 rounded-lg font-display font-bold text-xs transition-colors cursor-pointer"
-                        >
-                          ONLINE LOBBY
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => navigateTo('online_match')}
+                        className="px-3 py-1.5 bg-[#10B981]/20 hover:bg-[#10B981] text-[#10B981] hover:text-[#070A0E] border border-[#10B981]/40 rounded-lg font-display font-bold text-xs transition-colors cursor-pointer"
+                      >
+                        OPEN ONLINE MATCH →
+                      </button>
                     </div>
 
-                    {/* Live Connection Status Banner ("Waiting for Opponent" / "Opponent Connected" / "Match Starting") */}
-                    {(() => {
-                      const st = friendRoomState.status || 'waiting_for_opponent';
-                      const label =
-                        st === 'match_starting'
-                          ? 'Match Starting'
-                          : st === 'opponent_connected' || friendRoomState.members.length >= 2
-                          ? 'Opponent Connected'
-                          : st === 'opponent_disconnected'
-                          ? 'Opponent Disconnected'
-                          : 'Waiting for Opponent';
-                      const badgeColor =
-                        st === 'match_starting'
-                          ? 'bg-[#10B981] text-[#070A0E]'
-                          : st === 'opponent_connected' || friendRoomState.members.length >= 2
-                          ? 'bg-[#38BDF8] text-[#070A0E]'
-                          : st === 'opponent_disconnected'
-                          ? 'bg-rose-500 text-white'
-                          : 'bg-[#F59E0B]/20 text-[#F59E0B] border border-[#F59E0B]/40';
-                      return (
-                        <div className="p-3 rounded-xl bg-[#070A0E] border border-white/10 flex items-center justify-between gap-2">
-                          <span className={`px-2.5 py-1 rounded-md font-display font-bold text-xs flex items-center gap-1.5 ${badgeColor}`}>
-                            <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
-                            {label}
-                          </span>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono text-xs text-white font-bold">
+                    {!account ? (
+                      <div className="p-5 rounded-xl bg-[#070A0E] border border-white/10 text-center space-y-3">
+                        <div className="text-xs font-mono text-[#F59E0B] font-bold">
+                          SIGN IN REQUIRED
+                        </div>
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          Sign in with Google or Email + Password and enter your Username to create or join an Online Match Room Code.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setShowGoogleAuthModal(true)}
+                          className="w-full py-3 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                        >
+                          SIGN IN TO PLAY ONLINE
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        {/* 1. Create Room Code */}
+                        <div className="p-3.5 rounded-xl bg-[#070A0E] border border-white/10 flex items-center justify-between gap-2">
+                          <div>
+                            <div className="text-[10px] font-mono text-slate-400">
+                              YOUR ROOM CODE (SHARE WITH PLAYER 2)
+                            </div>
+                            <div className="font-mono text-lg font-bold text-[#10B981] tracking-wider">
                               {friendRoomState.roomCode || hostJoinCode}
-                            </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5">
                             <button
                               onClick={handleCopyJoinCode}
-                              className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-[11px] font-mono text-white cursor-pointer"
+                              className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-mono text-white cursor-pointer"
                             >
-                              {copiedCode ? 'Copied!' : 'Copy'}
+                              {copiedCode ? 'Copied' : 'Copy'}
                             </button>
                             <button
                               onClick={handleGenerateNewJoinCode}
-                              className="px-2 py-1 bg-[#10B981]/20 hover:bg-[#10B981]/30 text-[#10B981] rounded text-[11px] font-mono font-bold cursor-pointer"
+                              className="px-2.5 py-1.5 bg-[#10B981]/20 hover:bg-[#10B981]/30 text-[#10B981] rounded-lg text-xs font-mono font-bold cursor-pointer"
                             >
-                              New Room
+                              New Code
                             </button>
                           </div>
                         </div>
-                      );
-                    })()}
 
-                    {/* Player 2: Enter Room Code to Join Match */}
-                    <div>
-                      <label className="block text-xs text-slate-300 mb-1.5">
-                        Player 2 — Enter Friend’s Room Code to Join 1v1 Match:
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={joinCodeInput}
-                          onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
-                          placeholder={`Enter Room Code (e.g. ${hostJoinCode})`}
-                          className="w-full bg-[#070A0E] border border-white/20 rounded-lg px-3 py-2.5 font-mono text-xs font-bold text-white tracking-wider uppercase focus:outline-none focus:border-[#10B981]"
-                        />
-                        <button
-                          onClick={() => handleJoinFriendRoomOnly()}
-                          className="px-4 py-2.5 bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E] font-display font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap shadow-md cursor-pointer"
-                        >
-                          <Play className="w-3.5 h-3.5 fill-current" />
-                          JOIN ROOM
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Invite Friend by Username Input */}
-                    <div>
-                      <label className="block text-xs text-slate-300 mb-1.5">
-                        Or Invite Friend by Username:
-                      </label>
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          if (!friendUsernameHomeInput.trim()) return;
-                          SoundEngine.playUIClick();
-                          handleInviteFriendByUsername(friendUsernameHomeInput);
-                          setFriendUsernameHomeInput('');
-                        }}
-                        className="flex items-center gap-2"
-                      >
-                        <input
-                          type="text"
-                          value={friendUsernameHomeInput}
-                          onChange={(e) => setFriendUsernameHomeInput(e.target.value)}
-                          placeholder="Enter friend's username (e.g. Alex_10)..."
-                          className="w-full bg-[#070A0E] border border-white/20 focus:border-[#10B981] rounded-lg px-3.5 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none"
-                        />
-                        <button
-                          type="submit"
-                          className="px-3.5 py-2 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-xs rounded-lg transition-colors shrink-0 whitespace-nowrap shadow-md cursor-pointer"
-                        >
-                          INVITE
-                        </button>
-                      </form>
-                    </div>
-
-                    {/* Live Connected Friends in Private Room */}
-                    <div className="p-3 bg-[#070A0E]/80 border border-white/10 rounded-xl space-y-2.5">
-                      <div className="flex items-center justify-between text-[11px] font-mono">
-                        <span className="text-slate-400">
-                          MATCH CODE ({friendRoomState.roomCode || hostJoinCode}) · {onlineMatchFormat.toUpperCase()}
-                        </span>
-                        <span className="text-[#10B981] font-bold">
-                          {friendRoomState.members.filter((m) => m.isReady).length} /{' '}
-                          {friendRoomState.requiredPlayers || 2} PLAYERS READY
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="p-2 rounded-lg bg-[#111722] border border-[#10B981]/40">
-                          <div className="text-[10px] font-mono text-[#10B981] font-bold">
-                            HOST (YOU)
-                          </div>
-                          <div className="font-display font-bold text-white truncate">
-                            @{profile.username}
-                          </div>
-                          <div className="text-[10px] text-slate-400 truncate">
-                            {userTeam.name} · {userSquad[9]?.name}
+                        {/* 2. Enter Room Code to Join */}
+                        <div>
+                          <label className="block text-xs text-slate-300 mb-1.5">
+                            Join Friend’s Room Code:
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={joinCodeInput}
+                              onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
+                              placeholder="Enter Room Code (e.g. PLAY-7492)"
+                              className="w-full bg-[#070A0E] border border-white/20 rounded-xl px-3.5 py-2.5 font-mono text-xs font-bold text-white tracking-wider uppercase focus:outline-none focus:border-[#10B981]"
+                            />
+                            <button
+                              onClick={() => {
+                                handleJoinFriendRoomOnly();
+                                navigateTo('online_match');
+                              }}
+                              className="px-4 py-2.5 bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E] font-display font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap shadow-md cursor-pointer"
+                            >
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                              JOIN ROOM
+                            </button>
                           </div>
                         </div>
-                        {friendRoomState.members.find(
-                          (m) => m.clientId !== FriendRoomService.getClientId()
-                        ) ? (
-                          <div className="p-2 rounded-lg bg-[#111722] border border-[#F59E0B]/50">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-mono text-[#F59E0B] font-bold">
-                                FRIEND JOINED ({friendRoomState.members.length} IN ROOM)
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  SoundEngine.playUIClick();
-                                  const opp = friendRoomState.members.find(
-                                    (m) => m.clientId !== FriendRoomService.getClientId()
-                                  );
-                                  if (opp) {
-                                    setInspectedOpponentSquad({
-                                      username: opp.username,
-                                      clubName: opp.clubName,
-                                      starPlayerName: opp.starPlayerName,
-                                      starPlayerId: opp.starPlayerId,
-                                      squadIds: opp.squadIds,
-                                      formation: opp.formation || '4-3-3',
-                                    });
-                                  }
-                                }}
-                                className="px-1.5 py-0.5 rounded bg-[#38BDF8]/20 text-[#38BDF8] font-mono text-[9px] font-bold flex items-center gap-0.5 cursor-pointer"
-                              >
-                                <Eye className="w-2.5 h-2.5" />
-                                VIEW XI
-                              </button>
-                            </div>
-                            <div className="font-display font-bold text-white truncate">
-                              @
-                              {
-                                friendRoomState.members.find(
-                                  (m) => m.clientId !== FriendRoomService.getClientId()
-                                )?.username
-                              }
-                            </div>
-                            <div className="text-[10px] text-slate-400 truncate">
-                              {
-                                friendRoomState.members.find(
-                                  (m) => m.clientId !== FriendRoomService.getClientId()
-                                )?.clubName
-                              }{' '}
-                              ·{' '}
-                              {
-                                friendRoomState.members.find(
-                                  (m) => m.clientId !== FriendRoomService.getClientId()
-                                )?.starPlayerName
-                              }
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="p-2 rounded-lg bg-[#111722]/60 border border-white/10 flex flex-col justify-between gap-1">
-                            <div>
-                              <div className="text-[10px] font-mono text-slate-400">
-                                SHARE MATCH CODE
-                              </div>
-                              <div className="text-[11px] text-slate-300 font-medium">
-                                Friends enter <span className="text-[#10B981] font-mono font-bold">{friendRoomState.roomCode || hostJoinCode}</span> to join
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                SoundEngine.playUIClick();
-                                setInspectedOpponentSquad({
-                                  username: awayTeam.name,
-                                  clubName: awayTeam.name,
-                                  clubPrimaryColor: awayTeam.primaryColor,
-                                  clubSecondaryColor: awayTeam.secondaryColor,
-                                  formation: awayTeam.defaultFormation || '4-3-3',
-                                });
-                              }}
-                              className="self-start px-2 py-0.5 rounded bg-white/10 hover:bg-white/15 text-[#38BDF8] font-mono text-[10px] font-bold flex items-center gap-1 cursor-pointer"
-                            >
-                              <Eye className="w-3 h-3" />
-                              Scout Rival XI
-                            </button>
-                          </div>
-                        )}
-                      </div>
 
-                      {/* Ready Up & Auto-Start Match Bar */}
-                      {(() => {
-                        const myMemberInRoom = friendRoomState.members.find(
-                          (m) => m.clientId === FriendRoomService.getClientId()
-                        );
-                        const amIReady = Boolean(myMemberInRoom?.isReady);
-                        const readyCnt = friendRoomState.members.filter((m) => m.isReady).length;
-                        const reqCnt = friendRoomState.requiredPlayers || 2;
-                        return (
-                          <div className="grid grid-cols-2 gap-2 pt-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                SoundEngine.playUIClick();
-                                FriendRoomService.setRoomReady(
-                                  friendRoomState.roomCode || hostJoinCode,
-                                  !amIReady
-                                );
-                              }}
-                              className={`py-2 px-3 rounded-lg font-display font-bold text-xs transition-all cursor-pointer ${
-                                amIReady
-                                  ? 'bg-[#10B981] text-[#070A0E]'
-                                  : 'bg-white/10 hover:bg-white/15 border border-[#10B981] text-[#10B981]'
-                              }`}
-                            >
-                              {amIReady
-                                ? `READY ✓ (${readyCnt}/${reqCnt})`
-                                : `READY UP (${readyCnt}/${reqCnt})`}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => navigateTo('online_match')}
-                              className="py-2 px-3 rounded-lg bg-[#38BDF8]/15 hover:bg-[#38BDF8]/25 border border-[#38BDF8]/40 text-[#38BDF8] font-display font-bold text-xs transition-colors cursor-pointer"
-                            >
-                              {onlineMatchFormat === '11v11'
-                                ? 'PICK 11V11 PLAYER →'
-                                : 'OPEN MATCH LOBBY →'}
-                            </button>
+                        {/* 3. Connected Players & Ready Status */}
+                        <div className="p-3.5 bg-[#070A0E]/80 border border-white/10 rounded-xl space-y-2.5">
+                          <div className="flex items-center justify-between text-[11px] font-mono">
+                            <span className="text-slate-400">
+                              PLAYERS CONNECTED ({Math.max(1, friendRoomState.members.length)}/2)
+                            </span>
+                            <span className="text-[#10B981] font-bold">
+                              {friendRoomState.members.filter((m) => m.isReady).length}/2 READY
+                            </span>
                           </div>
-                        );
-                      })()}
-                    </div>
 
-                    {/* Active Squad Quick Summary */}
-                    <div className="pt-2 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-300">
-                      <div>
-                        <span className="text-[#10B981] font-mono font-bold">YOU (@{profile.username})</span> ·{' '}
-                        <span className="font-bold text-white">{userTeam.name}</span> ·{' '}
-                        <button
-                          onClick={() => navigateTo('welcome')}
-                          className="text-[#38BDF8] hover:underline ml-1"
-                        >
-                          Change Club/Name
-                        </button>
-                      </div>
-                      <div className="font-mono text-[#F59E0B] font-bold">
-                        {coins.toLocaleString()} Coins
-                      </div>
-                    </div>
+                          {(() => {
+                            const myMemberInRoom = friendRoomState.members.find(
+                              (m) => m.clientId === FriendRoomService.getClientId()
+                            );
+                            const amIReady = Boolean(myMemberInRoom?.isReady);
+                            const readyCnt = friendRoomState.members.filter((m) => m.isReady).length;
+                            return (
+                              <div className="grid grid-cols-2 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    SoundEngine.playUIClick();
+                                    FriendRoomService.setRoomReady(
+                                      friendRoomState.roomCode || hostJoinCode,
+                                      !amIReady
+                                    );
+                                  }}
+                                  className={`py-2.5 px-3 rounded-xl font-display font-bold text-xs transition-all cursor-pointer ${
+                                    amIReady
+                                      ? 'bg-[#10B981] text-[#070A0E]'
+                                      : 'bg-white hover:bg-slate-100 text-[#070A0E]'
+                                  }`}
+                                >
+                                  {amIReady ? `READY ✓ (${readyCnt}/2)` : `MARK READY (${readyCnt}/2)`}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => navigateTo('online_match')}
+                                  className="py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-display font-bold text-xs transition-colors cursor-pointer"
+                                >
+                                  ROOM LOBBY →
+                                </button>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1668,6 +1549,11 @@ export default function App() {
             onSelectOnlineMatchFormat={(fmt) => setOnlineMatchFormat(fmt)}
             onEditDreamTeam={() => navigateTo('my_team')}
             onOpenGoogleAuth={() => setShowGoogleAuthModal(true)}
+            onSuccessAuth={(acc, token) => {
+              setAuthToken(token);
+              localStorage.setItem('fe_auth_token', token);
+              applyServerUserProgress(acc);
+            }}
             onCreateNewRoom={handleGenerateNewJoinCode}
             onJoinRoomByCode={(enteredCode) => {
               handleJoinFriendRoomOnly(enteredCode);

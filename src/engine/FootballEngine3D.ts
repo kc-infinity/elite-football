@@ -1282,6 +1282,35 @@ export class FootballEngine3D {
     this.executePass(type);
   }
 
+  public triggerMobilePass() {
+    this.triggerPass('short');
+  }
+
+  public triggerMobileThroughBall() {
+    this.triggerPass('through');
+  }
+
+  public triggerMobileShoot(power = 78) {
+    const pct = power > 1 ? Math.min(1, power / 100) : power;
+    this.triggerShot('shoot', pct);
+  }
+
+  public triggerMobileSwitchOrTackle() {
+    const controlled = this.getControlledPlayer();
+    if (this.ballOwner && controlled && this.ballOwner.teamSide === controlled.teamSide) {
+      this.triggerSkillMove();
+    } else {
+      const dist = controlled
+        ? Math.hypot(controlled.x - this.ballPos.x, controlled.z - this.ballPos.z)
+        : 999;
+      if (dist < 4.5) {
+        this.triggerTackleOrPress();
+      } else {
+        this.triggerSwitchPlayer();
+      }
+    }
+  }
+
   public triggerShot(type: 'shoot' | 'curve' | 'chip' = 'shoot', powerPct = 0.78) {
     const p = this.getControlledPlayer();
     if (!p) return;
@@ -2640,16 +2669,22 @@ export class FootballEngine3D {
     }
 
     // 5. AI Tactical Movement for Teammates & Opponents
-    const diffMult =
+    const isOnlineChallenge =
+      this.isOnlineMatch() ||
+      this.config.mode === 'join_code_match' ||
+      this.config.mode === 'dream_team_11v11_online' ||
+      this.config.mode === '1v1';
+    const baseDiffMult =
       this.config.difficulty === 'World Class'
-        ? 1.12
+        ? 1.18
         : this.config.difficulty === 'Professional'
-        ? 1.02
+        ? 1.08
         : this.config.difficulty === 'Hard'
-        ? 0.94
+        ? 0.98
         : this.config.difficulty === 'Normal'
-        ? 0.85
-        : 0.74;
+        ? 0.88
+        : 0.76;
+    const diffMult = isOnlineChallenge ? Math.max(1.16, baseDiffMult * 1.08) : baseDiffMult;
 
     const isPressing = this.keysDown.has(kb.press);
 
@@ -2658,6 +2693,8 @@ export class FootballEngine3D {
     let closestHomeDist = Infinity;
     let closestAwayAI: ArticulatedPlayer3D | null = null;
     let closestAwayDist = Infinity;
+    let secondClosestAwayAI: ArticulatedPlayer3D | null = null;
+    let secondClosestAwayDist = Infinity;
 
     this.players.forEach((p, idx) => {
       if (p.role === 'GK') return;
@@ -2666,9 +2703,16 @@ export class FootballEngine3D {
         closestHomeDist = d;
         closestHomeAI = p;
       }
-      if (p.teamSide === 'away' && d < closestAwayDist) {
-        closestAwayDist = d;
-        closestAwayAI = p;
+      if (p.teamSide === 'away') {
+        if (d < closestAwayDist) {
+          secondClosestAwayDist = closestAwayDist;
+          secondClosestAwayAI = closestAwayAI;
+          closestAwayDist = d;
+          closestAwayAI = p;
+        } else if (d < secondClosestAwayDist) {
+          secondClosestAwayDist = d;
+          secondClosestAwayAI = p;
+        }
       }
     });
 
@@ -2789,8 +2833,12 @@ export class FootballEngine3D {
       // Goalkeeper AI
       if (p.role === 'GK') {
         const goalX = p.teamSide === 'home' ? -PITCH_WIDTH / 2 + 1.2 : PITCH_WIDTH / 2 - 1.2;
-        const targetZ = THREE.MathUtils.clamp(this.ballPos.z * 0.55, -GOAL_WIDTH * 0.42, GOAL_WIDTH * 0.42);
-        const gkSpeed = 6.8 * diffMult;
+        const targetZ = THREE.MathUtils.clamp(
+          this.ballPos.z * (isOnlineChallenge ? 0.62 : 0.55),
+          -GOAL_WIDTH * 0.42,
+          GOAL_WIDTH * 0.42
+        );
+        const gkSpeed = (isOnlineChallenge ? 7.8 : 6.8) * diffMult;
         p.x = THREE.MathUtils.lerp(p.x, goalX, dt * 5);
         p.z = THREE.MathUtils.lerp(p.z, targetZ, dt * gkSpeed);
         p.facingAngle = p.teamSide === 'home' ? Math.PI / 2 : -Math.PI / 2;
@@ -2798,15 +2846,16 @@ export class FootballEngine3D {
         // AI Goalkeeper Save Reaction
         const distBall = Math.hypot(p.x - this.ballPos.x, p.z - this.ballPos.z);
         const ballComingAtGoal =
-          (p.teamSide === 'away' && this.ballVel.x > 6 && this.ballPos.x > PITCH_WIDTH / 2 - 14) ||
-          (p.teamSide === 'home' && this.ballVel.x < -6 && this.ballPos.x < -PITCH_WIDTH / 2 + 14);
+          (p.teamSide === 'away' && this.ballVel.x > 6 && this.ballPos.x > PITCH_WIDTH / 2 - 15) ||
+          (p.teamSide === 'home' && this.ballVel.x < -6 && this.ballPos.x < -PITCH_WIDTH / 2 + 15);
 
-        if (ballComingAtGoal && distBall < 5.2 && p.diveTimer <= 0) {
+        if (ballComingAtGoal && distBall < (isOnlineChallenge ? 5.8 : 5.2) && p.diveTimer <= 0) {
           p.diveTimer = 0.65;
           p.diveDirZ = Math.sign(this.ballPos.z - p.z) || 1;
         }
 
-        if (distBall < 1.85 && this.celebrationGlobalTimer <= 0) {
+        const saveRadius = isOnlineChallenge ? 2.02 : 1.85;
+        if (distBall < saveRadius && this.celebrationGlobalTimer <= 0) {
           // Keeper parry or catch!
           this.ballOwner = null;
           this.lastTouchTeam = p.teamSide;
@@ -2836,43 +2885,55 @@ export class FootballEngine3D {
       }
 
       // Outfield AI Decision Making
-      let targetX = p.baseX + this.ballPos.x * 0.32;
-      let targetZ = p.baseZ + this.ballPos.z * 0.25;
-      let speed = 7.2 * diffMult;
+      let targetX = p.baseX + this.ballPos.x * 0.34;
+      let targetZ = p.baseZ + this.ballPos.z * 0.27;
+      let speed = (isOnlineChallenge ? 7.6 : 7.2) * diffMult;
 
       if (this.ballOwner === p) {
         // AI has the ball!
         if (p.teamSide === 'away') {
           targetX = -PITCH_WIDTH / 2;
-          targetZ = this.ballPos.z * 0.5;
-          speed = 8.4 * diffMult;
+          targetZ = this.ballPos.z * 0.46;
+          speed = (isOnlineChallenge ? 8.9 : 8.4) * diffMult;
 
-          // Shoot if within range of Home Goal
-          if (p.x < -PITCH_WIDTH / 2 + 21 && Math.abs(p.z) < 14) {
+          // Shoot if within range of Home Goal with clinical corner placement
+          const shotRange = isOnlineChallenge ? 23.5 : 21;
+          if (p.x < -PITCH_WIDTH / 2 + shotRange && Math.abs(p.z) < 14.5) {
             this.ballOwner = null;
             p.kickTimer = 0.4;
             this.stats.awayShots++;
             this.stats.awayShotsOnTarget++;
-            const aimZ = (Math.random() - 0.5) * (GOAL_WIDTH * 0.78);
+            const cornerSign = Math.random() > 0.5 ? 1 : -1;
+            const aimZ = isOnlineChallenge
+              ? cornerSign * (1.8 + Math.random() * (GOAL_WIDTH * 0.28))
+              : (Math.random() - 0.5) * (GOAL_WIDTH * 0.78);
             const dx = -PITCH_WIDTH / 2 - p.x;
             const dz = aimZ - p.z;
             const d = Math.max(1, Math.hypot(dx, dz));
-            this.ballVel.set((dx / d) * (27 * diffMult), 2.8 + Math.random() * 3.2, (dz / d) * (27 * diffMult));
-            SoundEngine.playKick(0.75, false);
+            const shotVel = (isOnlineChallenge ? 29.2 : 27) * diffMult;
+            this.ballVel.set((dx / d) * shotVel, 2.4 + Math.random() * 2.8, (dz / d) * shotVel);
+            SoundEngine.playKick(0.82, false);
             this.setCommentary(`${p.data.name.toUpperCase()} FIRES AT GOAL!`);
-          } else if (closestHomeDist < 2.6 && Math.random() < 0.08 * diffMult) {
-            // Pass to open away teammate
-            const openMate = this.players.find(
-              (m) => m.teamSide === 'away' && m !== p && m.role !== 'GK' && m.x < p.x + 6
-            );
+          } else if (
+            closestHomeDist < (isOnlineChallenge ? 3.5 : 2.6) &&
+            Math.random() < (isOnlineChallenge ? 0.14 : 0.08) * diffMult
+          ) {
+            // Pass to best positioned open away teammate
+            const openMate = this.players
+              .filter((m) => m.teamSide === 'away' && m !== p && m.role !== 'GK' && m.x < p.x + 8)
+              .sort((a, b) => a.x - b.x)[0];
             if (openMate) {
               this.ballOwner = null;
+              this.passTargetPlayer = openMate;
+              this.passAssistTimer = 0.85;
               p.kickTimer = 0.3;
               this.stats.awayPasses++;
-              const dx = openMate.x - p.x;
+              const leadX = isOnlineChallenge ? Math.max(-PITCH_WIDTH / 2 + 4, openMate.x - 2.2) : openMate.x;
+              const dx = leadX - p.x;
               const dz = openMate.z - p.z;
               const d = Math.max(1, Math.hypot(dx, dz));
-              this.ballVel.set((dx / d) * 21, 1.2, (dz / d) * 21);
+              const passSpd = isOnlineChallenge ? 23.5 : 21;
+              this.ballVel.set((dx / d) * passSpd, 1.0, (dz / d) * passSpd);
               SoundEngine.playPass();
             }
           }
@@ -2883,16 +2944,40 @@ export class FootballEngine3D {
         targetZ = this.ballPos.z + this.ballVel.z * 0.18;
         speed = 9.4 * diffMult;
       } else if (
-        (p.teamSide === 'away' && p === closestAwayAI) ||
+        (p.teamSide === 'away' &&
+          (p === closestAwayAI || (isOnlineChallenge && p === secondClosestAwayAI && secondClosestAwayDist < 18))) ||
         (p.teamSide === 'home' && p === closestHomeAI && isPressing)
       ) {
-        // Press the ball carrier
-        targetX = this.ballPos.x;
-        targetZ = this.ballPos.z;
-        speed = 8.3 * diffMult;
+        // Press the ball carrier and intercept
+        const leadMult = isOnlineChallenge && this.ballOwner ? 0.2 : 0;
+        targetX = this.ballPos.x + (this.ballOwner ? this.ballOwner.vx * leadMult : 0);
+        targetZ = this.ballPos.z + (this.ballOwner ? this.ballOwner.vz * leadMult : 0);
+        speed = (isOnlineChallenge ? 8.85 : 8.3) * diffMult;
+
+        // Active AI standing tackle when pressing closely in harder/online matches
+        const distToBallNow = Math.hypot(p.x - this.ballPos.x, p.z - this.ballPos.z);
+        if (
+          p.teamSide === 'away' &&
+          this.ballOwner &&
+          this.ballOwner.teamSide === 'home' &&
+          this.ballOwner.skillTimer <= 0 &&
+          p.tackleTimer <= 0 &&
+          distToBallNow < (isOnlineChallenge ? 2.15 : 1.85) &&
+          Math.random() < (isOnlineChallenge ? 0.045 : 0.025) * diffMult
+        ) {
+          this.ballOwner = p;
+          this.lastTouchTeam = 'away';
+          this.stats.awayTackles++;
+          p.tackleTimer = 0.42;
+          SoundEngine.playPass();
+          this.setCommentary(`STRONG TACKLE BY ${p.data.name.toUpperCase()}!`);
+        }
       } else if (p.teamSide === 'home' && this.ballOwner?.teamSide === 'home') {
         // Make intelligent forward attacking runs
         targetX = Math.min(PITCH_WIDTH / 2 - 6, p.baseX + 22);
+      } else if (p.teamSide === 'away' && this.ballOwner?.teamSide === 'away') {
+        // Away teammates make dangerous forward runs toward Home Goal
+        targetX = Math.max(-PITCH_WIDTH / 2 + 6, p.baseX - (isOnlineChallenge ? 24 : 18));
       }
 
       const dx = targetX - p.x;
