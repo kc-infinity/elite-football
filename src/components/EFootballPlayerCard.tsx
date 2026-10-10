@@ -159,7 +159,7 @@ export const EFootballPlayerCard: React.FC<EFootballPlayerCardProps> = ({
                 src={iconUrl}
                 alt="Crest"
                 referrerPolicy="no-referrer"
-                className="w-4 h-4 rounded-sm object-contain shrink-0"
+                className="w-5 h-5 rounded-full object-cover border border-[#F59E0B]/50 shrink-0"
               />
               <span
                 className="px-2 py-0.5 rounded text-[10px] font-mono font-extrabold tracking-wider uppercase border"
@@ -442,9 +442,9 @@ export const EFootballCardOpeningModal: React.FC<EFootballCardOpeningModalProps>
             >
               <img
                 src={iconUrl}
-                alt="App Icon"
+                alt="App Logo"
                 referrerPolicy="no-referrer"
-                className="w-14 h-14 object-contain mb-1.5 drop-shadow"
+                className="w-16 h-16 rounded-full object-cover border border-[#F59E0B]/60 mb-1.5 shadow-md"
               />
               <span className="font-mono text-[10px] font-bold text-white tracking-widest">
                 DRAWING...
