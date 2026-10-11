@@ -125,6 +125,7 @@ export type RoomConnectionStatus =
 
 interface FriendRoom {
   roomCode: string;
+  expectedOpponentUsername?: string;
   members: Map<string, RoomMember>;
   matchStarted: boolean;
   matchFormat: '11v11' | '1v1';
@@ -142,6 +143,10 @@ function normalizeRoomCode(raw: string): string {
   if (!cleaned) return 'PLAY-7492';
   if (/^\d{3,6}$/.test(cleaned)) {
     return `PLAY-${cleaned}`;
+  }
+  const playNoDash = cleaned.match(/^PLAY(\d{3,6})$/);
+  if (playNoDash) {
+    return `PLAY-${playNoDash[1]}`;
   }
   return cleaned;
 }
@@ -253,6 +258,7 @@ function broadcastRoomState(room: FriendRoom) {
   const payload = JSON.stringify({
     type: 'room:state',
     roomCode: room.roomCode,
+    expectedOpponentUsername: room.expectedOpponentUsername,
     members: membersList,
     matchStarted: room.matchStarted,
     matchFormat: room.matchFormat,
@@ -276,6 +282,7 @@ function broadcastOpenRooms() {
       return {
         roomCode: r.roomCode,
         hostUsername: host?.username || 'Player 1',
+        expectedOpponentUsername: r.expectedOpponentUsername,
         hostClubName: host?.clubName || 'Real Madrid',
         hostStarPlayer: host?.starPlayerName || 'Mbappé',
         matchFormat: r.matchFormat,
@@ -301,10 +308,14 @@ function checkAndAutoStartRoomIfReady(room: FriendRoom) {
   if (room.matchStarted) return;
   const minReq = room.matchFormat === '1v1' ? 2 : Math.max(2, room.requiredPlayers || 2);
   const membersArr = Array.from(room.members.values());
-  const allReady = membersArr.length >= minReq && membersArr.every((m) => m.isReady);
 
-  if (allReady) {
-    scheduleAutoStartForRoom(room);
+  // Once all required players (both players in 1v1 or 2-player 11v11) are connected,
+  // automatically mark them ready and start the online match quickly without extra steps!
+  if (membersArr.length >= minReq) {
+    membersArr.forEach((m) => {
+      m.isReady = true;
+    });
+    scheduleAutoStartForRoom(room, 250);
   } else {
     clearRoomTimers(room);
     room.status = membersArr.length >= 2 ? 'opponent_connected' : 'waiting_for_opponent';
@@ -313,13 +324,13 @@ function checkAndAutoStartRoomIfReady(room: FriendRoom) {
   }
 }
 
-function scheduleAutoStartForRoom(room: FriendRoom) {
+function scheduleAutoStartForRoom(room: FriendRoom, delayMs = 250) {
   clearRoomTimers(room);
   room.status = 'match_starting';
   broadcastRoomState(room);
   broadcastOpenRooms();
 
-  // Automatically launch the synchronized match for all players in the room!
+  // Automatically launch the synchronized match for all players in the room quickly!
   const t2 = setTimeout(() => {
     const minReq = room.matchFormat === '1v1' ? 2 : Math.max(2, room.requiredPlayers || 2);
     if (room.members.size < minReq) return;
@@ -338,7 +349,7 @@ function scheduleAutoStartForRoom(room: FriendRoom) {
       role: m.role,
       teamSide: m.teamSide,
       assignedSlotIdx: m.assignedSlotIdx,
-      isReady: m.isReady,
+      isReady: true,
     }));
     const hostMember = membersList.find((m) => m.role === 'host') || membersList[0];
     const guestMember =
@@ -349,6 +360,7 @@ function scheduleAutoStartForRoom(room: FriendRoom) {
     const payload = JSON.stringify({
       type: 'room:match_started',
       roomCode: room.roomCode,
+      expectedOpponentUsername: room.expectedOpponentUsername,
       matchFormat: room.matchFormat,
       requiredPlayers: room.requiredPlayers,
       members: membersList,
@@ -364,7 +376,7 @@ function scheduleAutoStartForRoom(room: FriendRoom) {
       }
     });
     broadcastOpenRooms();
-  }, 1400);
+  }, delayMs);
 
   room.timers.push(t2);
 }
@@ -1041,10 +1053,19 @@ async function startServer() {
           }
 
           const existing = room.members.get(clientId);
-          const hasHost = Array.from(room.members.values()).some(
+          const currentHost = Array.from(room.members.values()).find(
             (m) => m.clientId !== clientId && m.role === 'host'
           );
+          const hasHost = Boolean(currentHost);
           const role: 'host' | 'guest' = existing?.role || (!hasHost ? 'host' : 'guest');
+
+          const rawExpectedOpp = String(msg.expectedOpponentUsername || '').trim();
+          const rawEnteredOpp = String(msg.enteredOpponentUsername || '').trim();
+          if (rawExpectedOpp) {
+            room.expectedOpponentUsername = rawExpectedOpp;
+          } else if (role === 'host' && rawEnteredOpp && !room.expectedOpponentUsername) {
+            room.expectedOpponentUsername = rawEnteredOpp;
+          }
 
           if (role === 'host' && (msg.matchFormat === '11v11' || msg.matchFormat === '1v1')) {
             room.matchFormat = msg.matchFormat;
@@ -1078,12 +1099,39 @@ async function startServer() {
               : existing?.assignedSlotIdx ?? pickAvailableSlotForTeam(room, teamSide, clientId);
 
           const isReady =
-            typeof msg.isReady === 'boolean' ? msg.isReady : existing?.isReady ?? false;
+            typeof msg.isReady === 'boolean' ? msg.isReady : existing?.isReady ?? true;
+
+          // Resolve effective username when joining with Room Code + Opponent Username:
+          // - If the guest entered the same Opponent Username that the host specified, use it!
+          // - If the guest entered the host's username in the Opponent Username field, keep the guest's own username (or expectedOpponentUsername if generic).
+          let resolvedMemberUsername = String(msg.username || 'Player').trim();
+          if (role === 'guest') {
+            if (rawEnteredOpp) {
+              const matchesHostName =
+                currentHost &&
+                rawEnteredOpp.toLowerCase() === currentHost.username.toLowerCase();
+              if (!matchesHostName) {
+                resolvedMemberUsername = rawEnteredOpp;
+              } else if (
+                room.expectedOpponentUsername &&
+                (resolvedMemberUsername === 'ChampionElite_10' ||
+                  resolvedMemberUsername.startsWith('Player'))
+              ) {
+                resolvedMemberUsername = room.expectedOpponentUsername;
+              }
+            } else if (
+              room.expectedOpponentUsername &&
+              (resolvedMemberUsername === 'ChampionElite_10' ||
+                resolvedMemberUsername.startsWith('Player'))
+            ) {
+              resolvedMemberUsername = room.expectedOpponentUsername;
+            }
+          }
 
           room.members.set(clientId, {
             ws,
             clientId,
-            username: String(msg.username || 'Player'),
+            username: resolvedMemberUsername,
             clubId: String(msg.clubId || 'club_real_madrid'),
             clubName: String(msg.clubName || 'Real Madrid'),
             starPlayerId: msg.starPlayerId ? String(msg.starPlayerId) : undefined,

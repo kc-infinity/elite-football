@@ -23,6 +23,7 @@ export interface FriendRoomPlayer {
 
 export interface FriendRoomState {
   roomCode: string;
+  expectedOpponentUsername?: string;
   members: FriendRoomPlayer[];
   matchStarted: boolean;
   matchFormat?: '11v11' | '1v1';
@@ -34,6 +35,7 @@ export interface FriendRoomState {
 export interface OpenRoomInfo {
   roomCode: string;
   hostUsername: string;
+  expectedOpponentUsername?: string;
   hostClubName: string;
   hostStarPlayer: string;
   createdAt: number;
@@ -212,6 +214,10 @@ export function normalizeClientRoomCode(raw: string): string {
   if (!cleaned) return 'PLAY-7492';
   if (/^\d{3,6}$/.test(cleaned)) {
     return `PLAY-${cleaned}`;
+  }
+  const playNoDash = cleaned.match(/^PLAY(\d{3,6})$/);
+  if (playNoDash) {
+    return `PLAY-${playNoDash[1]}`;
   }
   return cleaned;
 }
@@ -481,6 +487,8 @@ class FriendRoomServiceManager {
   public joinRoom(params: {
     roomCode: string;
     username: string;
+    expectedOpponentUsername?: string;
+    enteredOpponentUsername?: string;
     clubId: string;
     clubName: string;
     starPlayerId?: string;
@@ -516,12 +524,14 @@ class FriendRoomServiceManager {
       teamSide: params.teamSide || existingMe?.teamSide || 'home',
       assignedSlotIdx:
         params.assignedSlotIdx ?? existingMe?.assignedSlotIdx ?? 9,
-      isReady: params.isReady ?? existingMe?.isReady ?? false,
+      isReady: params.isReady ?? existingMe?.isReady ?? true,
     };
 
     if (this.currentState.roomCode !== cleanCode) {
       this.currentState = {
         roomCode: cleanCode,
+        expectedOpponentUsername:
+          params.expectedOpponentUsername ?? params.enteredOpponentUsername,
         members: [selfMember],
         matchStarted: false,
         matchFormat: params.matchFormat || '11v11',
@@ -530,6 +540,9 @@ class FriendRoomServiceManager {
         statusLabel: 'Waiting for Opponent',
       };
     } else {
+      if (params.expectedOpponentUsername !== undefined) {
+        this.currentState.expectedOpponentUsername = params.expectedOpponentUsername;
+      }
       if (params.matchFormat) {
         this.currentState.matchFormat = params.matchFormat;
       }
@@ -567,6 +580,8 @@ class FriendRoomServiceManager {
       roomCode: cleanCode,
       clientId: this.clientId,
       username: params.username,
+      expectedOpponentUsername: params.expectedOpponentUsername,
+      enteredOpponentUsername: params.enteredOpponentUsername,
       clubId: params.clubId,
       clubName: params.clubName,
       starPlayerId: this.currentStarPlayerId,
@@ -577,7 +592,7 @@ class FriendRoomServiceManager {
       requiredPlayers: params.requiredPlayers || this.currentState.requiredPlayers || 2,
       teamSide: params.teamSide,
       assignedSlotIdx: params.assignedSlotIdx,
-      isReady: params.isReady,
+      isReady: params.isReady ?? true,
     };
 
     this.bc?.postMessage(joinMsg);
@@ -1014,6 +1029,8 @@ class FriendRoomServiceManager {
         this.currentRoomCode = msg.roomCode;
         this.currentState = {
           roomCode: msg.roomCode,
+          expectedOpponentUsername:
+            msg.expectedOpponentUsername ?? this.currentState.expectedOpponentUsername,
           members: msg.members || [],
           matchStarted: Boolean(msg.matchStarted),
           matchFormat: msg.matchFormat || this.currentState.matchFormat || '11v11',
@@ -1074,10 +1091,15 @@ class FriendRoomServiceManager {
       // Cross-tab fallback if WebSocket isn't handling it
       if (msg.roomCode === this.currentRoomCode && msg.clientId !== this.clientId) {
         const exists = this.currentState.members.some((m) => m.clientId === msg.clientId);
+        const resolvedGuestUsername =
+          msg.enteredOpponentUsername &&
+          msg.enteredOpponentUsername.toLowerCase() !== this.currentUsername.toLowerCase()
+            ? msg.enteredOpponentUsername
+            : msg.username;
         if (!exists) {
           this.currentState.members.push({
             clientId: msg.clientId,
-            username: msg.username,
+            username: resolvedGuestUsername,
             clubId: msg.clubId,
             clubName: msg.clubName,
             starPlayerId: msg.starPlayerId,
@@ -1088,21 +1110,48 @@ class FriendRoomServiceManager {
             role: 'guest',
             teamSide: msg.teamSide || 'away',
             assignedSlotIdx: msg.assignedSlotIdx ?? 9,
-            isReady: Boolean(msg.isReady),
+            isReady: true,
           });
-          this.currentState.status = 'opponent_connected';
-          this.currentState.statusLabel = 'Opponent Connected';
+          this.currentState.members.forEach((m) => {
+            m.isReady = true;
+          });
+          this.currentState.status = 'match_starting';
+          this.currentState.statusLabel = 'Match Starting';
           this.notifyListeners();
           this.bc?.postMessage({
             type: 'room:state',
             roomCode: this.currentRoomCode,
+            expectedOpponentUsername: this.currentState.expectedOpponentUsername,
             members: this.currentState.members,
             matchStarted: false,
             matchFormat: this.currentState.matchFormat,
             requiredPlayers: this.currentState.requiredPlayers,
-            status: 'opponent_connected',
-            statusLabel: 'Opponent Connected',
+            status: 'match_starting',
+            statusLabel: 'Match Starting',
           });
+          if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            const t = window.setTimeout(() => {
+              this.currentState.matchStarted = true;
+              this.currentState.status = 'in_match';
+              this.currentState.statusLabel = 'Live Match In Progress';
+              this.notifyListeners();
+              const hostP = this.currentState.members.find((m) => m.role === 'host');
+              const guestP = this.currentState.members.find((m) => m.role === 'guest');
+              this.bc?.postMessage({
+                type: 'room:match_started',
+                roomCode: this.currentRoomCode,
+                matchFormat: this.currentState.matchFormat,
+                members: this.currentState.members,
+                host: hostP,
+                guest: guestP,
+              });
+              const myRole = this.getMyRoleInRoom();
+              this.matchStartListeners.forEach((cb) =>
+                cb(this.currentRoomCode, myRole, hostP, guestP)
+              );
+            }, 250);
+            this.bcTimers.push(t);
+          }
         }
       }
     } else if (msg.type === 'room:match_started' || msg.type === 'room:start_match') {

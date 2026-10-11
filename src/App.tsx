@@ -199,7 +199,9 @@ export default function App() {
     sessionStorage.setItem('fe_room_code', code);
     return code;
   });
+  const [expectedOpponentUsername, setExpectedOpponentUsername] = useState<string>('');
   const [joinCodeInput, setJoinCodeInput] = useState<string>('');
+  const [joinOpponentInput, setJoinOpponentInput] = useState<string>('');
   const [activeJoinCodeMatch, setActiveJoinCodeMatch] = useState<string | undefined>(undefined);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [friendRoomState, setFriendRoomState] = useState<FriendRoomState>(() => ({
@@ -466,7 +468,7 @@ export default function App() {
     setActiveTournamentLabel(tourneyLabel);
     setActiveJoinCodeMatch(joinCode);
 
-    if (!hasSeenControlGuide) {
+    if (!hasSeenControlGuide && !isOnlineMode) {
       setShowPreMatchGuide(true);
     } else {
       setScreen('in_match');
@@ -480,16 +482,18 @@ export default function App() {
     setScreen('in_match');
   };
 
-  const handlePlayWithJoinCode = () => {
-    SoundEngine.playUIClick();
-    const raw = joinCodeInput.trim().toUpperCase() || hostJoinCode;
-    const formatted = raw.startsWith('PLAY-') ? raw : `PLAY-${raw}`;
-    setJoinCodeInput(formatted);
+  const handleHostRoomWithCode = (customRoomCode: string, oppUsername: string) => {
+    const raw = customRoomCode.trim().toUpperCase() || hostJoinCode;
+    const formatted =
+      raw.startsWith('PLAY-') || !/^\d{3,6}$/.test(raw) ? raw : `PLAY-${raw}`;
+    const cleanOpp = oppUsername.trim();
     setHostJoinCode(formatted);
+    setExpectedOpponentUsername(cleanOpp);
     sessionStorage.setItem('fe_room_code', formatted);
     FriendRoomService.joinRoom({
       roomCode: formatted,
       username: profile.username,
+      expectedOpponentUsername: cleanOpp,
       clubId: userTeam.id,
       clubName: userTeam.name,
       starPlayerId: userSquad[9]?.id,
@@ -497,22 +501,31 @@ export default function App() {
       squadIds: userSquad.slice(0, 11).map((p) => p.id),
       formation: userFormation,
       matchFormat: onlineMatchFormat,
+      isReady: true,
     });
   };
 
-  const handleJoinFriendRoomOnly = (customCode?: string, formatOverride?: '11v11' | '1v1') => {
+  const handleJoinFriendRoomOnly = (
+    customCode?: string,
+    formatOverride?: '11v11' | '1v1',
+    enteredOpponentName?: string
+  ) => {
     SoundEngine.playUIClick();
     const raw = (customCode ?? joinCodeInput).trim().toUpperCase();
     if (!raw) return;
-    const formatted = raw.startsWith('PLAY-') ? raw : `PLAY-${raw}`;
+    const formatted =
+      raw.startsWith('PLAY-') || !/^\d{3,6}$/.test(raw) ? raw : `PLAY-${raw}`;
+    const cleanOpp = (enteredOpponentName ?? joinOpponentInput).trim();
     const fmt = formatOverride || onlineMatchFormat;
     if (formatOverride) setOnlineMatchFormat(formatOverride);
     setJoinCodeInput(formatted);
     setHostJoinCode(formatted);
+    if (cleanOpp) setExpectedOpponentUsername(cleanOpp);
     sessionStorage.setItem('fe_room_code', formatted);
     FriendRoomService.joinRoom({
       roomCode: formatted,
       username: profile.username,
+      enteredOpponentUsername: cleanOpp || undefined,
       clubId: userTeam.id,
       clubName: userTeam.name,
       starPlayerId: userSquad[9]?.id,
@@ -520,13 +533,22 @@ export default function App() {
       squadIds: userSquad.slice(0, 11).map((p) => p.id),
       formation: userFormation,
       matchFormat: fmt,
+      isReady: true,
     });
   };
 
-  const handleGenerateNewJoinCode = () => {
+  const handleGenerateNewJoinCode = (oppUsername?: string) => {
     SoundEngine.playUIClick();
-    const nextCode = FriendRoomService.createRoom({
+    const nextCode = `PLAY-${Math.floor(1000 + Math.random() * 9000)}`;
+    const cleanOpp = (oppUsername ?? expectedOpponentUsername).trim();
+    if (oppUsername !== undefined) setExpectedOpponentUsername(cleanOpp);
+    setHostJoinCode(nextCode);
+    setJoinCodeInput('');
+    sessionStorage.setItem('fe_room_code', nextCode);
+    FriendRoomService.joinRoom({
+      roomCode: nextCode,
       username: profile.username,
+      expectedOpponentUsername: cleanOpp || undefined,
       clubId: userTeam.id,
       clubName: userTeam.name,
       starPlayerId: userSquad[9]?.id,
@@ -534,10 +556,8 @@ export default function App() {
       squadIds: userSquad.slice(0, 11).map((p) => p.id),
       formation: userFormation,
       matchFormat: onlineMatchFormat,
+      isReady: true,
     });
-    setHostJoinCode(nextCode);
-    setJoinCodeInput('');
-    sessionStorage.setItem('fe_room_code', nextCode);
   };
 
   useEffect(() => {
@@ -555,6 +575,7 @@ export default function App() {
       FriendRoomService.joinRoom({
         roomCode: hostJoinCode,
         username: profile.username,
+        expectedOpponentUsername: expectedOpponentUsername || undefined,
         clubId: userTeam.id,
         clubName: userTeam.name,
         starPlayerId: userSquad[9]?.id,
@@ -562,11 +583,13 @@ export default function App() {
         squadIds: userSquad.slice(0, 11).map((p) => p.id),
         formation: userFormation,
         matchFormat: onlineMatchFormat,
+        isReady: true,
       });
     }
   }, [
     screen,
     hostJoinCode,
+    expectedOpponentUsername,
     profile.username,
     userTeam.id,
     userTeam.name,
@@ -1005,8 +1028,24 @@ export default function App() {
                 setScreen('play_setup');
               }
         }
-        onExitToMenu={() => navigateTo('home')}
-        onReturnToOnlineLobby={() => navigateTo('online_match')}
+        onExitToMenu={() => {
+          if (activeJoinCodeMatch) {
+            const nextCode = `PLAY-${Math.floor(1000 + Math.random() * 9000)}`;
+            setHostJoinCode(nextCode);
+            setActiveJoinCodeMatch(undefined);
+            sessionStorage.setItem('fe_room_code', nextCode);
+          }
+          navigateTo('home');
+        }}
+        onReturnToOnlineLobby={() => {
+          if (activeJoinCodeMatch) {
+            const nextCode = `PLAY-${Math.floor(1000 + Math.random() * 9000)}`;
+            setHostJoinCode(nextCode);
+            setActiveJoinCodeMatch(undefined);
+            sessionStorage.setItem('fe_room_code', nextCode);
+          }
+          navigateTo('online_match');
+        }}
       />
     );
   }
@@ -1362,104 +1401,95 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* 1. Create Room Code */}
-                        <div className="p-3.5 rounded-xl bg-[#070A0E] border border-white/10 flex items-center justify-between gap-2">
-                          <div>
-                            <div className="text-[10px] font-mono text-slate-400">
-                              YOUR ROOM CODE (SHARE WITH PLAYER 2)
+                        {/* 1. Host Room Code + Opponent Username */}
+                        <div className="p-3.5 rounded-xl bg-[#070A0E] border border-white/10 space-y-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-[10px] font-mono text-[#10B981] font-bold">
+                              HOST MATCH (ROOM CODE + OPPONENT USERNAME)
                             </div>
-                            <div className="font-mono text-lg font-bold text-[#10B981] tracking-wider">
-                              {friendRoomState.roomCode || hostJoinCode}
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={handleCopyJoinCode}
+                                className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-[11px] font-mono text-white cursor-pointer"
+                              >
+                                {copiedCode ? 'Copied' : 'Copy'}
+                              </button>
+                              <button
+                                onClick={() => handleGenerateNewJoinCode()}
+                                className="px-2 py-1 bg-[#10B981]/20 hover:bg-[#10B981]/30 text-[#10B981] rounded text-[11px] font-mono font-bold cursor-pointer"
+                              >
+                                New Code
+                              </button>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={handleCopyJoinCode}
-                              className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-mono text-white cursor-pointer"
-                            >
-                              {copiedCode ? 'Copied' : 'Copy'}
-                            </button>
-                            <button
-                              onClick={handleGenerateNewJoinCode}
-                              className="px-2.5 py-1.5 bg-[#10B981]/20 hover:bg-[#10B981]/30 text-[#10B981] rounded-lg text-xs font-mono font-bold cursor-pointer"
-                            >
-                              New Code
-                            </button>
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              type="text"
+                              value={hostJoinCode}
+                              onChange={(e) =>
+                                handleHostRoomWithCode(e.target.value, expectedOpponentUsername)
+                              }
+                              placeholder="Room Code"
+                              className="w-full bg-[#111722] border border-[#10B981]/40 rounded-lg px-3 py-2 font-mono text-xs font-bold text-[#10B981] uppercase tracking-wider focus:outline-none focus:border-[#10B981]"
+                            />
+                            <input
+                              type="text"
+                              value={expectedOpponentUsername}
+                              onChange={(e) =>
+                                handleHostRoomWithCode(hostJoinCode, e.target.value)
+                              }
+                              placeholder="Opponent Username..."
+                              className="w-full bg-[#111722] border border-white/20 rounded-lg px-3 py-2 font-display text-xs font-bold text-white focus:outline-none focus:border-[#10B981]"
+                            />
                           </div>
                         </div>
 
-                        {/* 2. Enter Room Code to Join */}
-                        <div>
-                          <label className="block text-xs text-slate-300 mb-1.5">
-                            Enter Room Code to Join:
-                          </label>
-                          <div className="flex items-center gap-2">
+                        {/* 2. Opponent Joins with Same Room Code + Username */}
+                        <div className="p-3.5 rounded-xl bg-[#070A0E] border border-white/10 space-y-2.5">
+                          <div className="text-[10px] font-mono text-[#F59E0B] font-bold">
+                            JOIN MATCH (SAME ROOM CODE + USERNAME)
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
                             <input
                               type="text"
                               value={joinCodeInput}
                               onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
-                              placeholder="Enter Room Code (e.g. PLAY-7492)"
-                              className="w-full bg-[#070A0E] border border-white/20 rounded-xl px-3.5 py-2.5 font-mono text-xs font-bold text-white tracking-wider uppercase focus:outline-none focus:border-[#10B981]"
+                              placeholder="Same Room Code"
+                              className="w-full bg-[#111722] border border-white/20 rounded-lg px-3 py-2 font-mono text-xs font-bold text-white tracking-wider uppercase focus:outline-none focus:border-[#F59E0B]"
                             />
-                            <button
-                              onClick={() => {
-                                handleJoinFriendRoomOnly();
-                                navigateTo('online_match');
-                              }}
-                              className="px-4 py-2.5 bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E] font-display font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap shadow-md cursor-pointer"
-                            >
-                              <Play className="w-3.5 h-3.5 fill-current" />
-                              JOIN MATCH
-                            </button>
+                            <input
+                              type="text"
+                              value={joinOpponentInput}
+                              onChange={(e) => setJoinOpponentInput(e.target.value)}
+                              placeholder="Same Username..."
+                              className="w-full bg-[#111722] border border-white/20 rounded-lg px-3 py-2 font-display text-xs font-bold text-white focus:outline-none focus:border-[#F59E0B]"
+                            />
                           </div>
+                          <button
+                            onClick={() => {
+                              handleJoinFriendRoomOnly(
+                                joinCodeInput,
+                                onlineMatchFormat,
+                                joinOpponentInput
+                              );
+                            }}
+                            className="w-full py-2.5 bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E] font-display font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
+                          >
+                            <Play className="w-3.5 h-3.5 fill-current" />
+                            JOIN & START MATCH AUTOMATICALLY
+                          </button>
                         </div>
 
-                        {/* 3. Connected Players & Ready Status */}
-                        <div className="p-3.5 bg-[#070A0E]/80 border border-white/10 rounded-xl space-y-2.5">
-                          <div className="flex items-center justify-between text-[11px] font-mono">
-                            <span className="text-slate-400">
-                              PLAYERS CONNECTED ({Math.max(1, friendRoomState.members.length)}/2)
-                            </span>
-                            <span className="text-[#10B981] font-bold">
-                              {friendRoomState.members.filter((m) => m.isReady).length}/2 READY
-                            </span>
-                          </div>
-
-                          {(() => {
-                            const myMemberInRoom = friendRoomState.members.find(
-                              (m) => m.clientId === FriendRoomService.getClientId()
-                            );
-                            const amIReady = Boolean(myMemberInRoom?.isReady);
-                            const readyCnt = friendRoomState.members.filter((m) => m.isReady).length;
-                            return (
-                              <div className="grid grid-cols-2 gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    SoundEngine.playUIClick();
-                                    FriendRoomService.setRoomReady(
-                                      friendRoomState.roomCode || hostJoinCode,
-                                      !amIReady
-                                    );
-                                  }}
-                                  className={`py-2.5 px-3 rounded-xl font-display font-bold text-xs transition-all cursor-pointer ${
-                                    amIReady
-                                      ? 'bg-[#10B981] text-[#070A0E]'
-                                      : 'bg-white hover:bg-slate-100 text-[#070A0E]'
-                                  }`}
-                                >
-                                  {amIReady ? `READY ✓ (${readyCnt}/2)` : `MARK READY (${readyCnt}/2)`}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => navigateTo('online_match')}
-                                  className="py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-display font-bold text-xs transition-colors cursor-pointer"
-                                >
-                                  ROOM LOBBY →
-                                </button>
-                              </div>
-                            );
-                          })()}
+                        {/* 3. Connected Players & Instant Auto-Start Status */}
+                        <div className="p-3 bg-[#070A0E]/80 border border-white/10 rounded-xl flex items-center justify-between text-[11px] font-mono">
+                          <span className="text-slate-300">
+                            {friendRoomState.members.length >= 2
+                              ? 'BOTH CONNECTED — STARTING MATCH!'
+                              : expectedOpponentUsername
+                              ? `Waiting for @${expectedOpponentUsername} (${Math.max(1, friendRoomState.members.length)}/2)`
+                              : `Waiting for Opponent (${Math.max(1, friendRoomState.members.length)}/2)`}
+                          </span>
+                          <span className="text-[#10B981] font-bold">AUTO-START ON</span>
                         </div>
                       </>
                     )}
@@ -1598,9 +1628,10 @@ export default function App() {
               applyServerUserProgress(acc);
             }}
             onUpdateUsername={handleUpdateUsername}
-            onCreateNewRoom={handleGenerateNewJoinCode}
-            onJoinRoomByCode={(enteredCode) => {
-              handleJoinFriendRoomOnly(enteredCode);
+            onCreateNewRoom={(oppName) => handleGenerateNewJoinCode(oppName)}
+            onHostRoomWithCode={handleHostRoomWithCode}
+            onJoinRoomByCode={(enteredCode, enteredOppName) => {
+              handleJoinFriendRoomOnly(enteredCode, undefined, enteredOppName);
             }}
             onInviteByUsername={handleInviteFriendByUsername}
             onToggleLobbyReady={(lobbyId, nextReady) => {
