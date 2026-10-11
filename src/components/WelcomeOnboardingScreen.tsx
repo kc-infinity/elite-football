@@ -99,21 +99,33 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
   const handleGoogleSignInClick = () => {
     SoundEngine.playUIClick();
     setErrorMsg('');
-    setGoogleSignedIn(true);
 
     const currentName = username.trim();
     if (currentName.length > 0) {
+      setGoogleSignedIn(true);
       const resolvedEmail =
         email.trim() && email.includes('@')
           ? email.trim().toLowerCase()
           : `${currentName.toLowerCase().replace(/[^a-z0-9._-]/g, '') || 'player'}@gmail.com`;
       performSignIn('google', resolvedEmail, currentName);
-    } else {
-      setInfoMsg('Google connected! Enter any username you want below, then click Sign In.');
-      setTimeout(() => {
-        usernameInputRef.current?.focus();
-      }, 50);
+      return;
     }
+
+    if (googleSignedIn) {
+      // Second click on Google Sign-In signs in immediately even if username will be entered in Online Match
+      const fallbackName =
+        email.trim() && email.includes('@')
+          ? email.trim().split('@')[0]
+          : `Player_${Math.floor(100 + Math.random() * 900)}`;
+      performSignIn('google', `${fallbackName.toLowerCase()}@gmail.com`, fallbackName);
+      return;
+    }
+
+    setGoogleSignedIn(true);
+    setInfoMsg('Google connected! Enter any username below (or click Sign In to continue).');
+    setTimeout(() => {
+      usernameInputRef.current?.focus();
+    }, 50);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -122,16 +134,22 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
     setErrorMsg('');
     setInfoMsg('');
 
-    const trimmedUsername = username.trim();
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedPassword = password.trim();
+    const hasEmailCredentials = trimmedEmail.length > 0 || trimmedPassword.length > 0;
+    const trimmedUsername =
+      username.trim() ||
+      (trimmedEmail
+        ? trimmedEmail.split('@')[0]
+        : googleSignedIn
+        ? `Player_${Math.floor(100 + Math.random() * 900)}`
+        : '');
+
     if (!trimmedUsername) {
       setErrorMsg('Please enter any username you want in the Username field.');
       usernameInputRef.current?.focus();
       return;
     }
-
-    const trimmedEmail = email.trim().toLowerCase();
-    const trimmedPassword = password.trim();
-    const hasEmailCredentials = trimmedEmail.length > 0 || trimmedPassword.length > 0;
 
     if (hasEmailCredentials && !googleSignedIn) {
       if (!trimmedEmail) {
@@ -149,16 +167,11 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
       return;
     }
 
-    if (googleSignedIn) {
-      const resolvedEmail =
-        trimmedEmail && trimmedEmail.includes('@')
-          ? trimmedEmail
-          : `${trimmedUsername.toLowerCase().replace(/[^a-z0-9._-]/g, '') || 'player'}@gmail.com`;
-      performSignIn('google', resolvedEmail, trimmedUsername);
-      return;
-    }
-
-    setErrorMsg('Please choose Google Sign-In or enter your Email + Password above.');
+    const resolvedEmail =
+      trimmedEmail && trimmedEmail.includes('@')
+        ? trimmedEmail
+        : `${trimmedUsername.toLowerCase().replace(/[^a-z0-9._-]/g, '') || 'player'}@gmail.com`;
+    performSignIn('google', resolvedEmail, trimmedUsername);
   };
 
   return (

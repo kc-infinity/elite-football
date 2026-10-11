@@ -455,20 +455,21 @@ async function startServer() {
     } = req.body || {};
 
     const authProvider: 'google' | 'email' = provider === 'email' ? 'email' : 'google';
-    const rawUsername = String(username || '').trim().slice(0, 32);
-    if (!rawUsername) {
-      res.status(400).json({ error: 'Please enter a username.' });
-      return;
-    }
-
     const rawEmailInput = String(email || '').trim().toLowerCase();
+    const rawUsername = String(username || '').trim().slice(0, 32);
+    const fallbackUsername =
+      rawEmailInput && rawEmailInput.includes('@')
+        ? rawEmailInput.split('@')[0].slice(0, 32)
+        : rawEmailInput
+        ? rawEmailInput.slice(0, 32)
+        : `Player_${Math.floor(100 + Math.random() * 900)}`;
+    const cleanUsername = rawUsername || fallbackUsername;
+
     const cleanEmail = rawEmailInput
       ? rawEmailInput.includes('@')
         ? rawEmailInput
         : `${rawEmailInput}@football-elite.app`
-      : `${rawUsername.toLowerCase().replace(/[^a-z0-9._-]/g, '') || 'player'}@gmail.com`;
-
-    const cleanUsername = rawUsername;
+      : `${cleanUsername.toLowerCase().replace(/[^a-z0-9._-]/g, '') || 'player'}@gmail.com`;
 
     if (authProvider === 'email') {
       const rawPassword = String(password || '').trim();

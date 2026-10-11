@@ -97,8 +97,8 @@ export default function App() {
   const { iconUrl } = useAppIcon();
   const [screen, setScreen] = useState<ActiveScreen>(() => {
     const isSignedIn =
-      Boolean(localStorage.getItem('fe_auth_token')) ||
-      Boolean(localStorage.getItem('fe_saved_account'));
+      Boolean(localStorage.getItem('fe_auth_token_v3')) ||
+      Boolean(localStorage.getItem('fe_saved_account_v3'));
     return isSignedIn ? 'home' : 'welcome';
   });
 
@@ -212,11 +212,11 @@ export default function App() {
 
   // Google Auth, Online Matchmaking by Username, Lobby & App Payment State
   const [authToken, setAuthToken] = useState<string | null>(() =>
-    localStorage.getItem('fe_auth_token')
+    localStorage.getItem('fe_auth_token_v3')
   );
   const [account, setAccount] = useState<AuthenticatedAccount | null>(() => {
     try {
-      const raw = localStorage.getItem('fe_saved_account');
+      const raw = localStorage.getItem('fe_saved_account_v3');
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -273,9 +273,9 @@ export default function App() {
 
   const applyServerUserProgress = (user: AuthenticatedAccount) => {
     setAccount(user);
-    localStorage.setItem('fe_saved_account', JSON.stringify(user));
+    localStorage.setItem('fe_saved_account_v3', JSON.stringify(user));
     if (user.email) {
-      localStorage.setItem('fe_user_email', user.email);
+      localStorage.setItem('fe_user_email_v3', user.email);
     }
     localStorage.setItem('fe_has_onboarded', 'true');
     if (user.username) {
@@ -348,7 +348,7 @@ export default function App() {
 
     if (authenticatedUser && token) {
       setAuthToken(token);
-      localStorage.setItem('fe_auth_token', token);
+      localStorage.setItem('fe_auth_token_v3', token);
       applyServerUserProgress(authenticatedUser);
       setScreen('home');
       return;
@@ -393,13 +393,36 @@ export default function App() {
       .then((data) => {
         if (data?.user && data?.token) {
           setAuthToken(data.token);
-          localStorage.setItem('fe_auth_token', data.token);
+          localStorage.setItem('fe_auth_token_v3', data.token);
           applyServerUserProgress(data.user);
         }
       })
       .catch(() => {});
 
     setScreen('home');
+  };
+
+  const handleUpdateUsername = (nextUsername: string) => {
+    const clean = nextUsername.trim().slice(0, 32);
+    if (!clean) return;
+    localStorage.setItem('fe_username', clean);
+    setProfile((prev) => ({ ...prev, username: clean }));
+    if (account) {
+      const updatedAcc = { ...account, username: clean };
+      setAccount(updatedAcc);
+      localStorage.setItem('fe_saved_account_v3', JSON.stringify(updatedAcc));
+    }
+    FriendRoomService.joinRoom({
+      roomCode: friendRoomState.roomCode || hostJoinCode,
+      username: clean,
+      clubId: userTeam.id,
+      clubName: userTeam.name,
+      starPlayerId: userSquad[9]?.id,
+      starPlayerName: userSquad[9]?.name || 'Mbappé',
+      squadIds: userSquad.slice(0, 11).map((p) => p.id),
+      formation: userFormation,
+      matchFormat: onlineMatchFormat,
+    });
   };
 
   const navigateTo = (target: ActiveScreen) => {
@@ -429,12 +452,12 @@ export default function App() {
 
     if (modeOverride === 'dream_team_11v11_online') {
       setOnlineMatchFormat('11v11');
-      if (friendRoomState.members.length < 2 && !activeOnlineLobby?.guest) {
+      if (!joinCode && friendRoomState.members.length < 2 && !activeOnlineLobby?.guest) {
         setScreen('online_match');
         return;
       }
     }
-    if (modeOverride === 'join_code_match' && friendRoomState.members.length < 2 && !activeOnlineLobby?.guest) {
+    if (modeOverride === 'join_code_match' && !joinCode && friendRoomState.members.length < 2 && !activeOnlineLobby?.guest) {
       setScreen('online_match');
       return;
     }
@@ -554,7 +577,7 @@ export default function App() {
 
   // Restore Account session if token or saved email exists (keeps user permanently logged in)
   useEffect(() => {
-    const savedEmail = localStorage.getItem('fe_user_email') || account?.email || '';
+    const savedEmail = localStorage.getItem('fe_user_email_v3') || account?.email || '';
     if (!authToken && !savedEmail) return;
     const headers: Record<string, string> = {};
     if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
@@ -588,7 +611,7 @@ export default function App() {
       // ignore storage quota errors
     }
 
-    const savedEmail = localStorage.getItem('fe_user_email') || account?.email || '';
+    const savedEmail = localStorage.getItem('fe_user_email_v3') || account?.email || '';
     if (!authToken && !savedEmail) return;
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -810,6 +833,7 @@ export default function App() {
           coins={coins}
           isGoogleLinked={Boolean(account)}
           onOpenGoogleAuth={() => setShowGoogleAuthModal(true)}
+          onContinueAsGuest={() => setScreen('home')}
           onCompleteOnboarding={handleCompleteOnboarding}
         />
         <GoogleAuthModal
@@ -821,15 +845,16 @@ export default function App() {
           onClose={() => setShowGoogleAuthModal(false)}
           onSuccessAuth={(acc, token) => {
             setAuthToken(token);
-            localStorage.setItem('fe_auth_token', token);
+            localStorage.setItem('fe_auth_token_v3', token);
             applyServerUserProgress(acc);
+            setScreen('home');
           }}
           onLogout={() => {
             setAccount(null);
             setAuthToken(null);
-            localStorage.removeItem('fe_auth_token');
-            localStorage.removeItem('fe_user_email');
-            localStorage.removeItem('fe_saved_account');
+            localStorage.removeItem('fe_auth_token_v3');
+            localStorage.removeItem('fe_user_email_v3');
+            localStorage.removeItem('fe_saved_account_v3');
           }}
         />
       </>
@@ -1319,6 +1344,24 @@ export default function App() {
                       </div>
                     ) : (
                       <>
+                        {/* 0. Your Username Input */}
+                        <div>
+                          <label className="block text-[11px] font-mono text-[#10B981] font-bold mb-1">
+                            YOUR USERNAME
+                          </label>
+                          <div className="relative">
+                            <User className="w-3.5 h-3.5 text-[#10B981] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <input
+                              type="text"
+                              value={profile.username}
+                              onChange={(e) => handleUpdateUsername(e.target.value)}
+                              placeholder="Enter your username..."
+                              maxLength={32}
+                              className="w-full bg-[#070A0E] border border-white/20 focus:border-[#10B981] rounded-xl pl-9 pr-3 py-2 font-display font-bold text-xs text-white focus:outline-none"
+                            />
+                          </div>
+                        </div>
+
                         {/* 1. Create Room Code */}
                         <div className="p-3.5 rounded-xl bg-[#070A0E] border border-white/10 flex items-center justify-between gap-2">
                           <div>
@@ -1348,7 +1391,7 @@ export default function App() {
                         {/* 2. Enter Room Code to Join */}
                         <div>
                           <label className="block text-xs text-slate-300 mb-1.5">
-                            Join Friend’s Room Code:
+                            Enter Room Code to Join:
                           </label>
                           <div className="flex items-center gap-2">
                             <input
@@ -1366,7 +1409,7 @@ export default function App() {
                               className="px-4 py-2.5 bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E] font-display font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 shrink-0 whitespace-nowrap shadow-md cursor-pointer"
                             >
                               <Play className="w-3.5 h-3.5 fill-current" />
-                              JOIN ROOM
+                              JOIN MATCH
                             </button>
                           </div>
                         </div>
@@ -1551,9 +1594,10 @@ export default function App() {
             onOpenGoogleAuth={() => setShowGoogleAuthModal(true)}
             onSuccessAuth={(acc, token) => {
               setAuthToken(token);
-              localStorage.setItem('fe_auth_token', token);
+              localStorage.setItem('fe_auth_token_v3', token);
               applyServerUserProgress(acc);
             }}
+            onUpdateUsername={handleUpdateUsername}
             onCreateNewRoom={handleGenerateNewJoinCode}
             onJoinRoomByCode={(enteredCode) => {
               handleJoinFriendRoomOnly(enteredCode);
@@ -2210,15 +2254,15 @@ export default function App() {
         onClose={() => setShowGoogleAuthModal(false)}
         onSuccessAuth={(acc, token) => {
           setAuthToken(token);
-          localStorage.setItem('fe_auth_token', token);
+          localStorage.setItem('fe_auth_token_v3', token);
           applyServerUserProgress(acc);
         }}
         onLogout={() => {
           setAccount(null);
           setAuthToken(null);
-          localStorage.removeItem('fe_auth_token');
-          localStorage.removeItem('fe_user_email');
-          localStorage.removeItem('fe_saved_account');
+          localStorage.removeItem('fe_auth_token_v3');
+          localStorage.removeItem('fe_user_email_v3');
+          localStorage.removeItem('fe_saved_account_v3');
         }}
       />
 

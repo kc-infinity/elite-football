@@ -543,6 +543,21 @@ class FriendRoomServiceManager {
           role: this.currentState.members.length === 0 ? 'host' : 'guest',
           teamSide: this.currentState.members.length === 0 ? 'home' : 'away',
         });
+      } else {
+        this.currentState.members = this.currentState.members.map((m) =>
+          m.clientId === this.clientId
+            ? {
+                ...m,
+                username: params.username,
+                clubId: params.clubId,
+                clubName: params.clubName,
+                starPlayerId: this.currentStarPlayerId,
+                starPlayerName: params.starPlayerName,
+                squadIds: params.squadIds,
+                formation: params.formation,
+              }
+            : m
+        );
       }
     }
     this.notifyListeners();
