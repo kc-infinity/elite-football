@@ -205,8 +205,8 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
             </h1>
             <p className="text-xs sm:text-sm text-slate-300">
               Sign in with <span className="text-white font-semibold">Google</span> or{' '}
-              <span className="text-white font-semibold">Email + Password</span> to unlock{' '}
-              <span className="text-[#10B981] font-semibold">Online Match</span>
+              <span className="text-white font-semibold">Email + Password</span> to save your{' '}
+              <span className="text-[#10B981] font-semibold">Dream Squad & Coins</span>
             </p>
           </div>
 
@@ -350,7 +350,7 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
             >
               <ShieldCheck className="w-4 h-4" />
               <span>
-                {isSubmitting ? 'SIGNING IN...' : 'SIGN IN & UNLOCK ONLINE MATCH'}
+                {isSubmitting ? 'SIGNING IN...' : 'SIGN IN & ENTER STADIUM'}
               </span>
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -364,7 +364,7 @@ export const WelcomeOnboardingScreen: React.FC<WelcomeOnboardingScreenProps> = (
                 }}
                 className="w-full py-2 text-xs font-mono text-slate-400 hover:text-white transition-colors text-center cursor-pointer"
               >
-                Continue Offline Without Signing In (Online Match Locked 🔒)
+                Continue as Guest Player →
               </button>
             )}
           </form>

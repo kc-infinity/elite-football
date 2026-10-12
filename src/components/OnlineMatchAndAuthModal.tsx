@@ -570,6 +570,7 @@ interface OnlineMatchCenterProps {
   onToggleLobbyReady: (lobbyId: string, nextReady: boolean) => void;
   onStartOnlineMatch: (opponentTeam: TeamData, roomCodeLabel: string, lobbyId?: string) => void;
   onQuickMatchmaking: () => void;
+  onOpenPlayWithFriends?: () => void;
 }
 
 export const OnlineMatchCenter: React.FC<OnlineMatchCenterProps> = ({
@@ -593,6 +594,7 @@ export const OnlineMatchCenter: React.FC<OnlineMatchCenterProps> = ({
   onHostRoomWithCode,
   onJoinRoomByCode,
   onStartOnlineMatch,
+  onOpenPlayWithFriends,
 }) => {
   const activeRoomCode = friendRoomState.roomCode || roomCode;
   const [hostRoomCodeInput, setHostRoomCodeInput] = useState(activeRoomCode);
@@ -1044,6 +1046,17 @@ export const OnlineMatchCenter: React.FC<OnlineMatchCenterProps> = ({
                 11v11
               </button>
             </div>
+
+            {onOpenPlayWithFriends && (
+              <button
+                type="button"
+                onClick={onOpenPlayWithFriends}
+                className="px-3.5 py-2 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] rounded-xl text-xs font-display font-bold flex items-center gap-1.5 cursor-pointer shadow-md"
+              >
+                <UserPlus className="w-4 h-4" />
+                Play With Friends
+              </button>
+            )}
 
             <button
               type="button"

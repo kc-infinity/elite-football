@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { CelebrationType, FootballPlayer, PositionCode } from '../data/gameDatabase';
+import { CelebrationType, FootballPlayer, PositionCode, TeamData } from '../data/gameDatabase';
+import { getPlayerLikenessProfile } from '../components/PlayerPhotoAvatar';
 
 export interface ArticulatedPlayer3D {
   id: string;
@@ -21,6 +22,7 @@ export interface ArticulatedPlayer3D {
   skillTimer: number;
   rainbowTimer: number;
   bicycleTimer: number;
+  headerTimer?: number;
   activeSkillName: string;
   diveTimer: number;
   diveDirZ: number;
@@ -28,7 +30,7 @@ export interface ArticulatedPlayer3D {
   celebrationTimer: number;
   celebrationType: CelebrationType;
 
-  // Realistic Multi-Jointed Human 3D Hierarchy
+  // 3D Scene Nodes for Biomechanical Human Animation
   root: THREE.Group;
   torso: THREE.Group;
   headGroup: THREE.Group;
@@ -46,55 +48,267 @@ export interface ArticulatedPlayer3D {
   carrierNameSprite: THREE.Sprite;
 }
 
-function createCarrierNameOverheadSprite(playerName: string, isHome: boolean): THREE.Sprite {
+const faceTextureCache = new Map<string, THREE.CanvasTexture>();
+
+function createRealistic3DFaceTexture(player: FootballPlayer): THREE.CanvasTexture {
+  const cacheKey = `${player.id}_${player.skinTone}_${player.hairColor}`;
+  const cached = faceTextureCache.get(cacheKey);
+  if (cached) return cached;
+
+  const likeness = getPlayerLikenessProfile(player);
   const canvas = document.createElement('canvas');
   canvas.width = 512;
-  canvas.height = 112;
+  canvas.height = 256;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Sphere UV mapping: U = 0.25 (front center of SphereGeometry when rotated -Math.PI/2 on Y, or U = 0.5 depending on rotation).
+  // Note: In Three.js SphereGeometry, U=0.5 is at +X or -Z; let's align headMesh.rotation.y = -Math.PI / 2 so U=0.5 faces directly forward (+Z in local player coordinates)!
+  ctx.fillStyle = player.skinTone || '#e0ac69';
+  ctx.fillRect(0, 0, 512, 256);
 
-  // Measure name width for sleek pill fit
-  ctx.font = 'bold 34px "Plus Jakarta Sans", "Chakra Petch", sans-serif';
-  const textMetrics = ctx.measureText(playerName);
-  const boxWidth = Math.min(488, Math.max(200, textMetrics.width + 64));
-  const boxX = (512 - boxWidth) / 2;
+  // Subtle subsurface skin warmth & cheekbone lighting around front center (x = 256, y = 128)
+  const cheekGrad = ctx.createRadialGradient(256, 132, 12, 256, 132, 115);
+  cheekGrad.addColorStop(0, 'rgba(255, 235, 215, 0.22)');
+  cheekGrad.addColorStop(0.55, 'rgba(210, 120, 95, 0.08)');
+  cheekGrad.addColorStop(1, 'rgba(0, 0, 0, 0.16)');
+  ctx.fillStyle = cheekGrad;
+  ctx.fillRect(0, 0, 512, 256);
 
-  // Dark broadcast pill with team-colored border
-  ctx.fillStyle = 'rgba(7, 10, 14, 0.92)';
-  ctx.strokeStyle = isHome ? '#10B981' : '#38BDF8';
-  ctx.lineWidth = 4;
+  const hairCol =
+    likeness.archetype === 'neymar'
+      ? '#eab308'
+      : likeness.archetype === 'haaland' || likeness.archetype === 'modric'
+      ? '#fde047'
+      : likeness.archetype === 'debruyne'
+      ? '#d97706'
+      : player.hairColor || '#111827';
+
+  // Back of head & upper scalp hairline on texture
+  ctx.fillStyle = hairCol;
+  ctx.fillRect(0, 0, 512, 62);
+  ctx.fillRect(0, 0, 145, 165);
+  ctx.fillRect(367, 0, 145, 165);
+
+  // Facial hair / beard on lower jaw (around x = 256, y = 165..245)
+  const beardCol = likeness.archetype === 'debruyne' ? '#9a3412' : '#141417';
+  if (likeness.beardStyle === 'full_thick' || likeness.beardStyle === 'full_trimmed') {
+    ctx.save();
+    ctx.fillStyle = beardCol;
+    ctx.globalAlpha = likeness.beardStyle === 'full_thick' ? 0.88 : 0.68;
+    ctx.beginPath();
+    ctx.moveTo(192, 142);
+    ctx.quadraticCurveTo(256, 245, 320, 142);
+    ctx.lineTo(312, 168);
+    ctx.quadraticCurveTo(256, 205, 200, 168);
+    ctx.closePath();
+    ctx.fill();
+    // Chin & jawline full coverage
+    ctx.beginPath();
+    ctx.ellipse(256, 204, 54, 34, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  } else if (likeness.beardStyle === 'stubble') {
+    ctx.save();
+    ctx.fillStyle = '#18181b';
+    ctx.globalAlpha = 0.25;
+    ctx.beginPath();
+    ctx.ellipse(256, 196, 52, 32, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Mustache & Goatee
+  if (
+    likeness.beardStyle === 'full_thick' ||
+    likeness.beardStyle === 'full_trimmed' ||
+    likeness.beardStyle === 'goatee' ||
+    likeness.beardStyle === 'mustache_soul'
+  ) {
+    ctx.save();
+    ctx.fillStyle = beardCol;
+    ctx.globalAlpha = 0.82;
+    // Mustache
+    ctx.beginPath();
+    ctx.moveTo(232, 166);
+    ctx.quadraticCurveTo(256, 157, 280, 166);
+    ctx.quadraticCurveTo(256, 163, 232, 166);
+    ctx.fill();
+    // Goatee chin patch
+    ctx.beginPath();
+    ctx.ellipse(256, 198, 18, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Expressive Eyebrows (Left = 228, Right = 284, y = 104)
+  ctx.strokeStyle = hairCol === '#fde047' ? '#b45309' : '#0f172a';
+  ctx.lineWidth = likeness.browThickness * 2.2;
+  ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.roundRect(boxX, 12, boxWidth, 58, 14);
-  ctx.fill();
+  ctx.moveTo(212, 106);
+  ctx.quadraticCurveTo(228, 99 + likeness.browArch * 1.5, 244, 105);
   ctx.stroke();
 
-  // Downward pointer arrow
-  ctx.fillStyle = isHome ? '#10B981' : '#38BDF8';
   ctx.beginPath();
-  ctx.moveTo(242, 70);
-  ctx.lineTo(270, 70);
-  ctx.lineTo(256, 90);
-  ctx.closePath();
-  ctx.fill();
+  ctx.moveTo(268, 105);
+  ctx.quadraticCurveTo(284, 99 + likeness.browArch * 1.5, 300, 106);
+  ctx.stroke();
 
-  // Medium-sized clear player name
-  ctx.fillStyle = '#FFFFFF';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(playerName, 256, 42);
+  // Realistic Eyes (Sclera + Colored Iris + Pupil + Specular Catchlight)
+  const drawEye = (cx: number, cy: number) => {
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, 12, 6.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Iris
+    ctx.fillStyle = likeness.eyeColor;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 5.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Pupil
+    ctx.fillStyle = '#09090b';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 2.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Specular catchlight
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(cx - 2.0, cy - 1.8, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Upper eyelid lash crease
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.75)';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.arc(cx, cy + 2, 12.5, Math.PI * 1.12, Math.PI * 1.88);
+    ctx.stroke();
+    ctx.restore();
+  };
+
+  drawEye(229, 118);
+  drawEye(283, 118);
+
+  // Nose shadow & nostrils (y = 122..152)
+  ctx.strokeStyle = 'rgba(0,0,0,0.22)';
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  ctx.moveTo(250, 148);
+  ctx.quadraticCurveTo(256, 154, 262, 148);
+  ctx.stroke();
+
+  // Mouth / Athletic Smile (y = 174)
+  if (likeness.smileIntensity > 0.68) {
+    ctx.fillStyle = '#6b1d1d';
+    ctx.beginPath();
+    ctx.moveTo(236, 173);
+    ctx.quadraticCurveTo(256, 185, 276, 173);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(239, 174);
+    ctx.quadraticCurveTo(256, 181, 273, 174);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    ctx.strokeStyle = 'rgba(95, 32, 28, 0.82)';
+    ctx.lineWidth = 3.2;
+    ctx.beginPath();
+    ctx.moveTo(238, 174);
+    ctx.quadraticCurveTo(256, 177 + likeness.smileIntensity * 5, 274, 174);
+    ctx.stroke();
+  }
+
+  // Cristiano Ronaldo / Haaland signature cheekbone contour lines
+  if (likeness.archetype === 'ronaldo' || likeness.archetype === 'haaland') {
+    ctx.strokeStyle = 'rgba(0,0,0,0.16)';
+    ctx.lineWidth = 2.0;
+    ctx.beginPath();
+    ctx.moveTo(212, 140);
+    ctx.quadraticCurveTo(222, 165, 232, 182);
+    ctx.moveTo(300, 140);
+    ctx.quadraticCurveTo(290, 165, 280, 182);
+    ctx.stroke();
+  }
 
   const tex = new THREE.CanvasTexture(canvas);
-  const mat = new THREE.SpriteMaterial({
-    map: tex,
-    transparent: true,
-    depthTest: false,
-  });
-  const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(3.4, 0.74, 1);
-  sprite.position.set(0, 2.52, 0);
-  sprite.visible = false;
-  return sprite;
+  tex.needsUpdate = true;
+  faceTextureCache.set(cacheKey, tex);
+  return tex;
+}
+
+function createJerseyTexture(
+  primaryColor: string,
+  secondaryColor: string,
+  number: number,
+  playerName: string,
+  isGoalkeeper: boolean
+): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.fillStyle = primaryColor;
+  ctx.fillRect(0, 0, 512, 512);
+
+  // Subtle fabric micro-weave & athletic side panels
+  ctx.fillStyle = secondaryColor;
+  ctx.globalAlpha = isGoalkeeper ? 0.18 : 0.26;
+  ctx.fillRect(0, 0, 44, 512);
+  ctx.fillRect(468, 0, 44, 512);
+  ctx.fillRect(216, 0, 80, 512);
+  ctx.globalAlpha = 1.0;
+
+  // Collar trim
+  ctx.strokeStyle = secondaryColor;
+  ctx.lineWidth = 18;
+  ctx.strokeRect(8, 8, 496, 496);
+
+  const isLightJersey =
+    primaryColor.toLowerCase() === '#ffffff' ||
+    primaryColor.toLowerCase() === '#f8fafc' ||
+    primaryColor.toLowerCase() === '#facc15' ||
+    primaryColor.toLowerCase() === '#eab308';
+
+  const textColor = isLightJersey ? '#090d16' : '#ffffff';
+  const outlineColor = isLightJersey ? '#ffffff' : '#090d16';
+
+  const cleanSurname = (
+    playerName
+      .replace(/\(.*?\)/g, '')
+      .trim()
+      .split(' ')
+      .pop() || playerName
+  )
+    .toUpperCase()
+    .slice(0, 12);
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // Back Player Surname
+  ctx.font = '800 44px "Chakra Petch", sans-serif';
+  ctx.lineWidth = 7;
+  ctx.strokeStyle = outlineColor;
+  ctx.fillStyle = textColor;
+  ctx.strokeText(cleanSurname, 256, 132);
+  ctx.fillText(cleanSurname, 256, 132);
+
+  // Large Back Number & Chest Number
+  ctx.font = '900 176px "JetBrains Mono", monospace';
+  ctx.lineWidth = 12;
+  ctx.strokeText(String(number), 256, 295);
+  ctx.fillText(String(number), 256, 295);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
 }
 
 function createYouOverheadSprite(playerName: string, isHome: boolean): THREE.Sprite {
@@ -103,154 +317,176 @@ function createYouOverheadSprite(playerName: string, isHome: boolean): THREE.Spr
   canvas.height = 96;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const accent = isHome ? '#10b981' : '#f59e0b';
+  const shortName = (
+    playerName
+      .replace(/\(.*?\)/g, '')
+      .trim()
+      .split(' ')
+      .pop() || playerName
+  )
+    .toUpperCase()
+    .slice(0, 10);
 
-  // Dark sleek badge background
-  ctx.fillStyle = isHome ? 'rgba(16, 185, 129, 0.95)' : 'rgba(245, 158, 11, 0.95)';
+  ctx.fillStyle = 'rgba(7, 10, 14, 0.88)';
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.roundRect(48, 8, 160, 44, 10);
+  ctx.roundRect(18, 8, 220, 50, 12);
   ctx.fill();
+  ctx.stroke();
 
-  // Downward pointer triangle
+  ctx.fillStyle = accent;
+  ctx.font = '900 22px "Chakra Petch", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`YOU · ${shortName}`, 128, 34);
+
+  // Downward pointer arrow
   ctx.beginPath();
-  ctx.moveTo(116, 52);
-  ctx.lineTo(140, 52);
-  ctx.lineTo(128, 68);
+  ctx.moveTo(114, 60);
+  ctx.lineTo(142, 60);
+  ctx.lineTo(128, 82);
   ctx.closePath();
   ctx.fill();
 
-  // "YOU" bold text
-  ctx.fillStyle = '#070A0E';
-  ctx.font = 'bold 26px "Chakra Petch", sans-serif';
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(2.3, 0.86, 1);
+  sprite.position.set(0, 2.75, 0);
+  sprite.renderOrder = 999;
+  return sprite;
+}
+
+function createCarrierNameOverheadSprite(playerName: string, isHome: boolean): THREE.Sprite {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d')!;
+
+  const accent = isHome ? '#10b981' : '#38bdf8';
+  const cleanName = playerName.replace(/\(.*?\)/g, '').trim().slice(0, 16);
+
+  ctx.fillStyle = 'rgba(7, 10, 14, 0.82)';
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(12, 10, 232, 42, 10);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 20px "Inter", sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(isHome ? 'YOU' : playerName.split(' ').pop() || 'P2', 128, 31);
+  ctx.fillText(cleanName, 128, 31);
 
   const tex = new THREE.CanvasTexture(canvas);
-  const mat = new THREE.SpriteMaterial({
-    map: tex,
-    transparent: true,
-    depthTest: false,
-  });
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(2.2, 0.82, 1);
-  sprite.position.set(0, 2.72, 0);
+  sprite.scale.set(2.1, 0.52, 1);
+  sprite.position.set(0, 2.48, 0);
+  sprite.renderOrder = 998;
   sprite.visible = false;
   return sprite;
 }
 
-function createJerseyNumberTexture(
-  jerseyHex: string,
-  trimHex: string,
-  squadNumber: number,
-  lastName: string
-): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d')!;
-
-  // Base jersey fabric color
-  ctx.fillStyle = jerseyHex;
-  ctx.fillRect(0, 0, 256, 256);
-
-  // Subtle athletic mesh weave lines
-  ctx.fillStyle = 'rgba(0,0,0,0.06)';
-  for (let y = 0; y < 256; y += 8) {
-    ctx.fillRect(0, y, 256, 2);
-  }
-
-  // Chest / shoulder trim accent stripe
-  ctx.fillStyle = trimHex;
-  ctx.fillRect(0, 34, 256, 20);
-
-  // Determine high-contrast text color for squad number
-  const isLightJersey =
-    jerseyHex.toLowerCase() === '#ffffff' ||
-    jerseyHex.toLowerCase() === '#f8fafc' ||
-    jerseyHex.toLowerCase() === '#facc15';
-  ctx.fillStyle = isLightJersey ? '#0f172a' : '#ffffff';
-
-  // Back & Front Squad Number
-  ctx.font = 'bold 68px "Chakra Petch", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(String(squadNumber || 10), 64, 140);
-  ctx.fillText(String(squadNumber || 10), 192, 140);
-
-  // Player Surname across upper back
-  ctx.font = 'bold 20px "Plus Jakarta Sans", sans-serif';
-  const cleanSurname = (lastName.split(' ').pop() || 'STAR').toUpperCase().slice(0, 10);
-  ctx.fillText(cleanSurname, 192, 86);
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.needsUpdate = true;
-  return tex;
-}
-
 export function createArticulatedPlayer3D(
   player: FootballPlayer,
+  team: TeamData,
   teamSide: 'home' | 'away',
   role: PositionCode,
   baseX: number,
-  baseZ: number,
-  kitPrimary: string,
-  kitSecondary: string,
-  shortsColor: string,
-  gkColor: string
+  baseZ: number
 ): ArticulatedPlayer3D {
   const root = new THREE.Group();
   const isGK = role === 'GK';
-  const jerseyHex = isGK ? gkColor : kitPrimary;
-  const trimHex = isGK ? '#09090b' : kitSecondary;
+  const likeness = getPlayerLikenessProfile(player);
+
+  // Unique Body Proportions based on real-life player archetype & physical strength
+  let heightScale = 1.0;
+  let buildWidthScale = 1.0;
+  if (
+    likeness.archetype === 'haaland' ||
+    likeness.archetype === 'vandijk' ||
+    isGK
+  ) {
+    heightScale = 1.06;
+    buildWidthScale = 1.06;
+  } else if (
+    likeness.archetype === 'ronaldo' ||
+    likeness.archetype === 'bellingham' ||
+    likeness.archetype === 'kane' ||
+    likeness.archetype === 'benzema'
+  ) {
+    heightScale = 1.03;
+    buildWidthScale = 1.04;
+  } else if (
+    likeness.archetype === 'messi' ||
+    likeness.archetype === 'neymar' ||
+    likeness.archetype === 'modric' ||
+    likeness.archetype === 'yamal'
+  ) {
+    heightScale = 0.95;
+    buildWidthScale = 0.96;
+  } else {
+    heightScale = 0.96 + ((player.attributes.physical - 70) / 30) * 0.08;
+    buildWidthScale = 0.96 + ((player.attributes.physical - 70) / 30) * 0.07;
+  }
+  root.scale.set(buildWidthScale, heightScale, buildWidthScale);
+
+  const primaryCol = isGK ? team.gkColor : team.primaryColor;
+  const secondaryCol = isGK ? '#090d16' : team.secondaryColor;
+  const shortsCol = isGK ? team.gkColor : team.shortsColor;
 
   const skinMat = new THREE.MeshStandardMaterial({
     color: player.skinTone,
+    roughness: 0.48,
+    metalness: 0.04,
+  });
+
+  const jerseyTex = createJerseyTexture(
+    primaryCol,
+    secondaryCol,
+    player.number,
+    player.name,
+    isGK
+  );
+  const jerseyMat = new THREE.MeshStandardMaterial({
+    map: jerseyTex,
     roughness: 0.55,
     metalness: 0.05,
   });
-  const hairMat = new THREE.MeshStandardMaterial({
-    color: player.hairColor,
-    roughness: 0.82,
-  });
-  const jerseyTex = createJerseyNumberTexture(jerseyHex, trimHex, player.number, player.name);
-  const jerseyMat = new THREE.MeshStandardMaterial({
-    map: jerseyTex,
-    roughness: 0.62,
-    metalness: 0.04,
-  });
-  const solidJerseyMat = new THREE.MeshStandardMaterial({
-    color: jerseyHex,
-    roughness: 0.6,
-  });
-  const trimMat = new THREE.MeshStandardMaterial({
-    color: trimHex,
-    roughness: 0.5,
-  });
+
   const shortsMat = new THREE.MeshStandardMaterial({
-    color: isGK ? gkColor : shortsColor,
+    color: shortsCol,
+    roughness: 0.62,
+  });
+
+  const sockMat = new THREE.MeshStandardMaterial({
+    color: primaryCol,
     roughness: 0.65,
   });
-  const sockMat = new THREE.MeshStandardMaterial({
-    color: isGK ? gkColor : kitPrimary === '#ffffff' ? '#f1f5f9' : kitPrimary,
-    roughness: 0.7,
-  });
-  const bootMat = new THREE.MeshStandardMaterial({
-    color: player.bootColor,
-    roughness: 0.28,
-    metalness: 0.25,
-  });
-  const eyeDarkMat = new THREE.MeshBasicMaterial({ color: '#111827' });
 
-  // ============================================================================
-  // 1. REALISTIC HUMAN TORSO & PELVIS (Natural 1.84m Athletic Proportions)
-  // ============================================================================
+  const trimMat = new THREE.MeshStandardMaterial({
+    color: secondaryCol,
+    roughness: 0.5,
+  });
+
+  const bootMat = new THREE.MeshStandardMaterial({
+    color: player.bootColor || '#10b981',
+    roughness: 0.25,
+    metalness: 0.35,
+  });
+
+  // 1. Torso Group (Pivots at waist/hips y = 1.12)
   const torso = new THREE.Group();
-  torso.position.y = 1.12; // Hip / Pelvis center height above turf
+  torso.position.set(0, 1.12, 0);
   root.add(torso);
 
-  // Upper Chest (Tapered V-shape athletic human ribcage, wider X than Z)
-  const chestGeo = new THREE.CylinderGeometry(0.22, 0.175, 0.48, 20);
+  // Sculpted Athletic Upper Chest (V-Taper)
+  const chestGeo = new THREE.CylinderGeometry(0.245, 0.2, 0.44, 20);
   chestGeo.scale(1.18, 1.0, 0.74);
   const chestMesh = new THREE.Mesh(chestGeo, jerseyMat);
   chestMesh.position.y = 0.28;
@@ -258,195 +494,336 @@ export function createArticulatedPlayer3D(
   chestMesh.receiveShadow = true;
   torso.add(chestMesh);
 
-  // Rounded Shoulder Caps (Deltoids) + V-Neck Collar
-  const collarGeo = new THREE.TorusGeometry(0.105, 0.022, 10, 20);
+  // Lower Torso / Waist Tuck
+  const abdomenGeo = new THREE.CylinderGeometry(0.2, 0.195, 0.18, 18);
+  abdomenGeo.scale(1.14, 1.0, 0.74);
+  const abdomenMesh = new THREE.Mesh(abdomenGeo, jerseyMat);
+  abdomenMesh.position.y = 0.02;
+  abdomenMesh.castShadow = true;
+  torso.add(abdomenMesh);
+
+  // Rounded Deltoid Shoulder Caps
+  const shoulderCapGeo = new THREE.SphereGeometry(0.118, 16, 14);
+  shoulderCapGeo.scale(1.1, 0.9, 0.95);
+  const leftShoulderCap = new THREE.Mesh(shoulderCapGeo, jerseyMat);
+  leftShoulderCap.position.set(-0.27, 0.44, 0);
+  torso.add(leftShoulderCap);
+
+  const rightShoulderCap = new THREE.Mesh(shoulderCapGeo, jerseyMat);
+  rightShoulderCap.position.set(0.27, 0.44, 0);
+  torso.add(rightShoulderCap);
+
+  // Kit Collar Ring
+  const collarGeo = new THREE.TorusGeometry(0.115, 0.022, 10, 24);
+  collarGeo.rotateX(Math.PI / 2);
   const collarMesh = new THREE.Mesh(collarGeo, trimMat);
-  collarMesh.rotation.x = Math.PI / 2 + 0.15;
-  collarMesh.position.set(0, 0.51, 0.02);
+  collarMesh.position.set(0, 0.5, 0.01);
   torso.add(collarMesh);
 
-  // Lower Waist / Core transition
-  const waistGeo = new THREE.CylinderGeometry(0.175, 0.185, 0.18, 18);
-  waistGeo.scale(1.12, 1.0, 0.74);
-  const waistMesh = new THREE.Mesh(waistGeo, solidJerseyMat);
-  waistMesh.position.y = 0.02;
-  waistMesh.castShadow = true;
-  torso.add(waistMesh);
-
-  // Tailored Football Shorts Hip / Pelvis
-  const pelvisGeo = new THREE.CylinderGeometry(0.188, 0.2, 0.24, 18);
+  // Athletic Pelvis / Shorts Waistband
+  const pelvisGeo = new THREE.CylinderGeometry(0.198, 0.205, 0.2, 18);
   pelvisGeo.scale(1.14, 1.0, 0.78);
   const pelvisMesh = new THREE.Mesh(pelvisGeo, shortsMat);
-  pelvisMesh.position.y = -0.14;
+  pelvisMesh.position.y = -0.12;
   pelvisMesh.castShadow = true;
   torso.add(pelvisMesh);
 
-  // ============================================================================
-  // 2. REALISTIC HUMAN NECK, HEAD, FACE & HAIRSTYLE
-  // ============================================================================
+  // 2. Sculpted 3D Head & Bespoke Facial Likeness Group
   const headGroup = new THREE.Group();
-  headGroup.position.y = 0.54; // Base of neck
+  headGroup.position.set(0, 0.55, 0);
   torso.add(headGroup);
 
-  // Anatomical Neck Cylinder
-  const neckGeo = new THREE.CylinderGeometry(0.068, 0.078, 0.13, 14);
+  // Muscular Neck
+  const neckGeo = new THREE.CylinderGeometry(0.082, 0.096, 0.14, 16);
   const neckMesh = new THREE.Mesh(neckGeo, skinMat);
-  neckMesh.position.y = 0.05;
-  neckMesh.castShadow = true;
+  neckMesh.position.y = 0.04;
   headGroup.add(neckMesh);
 
-  // Oval Human Cranium & Jawline
-  const craniumGeo = new THREE.SphereGeometry(0.145, 20, 20);
-  craniumGeo.scale(0.9, 1.1, 0.96);
-  const headMesh = new THREE.Mesh(craniumGeo, skinMat);
-  headMesh.position.y = 0.21;
+  // 3D Face-Mapped Cranium & Jaw Mesh
+  const faceTex = createRealistic3DFaceTexture(player);
+  const faceMat = new THREE.MeshStandardMaterial({
+    map: faceTex,
+    roughness: 0.45,
+    metalness: 0.04,
+  });
+
+  const headGeo = new THREE.SphereGeometry(0.195, 28, 24);
+  headGeo.scale(0.93, 1.12, 0.98);
+  const headMesh = new THREE.Mesh(headGeo, faceMat);
+  // Rotate so U=0.5 of the canvas texture maps directly to the front (+Z) of the head
+  headMesh.rotation.y = -Math.PI / 2;
+  headMesh.position.y = 0.22;
   headMesh.castShadow = true;
   headGroup.add(headMesh);
 
-  // Human Ears
-  const earGeo = new THREE.SphereGeometry(0.028, 10, 10);
-  earGeo.scale(0.45, 1.1, 0.7);
-  const leftEar = new THREE.Mesh(earGeo, skinMat);
-  leftEar.position.set(-0.13, 0.2, 0);
-  const rightEar = new THREE.Mesh(earGeo, skinMat);
-  rightEar.position.set(0.13, 0.2, 0);
-  headGroup.add(leftEar, rightEar);
-
-  // Subtle Nose Bridge & Eyes (Facing +Z local forward)
-  const noseGeo = new THREE.ConeGeometry(0.022, 0.055, 8);
+  // 3D Nose Bridge & Tip (Gives true 3D profile in close-up cameras & celebrations!)
+  const noseGeo = new THREE.ConeGeometry(0.028, 0.068, 10);
+  noseGeo.rotateX(Math.PI / 2);
   const noseMesh = new THREE.Mesh(noseGeo, skinMat);
-  noseMesh.rotation.x = Math.PI / 2 - 0.25;
-  noseMesh.position.set(0, 0.205, 0.142);
+  noseMesh.position.set(0, 0.215, 0.192);
   headGroup.add(noseMesh);
 
-  const eyeGeo = new THREE.SphereGeometry(0.015, 8, 8);
-  const leftEye = new THREE.Mesh(eyeGeo, eyeDarkMat);
-  leftEye.position.set(-0.046, 0.228, 0.13);
-  const rightEye = new THREE.Mesh(eyeGeo, eyeDarkMat);
-  rightEye.position.set(0.046, 0.228, 0.13);
-  headGroup.add(leftEye, rightEye);
+  // 3D Ears on Left & Right Sides
+  const earGeo = new THREE.SphereGeometry(0.036, 10, 10);
+  earGeo.scale(0.45, 1.15, 0.75);
+  const leftEar = new THREE.Mesh(earGeo, skinMat);
+  leftEar.position.set(-0.182, 0.215, 0.0);
+  headGroup.add(leftEar);
 
-  // Eyebrows
-  const browGeo = new THREE.BoxGeometry(0.036, 0.009, 0.012);
-  const leftBrow = new THREE.Mesh(browGeo, hairMat);
-  leftBrow.position.set(-0.046, 0.252, 0.132);
-  const rightBrow = new THREE.Mesh(browGeo, hairMat);
-  rightBrow.position.set(0.046, 0.252, 0.132);
-  headGroup.add(leftBrow, rightBrow);
+  const rightEar = new THREE.Mesh(earGeo, skinMat);
+  rightEar.position.set(0.182, 0.215, 0.0);
+  headGroup.add(rightEar);
 
-  // Sculpted Realistic Athlete Haircut Cap + Textured Top Volume
-  const hairCapGeo = new THREE.SphereGeometry(
-    0.15,
+  // Diamond Stud Earrings for Ronaldo, Neymar, Vinícius Jr.
+  if (likeness.hasEarring) {
+    const studMat = new THREE.MeshStandardMaterial({
+      color: '#ffffff',
+      emissive: '#e2e8f0',
+      emissiveIntensity: 0.5,
+      metalness: 0.9,
+      roughness: 0.1,
+    });
+    const studGeo = new THREE.SphereGeometry(0.013, 8, 8);
+    const leftStud = new THREE.Mesh(studGeo, studMat);
+    leftStud.position.set(-0.19, 0.182, 0.01);
+    headGroup.add(leftStud);
+
+    const rightStud = new THREE.Mesh(studGeo, studMat);
+    rightStud.position.set(0.19, 0.182, 0.01);
+    headGroup.add(rightStud);
+  }
+
+  // 3D Volumetric Beard Geometry for Messi, Salah, Benzema, De Bruyne
+  if (likeness.beardStyle === 'full_thick' || likeness.beardStyle === 'full_trimmed') {
+    const beardCol = likeness.archetype === 'debruyne' ? '#9a3412' : '#141417';
+    const beardMat = new THREE.MeshStandardMaterial({ color: beardCol, roughness: 0.85 });
+    const beardGeo = new THREE.SphereGeometry(
+      likeness.beardStyle === 'full_thick' ? 0.155 : 0.145,
+      18,
+      14,
+      0,
+      Math.PI * 2,
+      Math.PI * 0.42,
+      Math.PI * 0.58
+    );
+    beardGeo.scale(1.12, 0.95, 1.18);
+    const beardMesh = new THREE.Mesh(beardGeo, beardMat);
+    beardMesh.position.set(0, 0.175, 0.025);
+    headGroup.add(beardMesh);
+  }
+
+  // 3D Player-Specific Sculpted Hairstyles
+  const resolvedHairColor =
+    likeness.archetype === 'neymar'
+      ? '#eab308'
+      : likeness.archetype === 'haaland' || likeness.archetype === 'modric'
+      ? '#fde047'
+      : likeness.archetype === 'debruyne'
+      ? '#d97706'
+      : player.hairColor || '#111827';
+
+  const hairMat = new THREE.MeshStandardMaterial({
+    color: resolvedHairColor,
+    roughness: 0.72,
+  });
+
+  // Base cranial hair cap (leaves face & forehead open)
+  const capGeo = new THREE.SphereGeometry(
+    0.198,
+    22,
     18,
-    16,
     0,
     Math.PI * 2,
     0,
-    Math.PI * 0.58
+    Math.PI * 0.52
   );
-  hairCapGeo.scale(0.92, 1.1, 0.99);
-  const hairCap = new THREE.Mesh(hairCapGeo, hairMat);
-  hairCap.position.set(0, 0.22, -0.008);
-  hairCap.rotation.x = -0.18;
-  headGroup.add(hairCap);
+  capGeo.scale(0.95, 1.08, 1.0);
+  const capMesh = new THREE.Mesh(capGeo, hairMat);
+  capMesh.position.set(0, 0.23, -0.015);
+  capMesh.rotation.x = -0.22;
+  headGroup.add(capMesh);
 
-  // Top Hair Crest / Modern Fade Volume
-  const hairTopGeo = new THREE.CapsuleGeometry(0.068, 0.09, 8, 12);
-  const hairTop = new THREE.Mesh(hairTopGeo, hairMat);
-  hairTop.rotation.x = Math.PI / 2;
-  hairTop.position.set(0, 0.34, 0.01);
-  headGroup.add(hairTop);
+  if (likeness.hairStyle === 'cr7_quiff') {
+    // Cristiano Ronaldo signature sculpted high front quiff + textured crest
+    const quiffGeo = new THREE.BoxGeometry(0.18, 0.09, 0.22);
+    const quiffMesh = new THREE.Mesh(quiffGeo, hairMat);
+    quiffMesh.position.set(0.015, 0.42, 0.045);
+    quiffMesh.rotation.set(-0.22, 0.12, -0.08);
+    headGroup.add(quiffMesh);
 
-  // ============================================================================
-  // 3. REALISTIC ARTICULATED ARMS (Shoulder -> Upper Arm -> Elbow -> Forearm -> Hand)
-  // ============================================================================
-  const buildRealisticArm = (sideSign: number): { armGroup: THREE.Group; forearmGroup: THREE.Group } => {
+    const waveGeo = new THREE.CapsuleGeometry(0.042, 0.12, 8, 12);
+    waveGeo.rotateZ(Math.PI / 2);
+    const waveMesh = new THREE.Mesh(waveGeo, hairMat);
+    waveMesh.position.set(0.01, 0.44, 0.11);
+    headGroup.add(waveMesh);
+  } else if (likeness.hairStyle === 'messi_swept') {
+    // Lionel Messi side-swept fringe & layered crown
+    const sweptGeo = new THREE.CapsuleGeometry(0.048, 0.16, 10, 12);
+    sweptGeo.rotateZ(Math.PI / 2);
+    const sweptMesh = new THREE.Mesh(sweptGeo, hairMat);
+    sweptMesh.position.set(-0.02, 0.415, 0.06);
+    sweptMesh.rotation.z = 0.14;
+    headGroup.add(sweptMesh);
+  } else if (likeness.hairStyle === 'haaland_long_band') {
+    // Erling Haaland long blonde hair + rear man-bun + black headband
+    const bunGeo = new THREE.SphereGeometry(0.078, 14, 14);
+    const bunMesh = new THREE.Mesh(bunGeo, hairMat);
+    bunMesh.position.set(0, 0.34, -0.21);
+    headGroup.add(bunMesh);
+
+    const bandGeo = new THREE.TorusGeometry(0.186, 0.016, 10, 26);
+    bandGeo.rotateX(Math.PI / 2);
+    const bandMesh = new THREE.Mesh(
+      bandGeo,
+      new THREE.MeshStandardMaterial({ color: '#09090b', roughness: 0.4 })
+    );
+    bandMesh.position.set(0, 0.31, 0);
+    bandMesh.rotation.x = 0.16;
+    headGroup.add(bandMesh);
+  } else if (likeness.hairStyle === 'salah_afro') {
+    // Mohamed Salah iconic wide curly afro
+    const afroMain = new THREE.Mesh(new THREE.SphereGeometry(0.235, 18, 18), hairMat);
+    afroMain.scale.set(1.08, 0.96, 1.05);
+    afroMain.position.set(0, 0.33, -0.02);
+    headGroup.add(afroMain);
+  } else if (likeness.hairStyle === 'neymar_curls' || likeness.hairStyle === 'yamal_curls') {
+    // Curly top clusters
+    const curlOffsets = [
+      [-0.07, 0.42, 0.05],
+      [0.0, 0.435, 0.07],
+      [0.07, 0.42, 0.05],
+      [-0.04, 0.43, -0.02],
+      [0.04, 0.43, -0.02],
+    ];
+    curlOffsets.forEach(([cx, cy, cz]) => {
+      const cMesh = new THREE.Mesh(new THREE.SphereGeometry(0.062, 10, 10), hairMat);
+      cMesh.position.set(cx, cy, cz);
+      headGroup.add(cMesh);
+    });
+  } else if (likeness.hairStyle === 'vini_twists' || likeness.hairStyle === 'bellingham_taper') {
+    // High taper / twist top
+    const topGeo = new THREE.CylinderGeometry(0.145, 0.165, 0.085, 16);
+    const topMesh = new THREE.Mesh(topGeo, hairMat);
+    topMesh.position.set(0, 0.41, 0.01);
+    headGroup.add(topMesh);
+  } else if (likeness.hairStyle === 'vandijk_bun') {
+    const bunMesh = new THREE.Mesh(new THREE.SphereGeometry(0.068, 12, 12), hairMat);
+    bunMesh.position.set(0, 0.38, -0.19);
+    headGroup.add(bunMesh);
+  } else if (likeness.hairStyle === 'modric_locks') {
+    const locksGeo = new THREE.CylinderGeometry(0.185, 0.21, 0.22, 16, 1, true, Math.PI * 0.65, Math.PI * 1.7);
+    const locksMesh = new THREE.Mesh(locksGeo, hairMat);
+    locksMesh.position.set(0, 0.21, -0.02);
+    headGroup.add(locksMesh);
+
+    const bandGeo = new THREE.TorusGeometry(0.186, 0.014, 8, 24);
+    bandGeo.rotateX(Math.PI / 2);
+    const bandMesh = new THREE.Mesh(
+      bandGeo,
+      new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.4 })
+    );
+    bandMesh.position.set(0, 0.31, 0);
+    bandMesh.rotation.x = 0.14;
+    headGroup.add(bandMesh);
+  }
+
+  // 3. Articulated Left & Right Arms (Shoulder -> Upper Arm -> Elbow -> Forearm -> Hand)
+  const gloveMat = new THREE.MeshStandardMaterial({
+    color: isGK ? '#f59e0b' : player.skinTone,
+    roughness: 0.45,
+  });
+
+  const buildRealisticArm = (xOffset: number) => {
     const armGroup = new THREE.Group();
-    armGroup.position.set(sideSign * 0.29, 0.45, 0); // Shoulder socket
+    armGroup.position.set(xOffset, 0.43, 0);
+    torso.add(armGroup);
 
-    // Shoulder / Short Sleeve (Capsule)
-    const sleeveGeo = new THREE.CylinderGeometry(0.072, 0.064, 0.22, 14);
-    const sleeveMesh = new THREE.Mesh(sleeveGeo, solidJerseyMat);
-    sleeveMesh.position.y = -0.09;
+    // Jersey Sleeve
+    const sleeveGeo = new THREE.CylinderGeometry(0.082, 0.072, 0.23, 14);
+    const sleeveMesh = new THREE.Mesh(sleeveGeo, jerseyMat);
+    sleeveMesh.position.y = -0.11;
     sleeveMesh.castShadow = true;
     armGroup.add(sleeveMesh);
 
-    // Sleeve cuff band
-    const cuffGeo = new THREE.CylinderGeometry(0.066, 0.066, 0.025, 14);
+    // Sleeve Cuff Trim
+    const cuffGeo = new THREE.CylinderGeometry(0.074, 0.073, 0.032, 14);
     const cuffMesh = new THREE.Mesh(cuffGeo, trimMat);
-    cuffMesh.position.y = -0.195;
+    cuffMesh.position.y = -0.22;
     armGroup.add(cuffMesh);
 
-    // Bicep / Tricep lower upper-arm skin
-    const bicepGeo = new THREE.CylinderGeometry(0.06, 0.052, 0.11, 12);
+    // Upper Arm Bicep/Tricep
+    const bicepGeo = new THREE.CylinderGeometry(0.066, 0.058, 0.15, 14);
     const bicepMesh = new THREE.Mesh(bicepGeo, skinMat);
-    bicepMesh.position.y = -0.24;
-    bicepMesh.castShadow = true;
+    bicepMesh.position.y = -0.28;
     armGroup.add(bicepMesh);
 
-    // Elbow Pivot Group
+    // Elbow Joint Sphere
+    const elbowGeo = new THREE.SphereGeometry(0.056, 12, 12);
+    const elbowMesh = new THREE.Mesh(elbowGeo, skinMat);
+    elbowMesh.position.y = -0.35;
+    armGroup.add(elbowMesh);
+
+    // Forearm Group (pivots at elbow y = -0.35)
     const forearmGroup = new THREE.Group();
-    forearmGroup.position.set(0, -0.29, 0);
+    forearmGroup.position.set(0, -0.35, 0);
     armGroup.add(forearmGroup);
 
-    // Tapered Muscular Forearm
-    const forearmGeo = new THREE.CylinderGeometry(0.052, 0.038, 0.26, 12);
+    const forearmGeo = new THREE.CylinderGeometry(0.056, 0.044, 0.27, 14);
     const forearmMesh = new THREE.Mesh(forearmGeo, skinMat);
-    forearmMesh.position.y = -0.13;
+    forearmMesh.position.y = -0.135;
     forearmMesh.castShadow = true;
     forearmGroup.add(forearmMesh);
 
-    // Wristband / Athlete Tape
-    const wristTapeGeo = new THREE.CylinderGeometry(0.041, 0.041, 0.035, 12);
-    const wristTape = new THREE.Mesh(
-      wristTapeGeo,
-      new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.5 })
+    // Wrist Tape
+    const tapeGeo = new THREE.CylinderGeometry(0.046, 0.045, 0.035, 12);
+    const tapeMesh = new THREE.Mesh(
+      tapeGeo,
+      new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.4 })
     );
-    wristTape.position.y = -0.25;
-    forearmGroup.add(wristTape);
+    tapeMesh.position.y = -0.255;
+    forearmGroup.add(tapeMesh);
 
-    // Sculpted Hand (or GK Pro Glove)
-    const handGeo = new THREE.SphereGeometry(isGK ? 0.064 : 0.046, 12, 12);
+    // Hand / Goalkeeper Glove
+    const handGeo = new THREE.SphereGeometry(isGK ? 0.072 : 0.05, 12, 12);
     handGeo.scale(0.85, 1.25, 0.65);
-    const handMesh = new THREE.Mesh(handGeo, isGK ? trimMat : skinMat);
+    const handMesh = new THREE.Mesh(handGeo, gloveMat);
     handMesh.position.y = -0.3;
-    handMesh.castShadow = true;
     forearmGroup.add(handMesh);
 
-    // Slight natural athletic elbow bend
-    forearmGroup.rotation.x = -0.32;
-
-    torso.add(armGroup);
     return { armGroup, forearmGroup };
   };
 
-  const leftArmBuilt = buildRealisticArm(-1);
-  const rightArmBuilt = buildRealisticArm(1);
+  const leftArmBuilt = buildRealisticArm(-0.31);
+  const rightArmBuilt = buildRealisticArm(0.31);
 
-  // ============================================================================
-  // 4. REALISTIC ARTICULATED LEGS (Hip -> Thigh -> Knee Pivot -> Calf/Sock -> Boot)
-  // ============================================================================
-  const buildRealisticLeg = (offsetX: number): { hipGroup: THREE.Group; kneeGroup: THREE.Group } => {
+  // 4. Articulated Left & Right Legs (Hip -> Shorts -> Muscular Quad -> Knee -> Shinguard Sock -> Boot)
+  const buildRealisticLeg = (xOffset: number) => {
     const hipGroup = new THREE.Group();
-    hipGroup.position.set(offsetX, -0.22, 0); // Hip socket inside pelvis
-    torso.add(hipGroup);
+    hipGroup.position.set(xOffset, 0.96, 0);
+    root.add(hipGroup);
 
-    // Upper Thigh Shorts Leg
-    const shortLegGeo = new THREE.CylinderGeometry(0.105, 0.092, 0.24, 16);
-    const shortLegMesh = new THREE.Mesh(shortLegGeo, shortsMat);
-    shortLegMesh.position.y = -0.11;
-    shortLegMesh.castShadow = true;
-    hipGroup.add(shortLegMesh);
+    // Shorts Leg
+    const shortsLegGeo = new THREE.CylinderGeometry(0.112, 0.098, 0.27, 16);
+    const shortsLegMesh = new THREE.Mesh(shortsLegGeo, shortsMat);
+    shortsLegMesh.position.y = -0.13;
+    shortsLegMesh.castShadow = true;
+    hipGroup.add(shortsLegMesh);
 
-    // Muscular Quadricep / Hamstring (Exposed thigh above knee)
-    const quadGeo = new THREE.CylinderGeometry(0.086, 0.072, 0.21, 14);
-    const quadMesh = new THREE.Mesh(quadGeo, skinMat);
-    quadMesh.position.y = -0.31;
-    quadMesh.castShadow = true;
-    hipGroup.add(quadMesh);
+    // Shorts Hem Trim
+    const shortsHemGeo = new THREE.CylinderGeometry(0.1, 0.099, 0.028, 16);
+    const shortsHemMesh = new THREE.Mesh(shortsHemGeo, trimMat);
+    shortsHemMesh.position.y = -0.255;
+    hipGroup.add(shortsHemMesh);
 
-    // Knee Cap Joint
-    const kneeCapGeo = new THREE.SphereGeometry(0.07, 12, 12);
+    // Muscular Thigh (Quadriceps & Hamstring)
+    const thighGeo = new THREE.CylinderGeometry(0.09, 0.074, 0.2, 16);
+    const thighMesh = new THREE.Mesh(thighGeo, skinMat);
+    thighMesh.position.y = -0.33;
+    thighMesh.castShadow = true;
+    hipGroup.add(thighMesh);
+
+    // Sculpted Knee Cap Joint
+    const kneeCapGeo = new THREE.SphereGeometry(0.072, 14, 14);
     const kneeCapMesh = new THREE.Mesh(kneeCapGeo, skinMat);
     kneeCapMesh.position.y = -0.42;
     hipGroup.add(kneeCapMesh);
@@ -556,6 +933,7 @@ export function createArticulatedPlayer3D(
     skillTimer: 0,
     rainbowTimer: 0,
     bicycleTimer: 0,
+    headerTimer: 0,
     activeSkillName: '',
     diveTimer: 0,
     diveDirZ: 0,
@@ -590,47 +968,57 @@ export function createFootballMesh(): {
 
   // Procedural high-contrast official World Cup style match ball texture
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
+  canvas.width = 512;
+  canvas.height = 512;
   const ctx = canvas.getContext('2d')!;
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, 256, 256);
+  ctx.fillRect(0, 0, 512, 512);
 
+  // Geometric thermally-bonded match ball panels
   ctx.fillStyle = '#090d16';
   const patches = [
-    [64, 64],
-    [192, 64],
     [128, 128],
-    [64, 192],
-    [192, 192],
+    [384, 128],
+    [256, 256],
+    [128, 384],
+    [384, 384],
+    [256, 64],
+    [256, 448],
   ];
   patches.forEach(([px, py]) => {
     ctx.beginPath();
-    ctx.arc(px, py, 26, 0, Math.PI * 2);
+    for (let i = 0; i < 5; i++) {
+      const angle = (i * Math.PI * 2) / 5 - Math.PI / 2;
+      const rx = px + Math.cos(angle) * 44;
+      const ry = py + Math.sin(angle) * 44;
+      if (i === 0) ctx.moveTo(rx, ry);
+      else ctx.lineTo(rx, ry);
+    }
+    ctx.closePath();
     ctx.fill();
   });
 
   // Gold & Emerald World Cup accents
   ctx.strokeStyle = '#f59e0b';
-  ctx.lineWidth = 5;
+  ctx.lineWidth = 10;
   ctx.beginPath();
-  ctx.moveTo(0, 96);
-  ctx.lineTo(256, 160);
+  ctx.moveTo(0, 192);
+  ctx.lineTo(512, 320);
   ctx.stroke();
 
   ctx.strokeStyle = '#10b981';
-  ctx.lineWidth = 6;
+  ctx.lineWidth = 10;
   ctx.beginPath();
-  ctx.moveTo(0, 128);
-  ctx.lineTo(256, 128);
+  ctx.moveTo(0, 256);
+  ctx.lineTo(512, 256);
   ctx.stroke();
 
   const ballTex = new THREE.CanvasTexture(canvas);
-  const ballGeo = new THREE.SphereGeometry(0.36, 24, 24);
+  const ballGeo = new THREE.SphereGeometry(0.36, 28, 28);
   const ballMat = new THREE.MeshStandardMaterial({
     map: ballTex,
-    roughness: 0.28,
-    metalness: 0.12,
+    roughness: 0.24,
+    metalness: 0.14,
   });
   const ballMesh = new THREE.Mesh(ballGeo, ballMat);
   ballMesh.castShadow = true;

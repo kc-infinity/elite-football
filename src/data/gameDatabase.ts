@@ -1,5 +1,21 @@
-export type PlayerRarity = 'Common' | 'Rare' | 'Elite' | 'World Class' | 'Legendary';
-export type PositionCode = 'ST' | 'LW' | 'RW' | 'CAM' | 'CM' | 'CDM' | 'LB' | 'CB' | 'RB' | 'GK';
+export type PlayerRarity = 'Common' | 'Rare' | 'Elite' | 'World Class' | 'Legendary' | 'Special Edition';
+export type PositionCode = 'ST' | 'CF' | 'LW' | 'RW' | 'LM' | 'RM' | 'CAM' | 'CM' | 'CDM' | 'LB' | 'CB' | 'RB' | 'GK';
+
+export const ALL_SQUAD_POSITIONS: PositionCode[] = [
+  'GK',
+  'LB',
+  'CB',
+  'RB',
+  'CDM',
+  'CM',
+  'CAM',
+  'LM',
+  'RM',
+  'LW',
+  'RW',
+  'CF',
+  'ST',
+];
 
 export interface PlayerAttributes {
   pace: number;
@@ -12,6 +28,8 @@ export interface PlayerAttributes {
   skill: number;
   curve: number;
   reactions: number;
+  weakFoot?: number;
+  skillMoves?: number;
 }
 
 export interface FootballPlayer {
@@ -69,12 +87,12 @@ export const FORMATIONS: Record<FormationName, FormationSlot[]> = {
     { role: 'CB', label: 'LCB', x: -0.72, z: -0.24 },
     { role: 'CB', label: 'RCB', x: -0.72, z: 0.24 },
     { role: 'RB', label: 'RB', x: -0.68, z: 0.65 },
-    { role: 'LW', label: 'LM', x: -0.38, z: -0.62 },
+    { role: 'LM', label: 'LM', x: -0.38, z: -0.62 },
     { role: 'CM', label: 'LCM', x: -0.42, z: -0.22 },
     { role: 'CM', label: 'RCM', x: -0.42, z: 0.22 },
-    { role: 'RW', label: 'RM', x: -0.38, z: 0.62 },
-    { role: 'ST', label: 'LST', x: -0.1, z: -0.22 },
-    { role: 'ST', label: 'RST', x: -0.1, z: 0.22 },
+    { role: 'RM', label: 'RM', x: -0.38, z: 0.62 },
+    { role: 'CF', label: 'CF', x: -0.12, z: -0.22 },
+    { role: 'ST', label: 'ST', x: -0.1, z: 0.22 },
   ],
   '4-2-3-1': [
     { role: 'GK', label: 'GK', x: -0.92, z: 0.0 },
@@ -94,23 +112,23 @@ export const FORMATIONS: Record<FormationName, FormationSlot[]> = {
     { role: 'CB', label: 'LCB', x: -0.72, z: -0.45 },
     { role: 'CB', label: 'CCB', x: -0.75, z: 0.0 },
     { role: 'CB', label: 'RCB', x: -0.72, z: 0.45 },
-    { role: 'LW', label: 'LWB', x: -0.42, z: -0.68 },
+    { role: 'LM', label: 'LM', x: -0.42, z: -0.68 },
     { role: 'CDM', label: 'CDM', x: -0.5, z: 0.0 },
     { role: 'CM', label: 'LCM', x: -0.36, z: -0.3 },
     { role: 'CM', label: 'RCM', x: -0.36, z: 0.3 },
-    { role: 'RW', label: 'RWB', x: -0.42, z: 0.68 },
-    { role: 'ST', label: 'LST', x: -0.1, z: -0.24 },
-    { role: 'ST', label: 'RST', x: -0.1, z: 0.24 },
+    { role: 'RM', label: 'RM', x: -0.42, z: 0.68 },
+    { role: 'CF', label: 'CF', x: -0.12, z: -0.24 },
+    { role: 'ST', label: 'ST', x: -0.1, z: 0.24 },
   ],
   '3-4-3': [
     { role: 'GK', label: 'GK', x: -0.92, z: 0.0 },
     { role: 'CB', label: 'LCB', x: -0.72, z: -0.45 },
     { role: 'CB', label: 'CCB', x: -0.75, z: 0.0 },
     { role: 'CB', label: 'RCB', x: -0.72, z: 0.45 },
-    { role: 'LW', label: 'LM', x: -0.42, z: -0.65 },
+    { role: 'LM', label: 'LM', x: -0.42, z: -0.65 },
     { role: 'CM', label: 'LCM', x: -0.44, z: -0.22 },
     { role: 'CM', label: 'RCM', x: -0.44, z: 0.22 },
-    { role: 'RW', label: 'RM', x: -0.42, z: 0.65 },
+    { role: 'RM', label: 'RM', x: -0.42, z: 0.65 },
     { role: 'LW', label: 'LW', x: -0.14, z: -0.58 },
     { role: 'ST', label: 'ST', x: -0.08, z: 0.0 },
     { role: 'RW', label: 'RW', x: -0.14, z: 0.58 },
@@ -122,10 +140,10 @@ export const FORMATIONS: Record<FormationName, FormationSlot[]> = {
     { role: 'CB', label: 'RCB', x: -0.72, z: 0.24 },
     { role: 'RB', label: 'RB', x: -0.68, z: 0.65 },
     { role: 'CDM', label: 'CDM', x: -0.52, z: 0.0 },
-    { role: 'LW', label: 'LM', x: -0.32, z: -0.62 },
+    { role: 'LM', label: 'LM', x: -0.32, z: -0.62 },
     { role: 'CM', label: 'LCM', x: -0.34, z: -0.22 },
     { role: 'CM', label: 'RCM', x: -0.34, z: 0.22 },
-    { role: 'RW', label: 'RM', x: -0.32, z: 0.62 },
+    { role: 'RM', label: 'RM', x: -0.32, z: 0.62 },
     { role: 'ST', label: 'ST', x: -0.08, z: 0.0 },
   ],
   '5-3-2': [
@@ -138,8 +156,8 @@ export const FORMATIONS: Record<FormationName, FormationSlot[]> = {
     { role: 'CM', label: 'LCM', x: -0.38, z: -0.35 },
     { role: 'CDM', label: 'CDM', x: -0.44, z: 0.0 },
     { role: 'CM', label: 'RCM', x: -0.38, z: 0.35 },
-    { role: 'ST', label: 'LST', x: -0.1, z: -0.22 },
-    { role: 'ST', label: 'RST', x: -0.1, z: 0.22 },
+    { role: 'CF', label: 'CF', x: -0.12, z: -0.22 },
+    { role: 'ST', label: 'ST', x: -0.1, z: 0.22 },
   ],
   '5-4-1': [
     { role: 'GK', label: 'GK', x: -0.92, z: 0.0 },
@@ -148,13 +166,190 @@ export const FORMATIONS: Record<FormationName, FormationSlot[]> = {
     { role: 'CB', label: 'CCB', x: -0.75, z: 0.0 },
     { role: 'CB', label: 'RCB', x: -0.72, z: 0.38 },
     { role: 'RB', label: 'RWB', x: -0.62, z: 0.68 },
-    { role: 'LW', label: 'LM', x: -0.36, z: -0.6 },
+    { role: 'LM', label: 'LM', x: -0.36, z: -0.6 },
     { role: 'CM', label: 'LCM', x: -0.4, z: -0.2 },
     { role: 'CM', label: 'RCM', x: -0.4, z: 0.2 },
-    { role: 'RW', label: 'RM', x: -0.36, z: 0.6 },
+    { role: 'RM', label: 'RM', x: -0.36, z: 0.6 },
     { role: 'ST', label: 'ST', x: -0.08, z: 0.0 },
   ],
 };
+
+export function normalizeSlotPosition(slotRole: PositionCode, slotLabel: string): PositionCode {
+  const lbl = slotLabel.toUpperCase();
+  if (lbl === 'GK') return 'GK';
+  if (lbl === 'LB' || lbl === 'LWB') return 'LB';
+  if (lbl === 'RB' || lbl === 'RWB') return 'RB';
+  if (lbl === 'CB' || lbl === 'LCB' || lbl === 'CCB' || lbl === 'RCB') return 'CB';
+  if (lbl === 'CDM' || lbl === 'LCDM' || lbl === 'RCDM') return 'CDM';
+  if (lbl === 'CM' || lbl === 'LCM' || lbl === 'RCM') return 'CM';
+  if (lbl === 'CAM') return 'CAM';
+  if (lbl === 'LAM') return 'LW';
+  if (lbl === 'RAM') return 'RW';
+  if (lbl === 'LM') return 'LM';
+  if (lbl === 'RM') return 'RM';
+  if (lbl === 'LW') return 'LW';
+  if (lbl === 'RW') return 'RW';
+  if (lbl === 'CF') return 'CF';
+  if (lbl === 'ST' || lbl === 'LST' || lbl === 'RST') return 'ST';
+  return slotRole;
+}
+
+export function getCompatiblePositionsForSlot(
+  slotRole: PositionCode,
+  slotLabel: string
+): { exact: PositionCode[]; compatible: PositionCode[] } {
+  const canonical = normalizeSlotPosition(slotRole, slotLabel);
+  switch (canonical) {
+    case 'GK':
+      return { exact: ['GK'], compatible: ['GK'] };
+    case 'LB':
+      return { exact: ['LB'], compatible: ['LB', 'LM', 'CB', 'LW'] };
+    case 'RB':
+      return { exact: ['RB'], compatible: ['RB', 'RM', 'CB', 'RW'] };
+    case 'CB':
+      return { exact: ['CB'], compatible: ['CB', 'CDM', 'LB', 'RB'] };
+    case 'CDM':
+      return { exact: ['CDM'], compatible: ['CDM', 'CM', 'CB'] };
+    case 'CM':
+      return { exact: ['CM'], compatible: ['CM', 'CDM', 'CAM', 'LM', 'RM'] };
+    case 'CAM':
+      return { exact: ['CAM'], compatible: ['CAM', 'CF', 'CM', 'LW', 'RW', 'LM', 'RM'] };
+    case 'LM':
+      return { exact: ['LM', 'LW'], compatible: ['LM', 'LW', 'LB', 'CM', 'CAM'] };
+    case 'RM':
+      return { exact: ['RM', 'RW'], compatible: ['RM', 'RW', 'RB', 'CM', 'CAM'] };
+    case 'LW':
+      return { exact: ['LW', 'LM'], compatible: ['LW', 'LM', 'ST', 'CF', 'CAM', 'RW'] };
+    case 'RW':
+      return { exact: ['RW', 'RM'], compatible: ['RW', 'RM', 'ST', 'CF', 'CAM', 'LW'] };
+    case 'CF':
+      return { exact: ['CF', 'ST'], compatible: ['CF', 'ST', 'CAM', 'LW', 'RW'] };
+    case 'ST':
+    default:
+      return { exact: ['ST', 'CF'], compatible: ['ST', 'CF', 'LW', 'RW', 'CAM'] };
+  }
+}
+
+export function getPlayerSlotFitLevel(
+  playerPos: PositionCode,
+  slotRole: PositionCode,
+  slotLabel: string
+): 'exact' | 'compatible' | 'out_of_position' {
+  const { exact, compatible } = getCompatiblePositionsForSlot(slotRole, slotLabel);
+  if (exact.includes(playerPos)) return 'exact';
+  if (compatible.includes(playerPos)) return 'compatible';
+  return 'out_of_position';
+}
+
+export function findBestSlotIndexForPlayer(
+  player: FootballPlayer,
+  formation: FormationName,
+  currentSquad: FootballPlayer[]
+): number {
+  const slots = FORMATIONS[formation];
+  // 1. Check exact position slots first
+  const exactIndices: number[] = [];
+  const compatibleIndices: number[] = [];
+
+  slots.forEach((slot, idx) => {
+    const fit = getPlayerSlotFitLevel(player.position, slot.role, slot.label);
+    if (fit === 'exact') exactIndices.push(idx);
+    else if (fit === 'compatible') compatibleIndices.push(idx);
+  });
+
+  const pickBestTargetFromCandidates = (indices: number[]): number => {
+    // Prefer a slot whose current player is out-of-position or has the lowest rating
+    let bestIdx = indices[0];
+    let lowestScore = Infinity;
+    for (const idx of indices) {
+      const occupant = currentSquad[idx];
+      if (!occupant) return idx;
+      const occupantFit = getPlayerSlotFitLevel(
+        occupant.position,
+        slots[idx].role,
+        slots[idx].label
+      );
+      const fitPenalty = occupantFit === 'exact' ? 100 : occupantFit === 'compatible' ? 50 : 0;
+      const score = fitPenalty + occupant.rating;
+      if (score < lowestScore) {
+        lowestScore = score;
+        bestIdx = idx;
+      }
+    }
+    return bestIdx;
+  };
+
+  if (exactIndices.length > 0) {
+    return pickBestTargetFromCandidates(exactIndices);
+  }
+  if (compatibleIndices.length > 0) {
+    return pickBestTargetFromCandidates(compatibleIndices);
+  }
+  return player.position === 'GK' ? 0 : 9;
+}
+
+export function buildOptimalSquadForFormation(
+  unlockedPlayers: FootballPlayer[],
+  currentSquad: FootballPlayer[],
+  formation: FormationName
+): FootballPlayer[] {
+  const slots = FORMATIONS[formation];
+  const pool = [...unlockedPlayers];
+  // Ensure any player currently in currentSquad is also in pool
+  currentSquad.forEach((p) => {
+    if (p && !pool.some((x) => x.id === p.id)) {
+      pool.push(p);
+    }
+  });
+
+  const usedIds = new Set<string>();
+  const startingXI: FootballPlayer[] = new Array(11);
+
+  // Pass 1: Fill each slot with highest-rated exact position match
+  slots.forEach((slot, idx) => {
+    const candidates = pool
+      .filter(
+        (p) =>
+          !usedIds.has(p.id) &&
+          getPlayerSlotFitLevel(p.position, slot.role, slot.label) === 'exact'
+      )
+      .sort((a, b) => b.rating - a.rating);
+    if (candidates.length > 0) {
+      startingXI[idx] = candidates[0];
+      usedIds.add(candidates[0].id);
+    }
+  });
+
+  // Pass 2: Fill remaining slots with highest-rated compatible position match
+  slots.forEach((slot, idx) => {
+    if (startingXI[idx]) return;
+    const candidates = pool
+      .filter(
+        (p) =>
+          !usedIds.has(p.id) &&
+          getPlayerSlotFitLevel(p.position, slot.role, slot.label) === 'compatible'
+      )
+      .sort((a, b) => b.rating - a.rating);
+    if (candidates.length > 0) {
+      startingXI[idx] = candidates[0];
+      usedIds.add(candidates[0].id);
+    }
+  });
+
+  // Pass 3: Fill any still-empty slots with highest-rated remaining players
+  slots.forEach((_, idx) => {
+    if (startingXI[idx]) return;
+    const remaining = pool.filter((p) => !usedIds.has(p.id)).sort((a, b) => b.rating - a.rating);
+    if (remaining.length > 0) {
+      startingXI[idx] = remaining[0];
+      usedIds.add(remaining[0].id);
+    }
+  });
+
+  // Append all unused unlocked players as reserves so no player is ever lost
+  const reserves = pool.filter((p) => !usedIds.has(p.id)).sort((a, b) => b.rating - a.rating);
+  return [...startingXI.filter(Boolean), ...reserves];
+}
 
 export type CelebrationType =
   | 'Knee Slide Surge'
@@ -4516,6 +4711,444 @@ export const PLAYERS_DB: FootballPlayer[] = [
     initialUnlocked: false,
     attributes: { pace: 89, shooting: 86, passing: 74, dribbling: 82, defending: 46, physical: 92, stamina: 87, skill: 81, curve: 78, reactions: 86 },
   },
+  // --- CF (CENTER FORWARD), SPECIAL EDITION (98-99 OVR) & COMMON TIER PLAYERS ---
+  {
+    id: 'se_ronaldo_99',
+    name: 'Cristiano Ronaldo (GOAT Edition)',
+    nationality: 'Portugal',
+    club: 'Al-Nassr FC',
+    position: 'ST',
+    rating: 99,
+    rarity: 'Special Edition',
+    price: 240000,
+    number: 7,
+    skinTone: '#e0ac69',
+    hairColor: '#09090b',
+    bootColor: '#fbbf24',
+    celebration: 'Acrobatic Flip',
+    initialUnlocked: false,
+    attributes: { pace: 97, shooting: 99, passing: 92, dribbling: 97, defending: 55, physical: 96, stamina: 97, skill: 99, curve: 98, reactions: 99, weakFoot: 5, skillMoves: 5 },
+  },
+  {
+    id: 'se_messi_99',
+    name: 'Lionel Messi (World Champion Edition)',
+    nationality: 'Argentina',
+    club: 'Inter Miami CF',
+    position: 'CF',
+    rating: 99,
+    rarity: 'Special Edition',
+    price: 245000,
+    number: 10,
+    skinTone: '#f1c27d',
+    hairColor: '#1c1917',
+    bootColor: '#fbbf24',
+    celebration: 'Skyward Point',
+    initialUnlocked: false,
+    attributes: { pace: 95, shooting: 99, passing: 99, dribbling: 99, defending: 52, physical: 85, stamina: 94, skill: 99, curve: 99, reactions: 99, weakFoot: 5, skillMoves: 5 },
+  },
+  {
+    id: 'se_mbappe_98',
+    name: 'Kylian Mbappé (Galáctico Edition)',
+    nationality: 'France',
+    club: 'Real Madrid',
+    position: 'CF',
+    rating: 98,
+    rarity: 'Special Edition',
+    price: 220000,
+    number: 9,
+    skinTone: '#8d5524',
+    hairColor: '#09090b',
+    bootColor: '#38bdf8',
+    celebration: 'Knee Slide Surge',
+    initialUnlocked: false,
+    attributes: { pace: 99, shooting: 98, passing: 93, dribbling: 99, defending: 50, physical: 89, stamina: 98, skill: 99, curve: 96, reactions: 99, weakFoot: 5, skillMoves: 5 },
+  },
+  {
+    id: 'se_haaland_98',
+    name: 'Erling Haaland (Viking Cyborg Edition)',
+    nationality: 'Norway',
+    club: 'Manchester City',
+    position: 'ST',
+    rating: 98,
+    rarity: 'Special Edition',
+    price: 215000,
+    number: 9,
+    skinTone: '#ffdbac',
+    hairColor: '#fde047',
+    bootColor: '#f97316',
+    celebration: 'Acrobatic Flip',
+    initialUnlocked: false,
+    attributes: { pace: 98, shooting: 99, passing: 86, dribbling: 92, defending: 60, physical: 99, stamina: 96, skill: 90, curve: 92, reactions: 99, weakFoot: 4, skillMoves: 4 },
+  },
+  {
+    id: 'se_bellingham_97',
+    name: 'Jude Bellingham (Bernabéu Icon Edition)',
+    nationality: 'England',
+    club: 'Real Madrid',
+    position: 'CAM',
+    rating: 97,
+    rarity: 'Special Edition',
+    price: 195000,
+    number: 5,
+    skinTone: '#8d5524',
+    hairColor: '#09090b',
+    bootColor: '#fbbf24',
+    celebration: 'Captain Salute',
+    initialUnlocked: false,
+    attributes: { pace: 93, shooting: 96, passing: 96, dribbling: 97, defending: 89, physical: 95, stamina: 99, skill: 96, curve: 94, reactions: 98, weakFoot: 5, skillMoves: 5 },
+  },
+  {
+    id: 'se_vinicius_97',
+    name: 'Vinícius Jr. (Samba Ballon d’Or Edition)',
+    nationality: 'Brazil',
+    club: 'Real Madrid',
+    position: 'LW',
+    rating: 97,
+    rarity: 'Special Edition',
+    price: 195000,
+    number: 7,
+    skinTone: '#6b3e26',
+    hairColor: '#09090b',
+    bootColor: '#10b981',
+    celebration: 'Knee Slide Surge',
+    initialUnlocked: false,
+    attributes: { pace: 99, shooting: 95, passing: 92, dribbling: 99, defending: 48, physical: 84, stamina: 96, skill: 99, curve: 95, reactions: 98, weakFoot: 5, skillMoves: 5 },
+  },
+  {
+    id: 'star_benzema_91',
+    name: 'Karim Benzema',
+    nationality: 'France',
+    club: 'Al-Ittihad',
+    position: 'CF',
+    rating: 91,
+    rarity: 'World Class',
+    price: 86000,
+    number: 9,
+    skinTone: '#e0ac69',
+    hairColor: '#18181b',
+    bootColor: '#fbbf24',
+    celebration: 'Skyward Point',
+    initialUnlocked: false,
+    attributes: { pace: 84, shooting: 94, passing: 90, dribbling: 92, defending: 46, physical: 86, stamina: 87, skill: 92, curve: 91, reactions: 95, weakFoot: 5, skillMoves: 4 },
+  },
+  {
+    id: 'star_dybala_89',
+    name: 'Paulo Dybala',
+    nationality: 'Argentina',
+    club: 'AS Roma',
+    position: 'CF',
+    rating: 89,
+    rarity: 'Elite',
+    price: 68000,
+    number: 21,
+    skinTone: '#ffdbac',
+    hairColor: '#18181b',
+    bootColor: '#ef4444',
+    celebration: 'Captain Salute',
+    initialUnlocked: false,
+    attributes: { pace: 85, shooting: 90, passing: 90, dribbling: 94, defending: 44, physical: 73, stamina: 85, skill: 95, curve: 96, reactions: 90, weakFoot: 4, skillMoves: 5 },
+  },
+  {
+    id: 'star_nkunku_88',
+    name: 'Christopher Nkunku',
+    nationality: 'France',
+    club: 'Chelsea FC',
+    position: 'CF',
+    rating: 88,
+    rarity: 'Elite',
+    price: 61000,
+    number: 18,
+    skinTone: '#6b3e26',
+    hairColor: '#09090b',
+    bootColor: '#38bdf8',
+    celebration: 'Aeroplane Glide',
+    initialUnlocked: false,
+    attributes: { pace: 89, shooting: 88, passing: 87, dribbling: 92, defending: 56, physical: 78, stamina: 88, skill: 93, curve: 89, reactions: 89, weakFoot: 4, skillMoves: 5 },
+  },
+  {
+    id: 'star_felix_86',
+    name: 'João Félix',
+    nationality: 'Portugal',
+    club: 'AC Milan',
+    position: 'CF',
+    rating: 86,
+    rarity: 'Rare',
+    price: 46000,
+    number: 79,
+    skinTone: '#ffdbac',
+    hairColor: '#27272a',
+    bootColor: '#ef4444',
+    celebration: 'Knee Slide Surge',
+    initialUnlocked: false,
+    attributes: { pace: 86, shooting: 85, passing: 85, dribbling: 92, defending: 44, physical: 74, stamina: 84, skill: 95, curve: 88, reactions: 87, weakFoot: 4, skillMoves: 5 },
+  },
+  {
+    id: 'common_mainoo_82',
+    name: 'Kobbie Mainoo',
+    nationality: 'England',
+    club: 'Manchester United',
+    position: 'CM',
+    rating: 82,
+    rarity: 'Common',
+    price: 14000,
+    number: 37,
+    skinTone: '#5c3317',
+    hairColor: '#09090b',
+    bootColor: '#ef4444',
+    celebration: 'Knee Slide Surge',
+    initialUnlocked: false,
+    attributes: { pace: 81, shooting: 76, passing: 84, dribbling: 87, defending: 79, physical: 80, stamina: 87, skill: 85, curve: 80, reactions: 84, weakFoot: 4, skillMoves: 4 },
+  },
+  {
+    id: 'common_endrick_82',
+    name: 'Endrick',
+    nationality: 'Brazil',
+    club: 'Real Madrid',
+    position: 'CF',
+    rating: 82,
+    rarity: 'Common',
+    price: 15000,
+    number: 16,
+    skinTone: '#6b3e26',
+    hairColor: '#09090b',
+    bootColor: '#10b981',
+    celebration: 'Captain Salute',
+    initialUnlocked: false,
+    attributes: { pace: 91, shooting: 85, passing: 75, dribbling: 85, defending: 42, physical: 84, stamina: 85, skill: 86, curve: 82, reactions: 84, weakFoot: 4, skillMoves: 4 },
+  },
+  {
+    id: 'common_cubarsi_82',
+    name: 'Pau Cubarsí',
+    nationality: 'Spain',
+    club: 'FC Barcelona',
+    position: 'CB',
+    rating: 82,
+    rarity: 'Common',
+    price: 13500,
+    number: 2,
+    skinTone: '#ffdbac',
+    hairColor: '#27272a',
+    bootColor: '#38bdf8',
+    celebration: 'Team Huddle Roar',
+    initialUnlocked: false,
+    attributes: { pace: 80, shooting: 52, passing: 86, dribbling: 80, defending: 84, physical: 82, stamina: 85, skill: 74, curve: 70, reactions: 85, weakFoot: 4, skillMoves: 3 },
+  },
+  {
+    id: 'common_garnacho_83',
+    name: 'Alejandro Garnacho',
+    nationality: 'Argentina',
+    club: 'Manchester United',
+    position: 'LW',
+    rating: 83,
+    rarity: 'Common',
+    price: 16500,
+    number: 17,
+    skinTone: '#ffdbac',
+    hairColor: '#18181b',
+    bootColor: '#ef4444',
+    celebration: 'Acrobatic Flip',
+    initialUnlocked: false,
+    attributes: { pace: 92, shooting: 82, passing: 79, dribbling: 87, defending: 44, physical: 73, stamina: 86, skill: 88, curve: 84, reactions: 84, weakFoot: 4, skillMoves: 4 },
+  },
+  {
+    id: 'lm_grimaldo_90',
+    name: 'Alejandro Grimaldo',
+    nationality: 'Spain',
+    club: 'Bayer Leverkusen',
+    position: 'LM',
+    rating: 90,
+    rarity: 'World Class',
+    price: 54000,
+    number: 20,
+    skinTone: '#f1c27d',
+    hairColor: '#18181b',
+    bootColor: '#10b981',
+    celebration: 'Knee Slide Surge',
+    initialUnlocked: false,
+    attributes: { pace: 89, shooting: 84, passing: 91, dribbling: 88, defending: 82, physical: 78, stamina: 92, skill: 86, curve: 93, reactions: 89, weakFoot: 3, skillMoves: 4 },
+  },
+  {
+    id: 'rm_frimpong_89',
+    name: 'Jeremie Frimpong',
+    nationality: 'Netherlands',
+    club: 'Bayer Leverkusen',
+    position: 'RM',
+    rating: 89,
+    rarity: 'Elite',
+    price: 49000,
+    number: 30,
+    skinTone: '#4a2c11',
+    hairColor: '#09090b',
+    bootColor: '#f59e0b',
+    celebration: 'Aeroplane Glide',
+    initialUnlocked: false,
+    attributes: { pace: 96, shooting: 81, passing: 84, dribbling: 90, defending: 78, physical: 76, stamina: 93, skill: 88, curve: 83, reactions: 88, weakFoot: 3, skillMoves: 4 },
+  },
+  {
+    id: 'lm_dimarco_88',
+    name: 'Federico Dimarco',
+    nationality: 'Italy',
+    club: 'Inter Milan',
+    position: 'LM',
+    rating: 88,
+    rarity: 'Elite',
+    price: 44000,
+    number: 32,
+    skinTone: '#ffdbac',
+    hairColor: '#27272a',
+    bootColor: '#38bdf8',
+    celebration: 'Captain Salute',
+    initialUnlocked: false,
+    attributes: { pace: 87, shooting: 82, passing: 90, dribbling: 85, defending: 83, physical: 80, stamina: 90, skill: 84, curve: 91, reactions: 88, weakFoot: 3, skillMoves: 3 },
+  },
+  {
+    id: 'rm_llorente_87',
+    name: 'Marcos Llorente',
+    nationality: 'Spain',
+    club: 'Atlético Madrid',
+    position: 'RM',
+    rating: 87,
+    rarity: 'Elite',
+    price: 39000,
+    number: 14,
+    skinTone: '#f1c27d',
+    hairColor: '#ca8a04',
+    bootColor: '#ffffff',
+    celebration: 'Knee Slide Surge',
+    initialUnlocked: false,
+    attributes: { pace: 92, shooting: 83, passing: 85, dribbling: 85, defending: 81, physical: 86, stamina: 95, skill: 82, curve: 81, reactions: 87, weakFoot: 4, skillMoves: 3 },
+  },
+];
+
+export interface UpgradeCardItem {
+  id: string;
+  name: string;
+  category:
+    | 'Shooting Boost'
+    | 'Passing Boost'
+    | 'Speed Boost'
+    | 'Strength Boost'
+    | 'Stamina Boost'
+    | 'Training & Upgrade'
+    | 'Special Edition';
+  rarity: PlayerRarity;
+  price: number;
+  description: string;
+  effectSummary: string;
+  accentColor: string;
+  statBonuses: Partial<PlayerAttributes>;
+  ratingBonus: number;
+  upgradeRarityTo?: PlayerRarity;
+}
+
+export const UPGRADE_CARDS_DB: UpgradeCardItem[] = [
+  {
+    id: 'upg_shooting_boost',
+    name: 'Sniper Finisher Shooting Boost Card',
+    category: 'Shooting Boost',
+    rarity: 'Rare',
+    price: 12000,
+    description: 'Calibrates strike mechanics, volley timing, and long-range shot power for clinical top-corner finishes.',
+    effectSummary: '+5 Shooting Power & Accuracy · +4 Curve · +3 Reactions',
+    accentColor: '#EF4444',
+    statBonuses: { shooting: 5, curve: 4, reactions: 3 },
+    ratingBonus: 1,
+  },
+  {
+    id: 'upg_passing_boost',
+    name: 'Playmaker Vision Passing Boost Card',
+    category: 'Passing Boost',
+    rarity: 'Rare',
+    price: 11500,
+    description: 'Sharpens ground short-pass weight, defense-splitting through balls, and whipped aerial crosses.',
+    effectSummary: '+5 Passing Accuracy · +4 Curve · +3 Ball Control',
+    accentColor: '#38BDF8',
+    statBonuses: { passing: 5, curve: 4, dribbling: 3 },
+    ratingBonus: 1,
+  },
+  {
+    id: 'upg_speed_boost',
+    name: 'Nitro Sprint Speed Boost Card',
+    category: 'Speed Boost',
+    rarity: 'Elite',
+    price: 14500,
+    description: 'Explosive first-step acceleration and top-end breakaway sprint speed to leave defenders behind.',
+    effectSummary: '+5 Speed (Pace) · +3 Dribbling · +3 Reactions',
+    accentColor: '#10B981',
+    statBonuses: { pace: 5, dribbling: 3, reactions: 3 },
+    ratingBonus: 1,
+  },
+  {
+    id: 'upg_strength_boost',
+    name: 'Titan Shield Strength Boost Card',
+    category: 'Strength Boost',
+    rarity: 'Elite',
+    price: 13500,
+    description: 'Maximizes upper-body physical balance, shoulder-to-shoulder shielding, and aerial header dominance.',
+    effectSummary: '+6 Physical Strength · +4 Defending · +2 Stamina',
+    accentColor: '#F97316',
+    statBonuses: { physical: 6, defending: 4, stamina: 2 },
+    ratingBonus: 1,
+  },
+  {
+    id: 'upg_stamina_card',
+    name: 'Relentless Engine Stamina Card',
+    category: 'Stamina Boost',
+    rarity: 'Common',
+    price: 9000,
+    description: 'High-altitude conditioning card that drastically reduces sprint fatigue across full 90-minute matches.',
+    effectSummary: '+8 Stamina · +3 Pace · +2 Physical',
+    accentColor: '#22C55E',
+    statBonuses: { stamina: 8, pace: 3, physical: 2 },
+    ratingBonus: 1,
+  },
+  {
+    id: 'upg_training_pro',
+    name: 'Elite Academy Training & Upgrade Card',
+    category: 'Training & Upgrade',
+    rarity: 'Legendary',
+    price: 24000,
+    description: 'Comprehensive tactical and technical masterclass that elevates every attribute and increases Overall Rating.',
+    effectSummary: '+2 OVR Rating · +3 All Core Attributes (Speed, Shooting, Passing, Dribbling, Physical)',
+    accentColor: '#F59E0B',
+    statBonuses: {
+      pace: 3,
+      shooting: 3,
+      passing: 3,
+      dribbling: 3,
+      defending: 3,
+      physical: 3,
+      stamina: 4,
+      skill: 3,
+      curve: 3,
+      reactions: 3,
+    },
+    ratingBonus: 2,
+  },
+  {
+    id: 'upg_special_edition_evo',
+    name: 'Ballon d’Or Special Edition Evolution Card',
+    category: 'Special Edition',
+    rarity: 'Special Edition',
+    price: 45000,
+    description: 'Transforms any footballer into a holographic Special Edition Superstar with +3 OVR and elite stat boosts.',
+    effectSummary: 'Evolves Card to SPECIAL EDITION · +3 OVR Rating · +5 All Attacking & Physical Stats',
+    accentColor: '#EC4899',
+    statBonuses: {
+      pace: 5,
+      shooting: 5,
+      passing: 5,
+      dribbling: 5,
+      defending: 4,
+      physical: 5,
+      stamina: 5,
+      skill: 5,
+      curve: 5,
+      reactions: 5,
+    },
+    ratingBonus: 3,
+    upgradeRarityTo: 'Special Edition',
+  },
 ];
 
 export const SPIN_COST_COINS = 500000;
@@ -5244,7 +5877,6 @@ export const TEAMS_DB: TeamData[] = [
 ];
 
 export type MatchModeId =
-  | 'dream_team_11v11_online'
   | 'quick_match'
   | '1v1'
   | '11v11'
@@ -5255,8 +5887,7 @@ export type MatchModeId =
   | 'gk_challenge'
   | 'skill_challenge'
   | 'world_cup'
-  | 'tournament'
-  | 'join_code_match';
+  | 'tournament';
 
 export interface MatchModeInfo {
   id: MatchModeId;
@@ -5270,13 +5901,22 @@ export interface MatchModeInfo {
 
 export const MATCH_MODES: MatchModeInfo[] = [
   {
-    id: 'dream_team_11v11_online',
-    title: '11 vs 11 Dream Team Online',
-    subtitle: 'Full Squad Online Multiplayer',
-    playersPerSide: '11 vs 11 Dream Team',
+    id: 'quick_match',
+    title: 'Quick Match',
+    subtitle: 'Instant 11v11 Kick-Off',
+    playersPerSide: '11 vs 11',
+    durationLabel: '4 Mins',
+    description: 'Select any two international or real-world club teams and jump straight into broadcast 3D stadium action.',
+    rewardCoins: 5000,
+  },
+  {
+    id: '11v11',
+    title: '11 vs 11 Pro Simulation',
+    subtitle: 'Full Tactical Dream Team Match',
+    playersPerSide: '11 vs 11',
     durationLabel: '6 Mins',
-    description: 'Deploy your custom 11-player World Cup Dream Team and tactical formation against online opponents in real-time 11v11 stadium matches.',
-    rewardCoins: 8000,
+    description: 'Complete tactical 11-a-side match with your custom Dream Team, full stamina management, formations, and intelligent AI.',
+    rewardCoins: 6500,
   },
   {
     id: '1v1',
@@ -5286,24 +5926,6 @@ export const MATCH_MODES: MatchModeInfo[] = [
     durationLabel: '3 Mins',
     description: 'High-tempo one-on-one duel where your chosen superstar battles head-to-head with dribbling, skill moves, and curved finishes.',
     rewardCoins: 4500,
-  },
-  {
-    id: 'quick_match',
-    title: 'Quick Match',
-    subtitle: 'Instant Kick-Off',
-    playersPerSide: '11 vs 11',
-    durationLabel: '4 Mins',
-    description: 'Select any two international or real-world club teams and jump straight into broadcast 3D stadium action.',
-    rewardCoins: 5000,
-  },
-  {
-    id: '11v11',
-    title: '11 vs 11 Pro Simulation',
-    subtitle: 'Full Tactical Match',
-    playersPerSide: '11 vs 11',
-    durationLabel: '6 Mins',
-    description: 'Complete tactical 11-a-side match with full stamina management, formations, and dynamic AI.',
-    rewardCoins: 6500,
   },
   {
     id: 'practice',

@@ -58,31 +58,126 @@ export interface IncomingMatchInvite {
   lobbyId: string;
   roomCode: string;
   fromClientId: string;
+  fromUserId?: string;
   fromUsername: string;
+  fromEmail?: string;
+  fromAvatarUrl?: string;
+  fromClubId?: string;
   fromClubName: string;
   fromStarPlayer: string;
   fromSquadIds?: string[];
   fromFormation?: string;
+  customMessage?: string;
+  matchFormat?: '1v1' | '11v11';
+  createdAt?: number;
+  expiresAt?: number;
+}
+
+export interface FriendListItem {
+  friendshipId?: string;
+  userId: string;
+  username: string;
+  displayName?: string;
+  email: string;
+  avatarUrl: string;
+  clubId: string;
+  mmrRating: number;
+  status: 'online' | 'in_lobby' | 'in_match' | 'offline';
+  since?: string;
+  isFriend?: boolean;
+  requestPending?: boolean;
+}
+
+export interface FriendRequestItem {
+  id: string;
+  fromUserId: string;
+  fromUsername: string;
+  fromEmail: string;
+  fromAvatarUrl: string;
+  toUserId: string;
+  toUsername: string;
+  toEmail: string;
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: number;
+}
+
+export interface MatchInvitationItem {
+  id: string;
+  lobbyId: string;
+  roomCode: string;
+  fromUserId: string;
+  fromUsername: string;
+  fromEmail: string;
+  fromAvatarUrl: string;
+  fromClubId: string;
+  fromClubName: string;
+  fromStarPlayer: string;
+  fromSquadIds?: string[];
+  fromFormation?: string;
+  toUserId: string;
+  toUsername: string;
+  toEmail: string;
+  customMessage: string;
+  matchFormat: '1v1' | '11v11';
+  status: 'pending' | 'accepted' | 'declined' | 'expired';
+  emailDeliveryStatus: 'sent' | 'not_configured' | 'failed';
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface MatchHistoryItem {
+  id: string;
+  lobbyId: string;
+  roomCode: string;
+  matchFormat: '1v1' | '11v11';
+  homeUserId: string;
+  homeUsername: string;
+  homeClubName: string;
+  homeScore: number;
+  awayUserId: string;
+  awayUsername: string;
+  awayClubName: string;
+  awayScore: number;
+  winnerUsername: string;
+  playedAt: string;
+}
+
+export interface OnlineLobbySettings {
+  stadiumName: string;
+  weather: 'Clear' | 'Rain' | 'Overcast';
+  halfDurationMinutes: number;
+  aiDifficulty: 'World Class' | 'Legendary';
 }
 
 export interface OnlineLobbyPlayer {
+  userId?: string;
   clientId: string;
   username: string;
+  email?: string;
+  avatarUrl?: string;
   clubId: string;
   clubName: string;
+  starPlayerId?: string;
   starPlayerName: string;
   rating: number;
   squadIds?: string[];
   formation?: string;
+  teamSide?: 'home' | 'away';
   isReady: boolean;
+  connected?: boolean;
+  disconnectedAt?: number;
 }
 
 export interface OnlineMatchLobbyState {
   lobbyId: string;
   roomCode: string;
+  matchFormat?: '1v1' | '11v11';
+  customMessage?: string;
+  settings?: OnlineLobbySettings;
   host: OnlineLobbyPlayer;
   guest: OnlineLobbyPlayer | null;
   status: 'waiting' | 'ready_check' | 'in_match' | 'completed';
+  createdAt?: number;
   lastResult?: {
     homeScore: number;
     awayScore: number;
@@ -238,11 +333,18 @@ type StateSyncListener = (packet: OnlineMatchStateSyncPacket) => void;
 type GuestInputListener = (packet: OnlineGuestInputPacket) => void;
 type DisconnectListener = (roomCode: string, disconnectedUsername: string) => void;
 type ReconnectListener = (roomCode: string, reconnectedUsername: string) => void;
+type SocialEventListener = (event: {
+  type: 'friend_request' | 'friend_accepted' | 'invite_received' | 'invite_declined' | 'presence_updated';
+  payload?: any;
+}) => void;
 
 class FriendRoomServiceManager {
   private ws: WebSocket | null = null;
   private bc: BroadcastChannel | null = null;
   private clientId: string;
+  private currentUserId = '';
+  private currentUserEmail = '';
+  private currentAvatarUrl = '';
   private currentUsername = 'ChampionElite_10';
   private currentClubId = 'club_real_madrid';
   private currentClubName = 'Real Madrid';
@@ -278,6 +380,7 @@ class FriendRoomServiceManager {
   private guestInputListeners = new Set<GuestInputListener>();
   private disconnectListeners = new Set<DisconnectListener>();
   private reconnectListeners = new Set<ReconnectListener>();
+  private socialEventListeners = new Set<SocialEventListener>();
 
   constructor() {
     this.clientId = `fe_${Math.random().toString(36).slice(2, 10)}`;
@@ -308,6 +411,9 @@ class FriendRoomServiceManager {
   }
 
   public registerPresence(params: {
+    userId?: string;
+    email?: string;
+    avatarUrl?: string;
     username: string;
     clubId: string;
     clubName: string;
@@ -317,6 +423,9 @@ class FriendRoomServiceManager {
     squadIds?: string[];
     formation?: string;
   }) {
+    if (params.userId) this.currentUserId = params.userId;
+    if (params.email) this.currentUserEmail = params.email;
+    if (params.avatarUrl) this.currentAvatarUrl = params.avatarUrl;
     this.currentUsername = params.username.trim() || 'Player';
     this.currentClubId = params.clubId;
     this.currentClubName = params.clubName;
@@ -329,6 +438,9 @@ class FriendRoomServiceManager {
     const msg = {
       type: 'presence:register',
       clientId: this.clientId,
+      userId: this.currentUserId || undefined,
+      email: this.currentUserEmail || undefined,
+      avatarUrl: this.currentAvatarUrl || undefined,
       username: this.currentUsername,
       clubId: this.currentClubId,
       clubName: this.currentClubName,
@@ -347,20 +459,32 @@ class FriendRoomServiceManager {
     });
   }
 
-  public sendInviteByUsername(targetUsername: string) {
+  public sendInviteByUsername(
+    targetUsername: string,
+    options?: {
+      customMessage?: string;
+      matchFormat?: '1v1' | '11v11';
+    }
+  ) {
     const cleanTarget = targetUsername.trim();
     if (!cleanTarget) return;
 
     const msg = {
       type: 'invite:send',
       fromClientId: this.clientId,
+      fromUserId: this.currentUserId || undefined,
       fromUsername: this.currentUsername,
+      fromEmail: this.currentUserEmail || undefined,
+      fromAvatarUrl: this.currentAvatarUrl || undefined,
       clubId: this.currentClubId,
       clubName: this.currentClubName,
+      starPlayerId: this.currentStarPlayerId,
       starPlayerName: this.currentStarPlayer,
       squadIds: this.currentSquadIds,
       formation: this.currentFormation,
       targetUsername: cleanTarget,
+      customMessage: options?.customMessage || `Let's play a ${options?.matchFormat || '11v11'} match!`,
+      matchFormat: options?.matchFormat || '11v11',
     };
 
     this.bc?.postMessage(msg);
@@ -374,12 +498,17 @@ class FriendRoomServiceManager {
   public respondToInvite(lobbyId: string, accept: boolean, invite?: IncomingMatchInvite) {
     const msg = {
       type: 'invite:respond',
+      inviteId: invite?.inviteId,
       lobbyId,
       accept,
       guestClientId: this.clientId,
+      guestUserId: this.currentUserId || undefined,
       guestUsername: this.currentUsername,
+      guestEmail: this.currentUserEmail || undefined,
+      guestAvatarUrl: this.currentAvatarUrl || undefined,
       guestClubId: this.currentClubId,
       guestClubName: this.currentClubName,
+      guestStarPlayerId: this.currentStarPlayerId,
       guestStarPlayer: this.currentStarPlayer,
       guestSquadIds: this.currentSquadIds,
       guestFormation: this.currentFormation,
@@ -389,27 +518,46 @@ class FriendRoomServiceManager {
       const joinedLobby: OnlineMatchLobbyState = {
         lobbyId: invite.lobbyId,
         roomCode: invite.roomCode,
+        matchFormat: invite.matchFormat || '11v11',
+        customMessage: invite.customMessage,
+        settings: {
+          stadiumName: 'Estadio Santiago Bernabéu',
+          weather: 'Clear',
+          halfDurationMinutes: 4,
+          aiDifficulty: 'Legendary',
+        },
         host: {
+          userId: invite.fromUserId,
           clientId: invite.fromClientId,
           username: invite.fromUsername,
-          clubId: 'club_real_madrid',
+          email: invite.fromEmail,
+          avatarUrl: invite.fromAvatarUrl,
+          clubId: invite.fromClubId || 'club_real_madrid',
           clubName: invite.fromClubName,
           starPlayerName: invite.fromStarPlayer,
           rating: 95,
           squadIds: invite.fromSquadIds,
           formation: invite.fromFormation || '4-3-3',
+          teamSide: 'home',
           isReady: false,
+          connected: true,
         },
         guest: {
+          userId: this.currentUserId || undefined,
           clientId: this.clientId,
           username: this.currentUsername,
+          email: this.currentUserEmail || undefined,
+          avatarUrl: this.currentAvatarUrl || undefined,
           clubId: this.currentClubId,
           clubName: this.currentClubName,
+          starPlayerId: this.currentStarPlayerId,
           starPlayerName: this.currentStarPlayer,
           rating: this.currentRating,
           squadIds: this.currentSquadIds,
           formation: this.currentFormation,
+          teamSide: 'away',
           isReady: false,
+          connected: true,
         },
         status: 'ready_check',
       };
@@ -426,6 +574,8 @@ class FriendRoomServiceManager {
         starPlayerName: this.currentStarPlayer,
         squadIds: this.currentSquadIds,
         formation: this.currentFormation,
+        matchFormat: invite.matchFormat || '11v11',
+        isReady: false,
       });
     }
 
@@ -437,11 +587,115 @@ class FriendRoomServiceManager {
     });
   }
 
+  public setActiveLobbyState(lobby: OnlineMatchLobbyState | null) {
+    this.activeLobby = lobby;
+    if (lobby && lobby.roomCode) {
+      this.joinRoom({
+        roomCode: lobby.roomCode,
+        username: this.currentUsername,
+        clubId: this.currentClubId,
+        clubName: this.currentClubName,
+        starPlayerId: this.currentStarPlayerId,
+        starPlayerName: this.currentStarPlayer,
+        squadIds: this.currentSquadIds,
+        formation: this.currentFormation,
+        matchFormat: lobby.matchFormat || '11v11',
+        isReady: false,
+      });
+    }
+    this.notifyLobbyListeners();
+  }
+
+  public getActiveLobbyState(): OnlineMatchLobbyState | null {
+    return this.activeLobby;
+  }
+
+  public configureLobby(params: {
+    lobbyId: string;
+    clubId?: string;
+    clubName?: string;
+    starPlayerId?: string;
+    starPlayerName?: string;
+    formation?: string;
+    teamSide?: 'home' | 'away';
+    matchFormat?: '1v1' | '11v11';
+    settings?: Partial<OnlineLobbySettings>;
+  }) {
+    if (this.activeLobby && this.activeLobby.lobbyId === params.lobbyId) {
+      const isHost =
+        this.activeLobby.host.clientId === this.clientId ||
+        (this.currentUserId && this.activeLobby.host.userId === this.currentUserId) ||
+        this.activeLobby.host.username.toLowerCase() === this.currentUsername.toLowerCase();
+      const targetPlayer = isHost ? this.activeLobby.host : this.activeLobby.guest;
+      if (targetPlayer) {
+        if (params.clubId) targetPlayer.clubId = params.clubId;
+        if (params.clubName) targetPlayer.clubName = params.clubName;
+        if (params.starPlayerId) targetPlayer.starPlayerId = params.starPlayerId;
+        if (params.starPlayerName) targetPlayer.starPlayerName = params.starPlayerName;
+        if (params.formation) targetPlayer.formation = params.formation;
+        if (params.teamSide) {
+          targetPlayer.teamSide = params.teamSide;
+          const otherPlayer = isHost ? this.activeLobby.guest : this.activeLobby.host;
+          if (otherPlayer) {
+            otherPlayer.teamSide = params.teamSide === 'home' ? 'away' : 'home';
+          }
+        }
+      }
+      if (params.matchFormat) {
+        this.activeLobby.matchFormat = params.matchFormat;
+      }
+      if (params.settings) {
+        this.activeLobby.settings = {
+          stadiumName:
+            params.settings.stadiumName ||
+            this.activeLobby.settings?.stadiumName ||
+            'Estadio Santiago Bernabéu',
+          weather:
+            params.settings.weather || this.activeLobby.settings?.weather || 'Clear',
+          halfDurationMinutes:
+            params.settings.halfDurationMinutes ||
+            this.activeLobby.settings?.halfDurationMinutes ||
+            4,
+          aiDifficulty:
+            params.settings.aiDifficulty ||
+            this.activeLobby.settings?.aiDifficulty ||
+            'Legendary',
+        };
+      }
+      this.notifyLobbyListeners();
+      this.bc?.postMessage({ type: 'lobby:update', lobby: this.activeLobby });
+    }
+
+    const msg = {
+      type: 'lobby:configure',
+      lobbyId: params.lobbyId,
+      clientId: this.clientId,
+      userId: this.currentUserId || undefined,
+      username: this.currentUsername,
+      clubId: params.clubId,
+      clubName: params.clubName,
+      starPlayerId: params.starPlayerId,
+      starPlayerName: params.starPlayerName,
+      formation: params.formation,
+      teamSide: params.teamSide,
+      matchFormat: params.matchFormat,
+      settings: params.settings,
+    };
+    this.bc?.postMessage(msg);
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(msg));
+    }
+  }
+
   public setLobbyReady(lobbyId: string, isReady: boolean) {
     if (this.activeLobby && this.activeLobby.lobbyId === lobbyId) {
-      if (this.activeLobby.host.clientId === this.clientId) {
+      const isHost =
+        this.activeLobby.host.clientId === this.clientId ||
+        (this.currentUserId && this.activeLobby.host.userId === this.currentUserId) ||
+        this.activeLobby.host.username.toLowerCase() === this.currentUsername.toLowerCase();
+      if (isHost) {
         this.activeLobby.host.isReady = isReady;
-      } else if (this.activeLobby.guest && this.activeLobby.guest.clientId === this.clientId) {
+      } else if (this.activeLobby.guest) {
         this.activeLobby.guest.isReady = isReady;
       }
       this.notifyLobbyListeners();
@@ -452,12 +706,30 @@ class FriendRoomServiceManager {
       type: 'lobby:ready',
       lobbyId,
       clientId: this.clientId,
+      userId: this.currentUserId || undefined,
+      username: this.currentUsername,
       isReady,
     };
     this.bc?.postMessage(msg);
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg));
     }
+  }
+
+  public reconnectLobby(lobbyId: string) {
+    const msg = {
+      type: 'lobby:reconnect',
+      lobbyId,
+      clientId: this.clientId,
+      userId: this.currentUserId || undefined,
+      username: this.currentUsername,
+    };
+    this.bc?.postMessage(msg);
+    this.ensureWebSocket(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify(msg));
+      }
+    });
   }
 
   public startLobbyMatch(lobbyId: string) {
@@ -882,6 +1154,13 @@ class FriendRoomServiceManager {
     };
   }
 
+  public subscribeSocialEvents(listener: SocialEventListener): () => void {
+    this.socialEventListeners.add(listener);
+    return () => {
+      this.socialEventListeners.delete(listener);
+    };
+  }
+
   private ensureWebSocket(onOpenCallback?: () => void) {
     if (typeof window === 'undefined') return;
     if (
@@ -948,6 +1227,17 @@ class FriendRoomServiceManager {
     if (msg.type === 'presence:list') {
       this.onlinePlayers = Array.isArray(msg.players) ? msg.players : [];
       this.onlinePlayersListeners.forEach((cb) => cb(this.onlinePlayers));
+      this.socialEventListeners.forEach((cb) =>
+        cb({ type: 'presence_updated', payload: this.onlinePlayers })
+      );
+    } else if (msg.type === 'friend:request_received') {
+      this.socialEventListeners.forEach((cb) =>
+        cb({ type: 'friend_request', payload: msg.request })
+      );
+    } else if (msg.type === 'friend:request_accepted') {
+      this.socialEventListeners.forEach((cb) =>
+        cb({ type: 'friend_accepted', payload: msg.request })
+      );
     } else if (msg.type === 'presence:register') {
       if (msg.clientId && !this.onlinePlayers.some((p) => p.clientId === msg.clientId)) {
         this.onlinePlayers.push({
@@ -963,6 +1253,13 @@ class FriendRoomServiceManager {
       }
     } else if (msg.type === 'invite:received') {
       this.inviteListeners.forEach((cb) => cb(msg as IncomingMatchInvite));
+      this.socialEventListeners.forEach((cb) =>
+        cb({ type: 'invite_received', payload: msg })
+      );
+    } else if (msg.type === 'invite:declined') {
+      this.socialEventListeners.forEach((cb) =>
+        cb({ type: 'invite_declined', payload: msg })
+      );
     } else if (msg.type === 'invite:send') {
       if (
         msg.targetUsername &&
@@ -977,36 +1274,77 @@ class FriendRoomServiceManager {
           fromUsername: msg.fromUsername,
           fromClubName: msg.clubName,
           fromStarPlayer: msg.starPlayerName,
+          customMessage: msg.customMessage,
+          matchFormat: msg.matchFormat || '11v11',
+          createdAt: Date.now(),
+          expiresAt: Date.now() + 5 * 60 * 1000,
         };
         this.inviteListeners.forEach((cb) => cb(inv));
+        this.socialEventListeners.forEach((cb) =>
+          cb({ type: 'invite_received', payload: inv })
+        );
       }
     } else if (msg.type === 'invite:sent_status' && msg.lobby) {
       this.activeLobby = msg.lobby;
       this.notifyLobbyListeners();
     } else if (msg.type === 'lobby:update' && msg.lobby) {
-      if (
-        msg.lobby.host.clientId === this.clientId ||
-        msg.lobby.guest?.clientId === this.clientId
-      ) {
-        this.activeLobby = msg.lobby;
+      const lob = msg.lobby as OnlineMatchLobbyState;
+      const isParticipant =
+        lob.host.clientId === this.clientId ||
+        lob.guest?.clientId === this.clientId ||
+        (this.currentUserId &&
+          (lob.host.userId === this.currentUserId ||
+            lob.guest?.userId === this.currentUserId)) ||
+        lob.host.username.toLowerCase() === this.currentUsername.toLowerCase() ||
+        (lob.guest &&
+          lob.guest.username.toLowerCase() === this.currentUsername.toLowerCase());
+      if (isParticipant) {
+        this.activeLobby = lob;
+        if (lob.roomCode && this.currentRoomCode !== lob.roomCode) {
+          this.joinRoom({
+            roomCode: lob.roomCode,
+            username: this.currentUsername,
+            clubId: this.currentClubId,
+            clubName: this.currentClubName,
+            starPlayerId: this.currentStarPlayerId,
+            starPlayerName: this.currentStarPlayer,
+            squadIds: this.currentSquadIds,
+            formation: this.currentFormation,
+            matchFormat: lob.matchFormat || '11v11',
+            isReady: false,
+          });
+        }
         this.notifyLobbyListeners();
       }
     } else if (msg.type === 'lobby:match_starting' && msg.lobby) {
       const lob = msg.lobby as OnlineMatchLobbyState;
-      if (lob.host.clientId === this.clientId || lob.guest?.clientId === this.clientId) {
+      const isHost =
+        lob.host.clientId === this.clientId ||
+        (this.currentUserId && lob.host.userId === this.currentUserId) ||
+        lob.host.username.toLowerCase() === this.currentUsername.toLowerCase();
+      const isGuest =
+        lob.guest?.clientId === this.clientId ||
+        (this.currentUserId && lob.guest?.userId === this.currentUserId) ||
+        (lob.guest &&
+          lob.guest.username.toLowerCase() === this.currentUsername.toLowerCase());
+
+      if (isHost || isGuest) {
         this.activeLobby = lob;
         this.notifyLobbyListeners();
-        const isHost = lob.host.clientId === this.clientId;
         const myRole: 'host' | 'guest' = isHost ? 'host' : 'guest';
         const hostPlayer: FriendRoomPlayer = {
           clientId: lob.host.clientId,
           username: lob.host.username,
           clubId: lob.host.clubId,
           clubName: lob.host.clubName,
+          starPlayerId: lob.host.starPlayerId,
           starPlayerName: lob.host.starPlayerName,
           squadIds: lob.host.squadIds,
           formation: lob.host.formation,
+          matchFormat: lob.matchFormat || '11v11',
           role: 'host',
+          teamSide: lob.host.teamSide || 'home',
+          isReady: true,
         };
         const guestPlayer: FriendRoomPlayer | undefined = lob.guest
           ? {
@@ -1014,10 +1352,14 @@ class FriendRoomServiceManager {
               username: lob.guest.username,
               clubId: lob.guest.clubId,
               clubName: lob.guest.clubName,
+              starPlayerId: lob.guest.starPlayerId,
               starPlayerName: lob.guest.starPlayerName,
               squadIds: lob.guest.squadIds,
               formation: lob.guest.formation,
+              matchFormat: lob.matchFormat || '11v11',
               role: 'guest',
+              teamSide: lob.guest.teamSide || 'away',
+              isReady: true,
             }
           : undefined;
         this.matchStartListeners.forEach((cb) =>

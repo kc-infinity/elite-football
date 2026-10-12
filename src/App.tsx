@@ -3,22 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Award,
   Check,
   ChevronRight,
   CloudRain,
   Coins,
-  Copy,
   Eye,
-  Globe,
-  KeyRound,
   Moon,
   Play,
   Settings as SettingsIcon,
   Shield,
   Sliders,
+  Sparkles,
   Sun,
   Trophy,
   User,
@@ -32,11 +30,13 @@ import {
   MATCH_MODES,
   MatchModeId,
   PackDefinition,
+  PlayerRarity,
   PLAYERS_DB,
   STADIUMS,
   StadiumInfo,
   TeamData,
   TEAMS_DB,
+  UpgradeCardItem,
   WeatherType,
 } from './data/gameDatabase';
 import {
@@ -50,13 +50,6 @@ import {
 } from './engine/FootballEngine3D';
 import { SoundEngine } from './engine/SoundEngine';
 import { PlayerPhotoAvatar } from './components/PlayerPhotoAvatar';
-import {
-  FriendRoomService,
-  FriendRoomState,
-  IncomingMatchInvite,
-  OnlineMatchLobbyState,
-  OnlinePlayerPresence,
-} from './engine/FriendRoomService';
 import { MatchViewport3D } from './components/MatchViewport3D';
 import { OpponentSquadInfo, OpponentSquadPopup } from './components/OpponentSquadPopup';
 import { WorldCupAndTournaments } from './components/WorldCupAndTournaments';
@@ -69,8 +62,6 @@ import { WelcomeOnboardingScreen } from './components/WelcomeOnboardingScreen';
 import {
   AuthenticatedAccount,
   GoogleAuthModal,
-  IncomingInviteModal,
-  OnlineMatchCenter,
   PaymentCheckoutItem,
   PaymentCheckoutModal,
 } from './components/OnlineMatchAndAuthModal';
@@ -80,18 +71,35 @@ import heroStadiumImg from './assets/images/hero_stadium_backdrop_1791305638088.
 type ActiveScreen =
   | 'welcome'
   | 'home'
-  | 'online_match'
   | 'play_setup'
   | 'in_match'
   | 'world_cup'
   | 'tournaments'
   | 'my_team'
   | 'transfer_market'
+  | 'upgrades'
   | 'packs'
   | 'spin_roulette'
   | 'profile'
   | 'leaderboard'
   | 'settings';
+
+interface SavedPlayerBoost {
+  speed?: number;
+  shooting?: number;
+  shotPower?: number;
+  shotAccuracy?: number;
+  passing?: number;
+  dribbling?: number;
+  ballControl?: number;
+  physical?: number;
+  stamina?: number;
+  defending?: number;
+  rating?: number;
+  weakFoot?: number;
+  skillMoves?: number;
+  rarity?: PlayerRarity;
+}
 
 export default function App() {
   const { iconUrl } = useAppIcon();
@@ -183,36 +191,64 @@ export default function App() {
     return 'auto';
   });
 
+  // Persistent Player Upgrades & Boosts
+  const [playerUpgrades, setPlayerUpgrades] = useState<Record<string, SavedPlayerBoost>>(() => {
+    try {
+      const raw = localStorage.getItem('fe_player_upgrades_v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    return {};
+  });
+
+  const applyBoostToPlayer = (p: FootballPlayer, boosts: Record<string, SavedPlayerBoost>): FootballPlayer => {
+    const b = boosts[p.id];
+    if (!b) return p;
+    const clampStat = (val: number) => Math.min(99, Math.max(40, val));
+    return {
+      ...p,
+      rating: clampStat(p.rating + (b.rating || 0)),
+      rarity: b.rarity || p.rarity,
+      weakFoot: Math.min(5, Math.max(1, (p.weakFoot ?? 4) + (b.weakFoot || 0))) as 1 | 2 | 3 | 4 | 5,
+      skillMoves: Math.min(5, Math.max(1, (p.skillMoves ?? 4) + (b.skillMoves || 0))) as 1 | 2 | 3 | 4 | 5,
+      stats: {
+        ...p.stats,
+        speed: clampStat(p.stats.speed + (b.speed || 0)),
+        shooting: clampStat(p.stats.shooting + (b.shooting || 0)),
+        shotPower: clampStat((p.stats.shotPower ?? p.stats.shooting) + (b.shotPower || 0)),
+        shotAccuracy: clampStat((p.stats.shotAccuracy ?? p.stats.shooting) + (b.shotAccuracy || 0)),
+        passing: clampStat(p.stats.passing + (b.passing || 0)),
+        dribbling: clampStat(p.stats.dribbling + (b.dribbling || 0)),
+        ballControl: clampStat((p.stats.ballControl ?? p.stats.dribbling) + (b.ballControl || 0)),
+        physical: clampStat(p.stats.physical + (b.physical || 0)),
+        stamina: clampStat((p.stats.stamina ?? p.stats.physical) + (b.stamina || 0)),
+        defending: clampStat(p.stats.defending + (b.defending || 0)),
+      },
+    };
+  };
+
+  const allPlayers = useMemo(
+    () => PLAYERS_DB.map((p) => applyBoostToPlayer(p, playerUpgrades)),
+    [playerUpgrades]
+  );
+
+  const boostedUserSquad = useMemo(
+    () => userSquad.map((p) => applyBoostToPlayer(p, playerUpgrades)),
+    [userSquad, playerUpgrades]
+  );
+
   // Pre-match Control Guide Modal
   const [showPreMatchGuide, setShowPreMatchGuide] = useState<boolean>(false);
   const [hasSeenControlGuide, setHasSeenControlGuide] = useState<boolean>(false);
-
-  // Join Code ("PLAY-XXXX" + Online VS 11v11 Dream Team / 1v1 Room State)
-  const [onlineMatchFormat, setOnlineMatchFormat] = useState<'11v11' | '1v1'>('11v11');
   const [inspectedOpponentSquad, setInspectedOpponentSquad] = useState<OpponentSquadInfo | null>(
     null
   );
-  const [hostJoinCode, setHostJoinCode] = useState<string>(() => {
-    const saved = sessionStorage.getItem('fe_room_code');
-    if (saved) return saved;
-    const code = `PLAY-${Math.floor(1000 + Math.random() * 9000)}`;
-    sessionStorage.setItem('fe_room_code', code);
-    return code;
-  });
-  const [expectedOpponentUsername, setExpectedOpponentUsername] = useState<string>('');
-  const [joinCodeInput, setJoinCodeInput] = useState<string>('');
-  const [joinOpponentInput, setJoinOpponentInput] = useState<string>('');
-  const [activeJoinCodeMatch, setActiveJoinCodeMatch] = useState<string | undefined>(undefined);
-  const [copiedCode, setCopiedCode] = useState<boolean>(false);
-  const [friendRoomState, setFriendRoomState] = useState<FriendRoomState>(() => ({
-    roomCode: sessionStorage.getItem('fe_room_code') || 'PLAY-7492',
-    status: 'waiting_for_opponent',
-    statusLabel: 'Waiting for Opponent',
-    members: [],
-    matchStarted: false,
-  }));
 
-  // Google Auth, Online Matchmaking by Username, Lobby & App Payment State
+  // Google Auth & App Payment State
   const [authToken, setAuthToken] = useState<string | null>(() =>
     localStorage.getItem('fe_auth_token_v3')
   );
@@ -226,16 +262,6 @@ export default function App() {
   });
   const [showGoogleAuthModal, setShowGoogleAuthModal] = useState<boolean>(false);
   const [checkoutItem, setCheckoutItem] = useState<PaymentCheckoutItem | null>(null);
-  const [onlinePlayers, setOnlinePlayers] = useState<OnlinePlayerPresence[]>([]);
-  const [activeOnlineLobby, setActiveOnlineLobby] = useState<OnlineMatchLobbyState | null>(null);
-  const [incomingInvite, setIncomingInvite] = useState<IncomingMatchInvite | null>(null);
-  const [friendUsernameHomeInput, setFriendUsernameHomeInput] = useState<string>('');
-  const [lastOnlineMatchResult, setLastOnlineMatchResult] = useState<{
-    homeScore: number;
-    awayScore: number;
-    opponentName: string;
-    coinsEarned: number;
-  } | null>(null);
 
   // Tournament Progression State
   const [tournamentStageIndex, setTournamentStageIndex] = useState<number>(() => {
@@ -414,17 +440,6 @@ export default function App() {
       setAccount(updatedAcc);
       localStorage.setItem('fe_saved_account_v3', JSON.stringify(updatedAcc));
     }
-    FriendRoomService.joinRoom({
-      roomCode: friendRoomState.roomCode || hostJoinCode,
-      username: clean,
-      clubId: userTeam.id,
-      clubName: userTeam.name,
-      starPlayerId: userSquad[9]?.id,
-      starPlayerName: userSquad[9]?.name || 'Mbappé',
-      squadIds: userSquad.slice(0, 11).map((p) => p.id),
-      formation: userFormation,
-      matchFormat: onlineMatchFormat,
-    });
   };
 
   const navigateTo = (target: ActiveScreen) => {
@@ -436,39 +451,14 @@ export default function App() {
   const handleLaunchMatch = (
     modeOverride?: MatchModeId,
     opponentOverride?: TeamData,
-    tourneyLabel?: string,
-    joinCode?: string
+    tourneyLabel?: string
   ) => {
     SoundEngine.playUIClick();
-    const isOnlineMode =
-      modeOverride === 'dream_team_11v11_online' ||
-      modeOverride === 'join_code_match' ||
-      Boolean(joinCode);
-
-    // Users must successfully sign in before they can access Online Match
-    if (isOnlineMode && !account) {
-      setScreen('online_match');
-      setShowGoogleAuthModal(true);
-      return;
-    }
-
-    if (modeOverride === 'dream_team_11v11_online') {
-      setOnlineMatchFormat('11v11');
-      if (!joinCode && friendRoomState.members.length < 2 && !activeOnlineLobby?.guest) {
-        setScreen('online_match');
-        return;
-      }
-    }
-    if (modeOverride === 'join_code_match' && !joinCode && friendRoomState.members.length < 2 && !activeOnlineLobby?.guest) {
-      setScreen('online_match');
-      return;
-    }
     if (modeOverride) setSelectedMode(modeOverride);
     if (opponentOverride) setAwayTeam(opponentOverride);
     setActiveTournamentLabel(tourneyLabel);
-    setActiveJoinCodeMatch(joinCode);
 
-    if (!hasSeenControlGuide && !isOnlineMode) {
+    if (!hasSeenControlGuide) {
       setShowPreMatchGuide(true);
     } else {
       setScreen('in_match');
@@ -481,122 +471,6 @@ export default function App() {
     setShowPreMatchGuide(false);
     setScreen('in_match');
   };
-
-  const handleHostRoomWithCode = (customRoomCode: string, oppUsername: string) => {
-    const raw = customRoomCode.trim().toUpperCase() || hostJoinCode;
-    const formatted =
-      raw.startsWith('PLAY-') || !/^\d{3,6}$/.test(raw) ? raw : `PLAY-${raw}`;
-    const cleanOpp = oppUsername.trim();
-    setHostJoinCode(formatted);
-    setExpectedOpponentUsername(cleanOpp);
-    sessionStorage.setItem('fe_room_code', formatted);
-    FriendRoomService.joinRoom({
-      roomCode: formatted,
-      username: profile.username,
-      expectedOpponentUsername: cleanOpp,
-      clubId: userTeam.id,
-      clubName: userTeam.name,
-      starPlayerId: userSquad[9]?.id,
-      starPlayerName: userSquad[9]?.name || 'Mbappé',
-      squadIds: userSquad.slice(0, 11).map((p) => p.id),
-      formation: userFormation,
-      matchFormat: onlineMatchFormat,
-      isReady: true,
-    });
-  };
-
-  const handleJoinFriendRoomOnly = (
-    customCode?: string,
-    formatOverride?: '11v11' | '1v1',
-    enteredOpponentName?: string
-  ) => {
-    SoundEngine.playUIClick();
-    const raw = (customCode ?? joinCodeInput).trim().toUpperCase();
-    if (!raw) return;
-    const formatted =
-      raw.startsWith('PLAY-') || !/^\d{3,6}$/.test(raw) ? raw : `PLAY-${raw}`;
-    const cleanOpp = (enteredOpponentName ?? joinOpponentInput).trim();
-    const fmt = formatOverride || onlineMatchFormat;
-    if (formatOverride) setOnlineMatchFormat(formatOverride);
-    setJoinCodeInput(formatted);
-    setHostJoinCode(formatted);
-    if (cleanOpp) setExpectedOpponentUsername(cleanOpp);
-    sessionStorage.setItem('fe_room_code', formatted);
-    FriendRoomService.joinRoom({
-      roomCode: formatted,
-      username: profile.username,
-      enteredOpponentUsername: cleanOpp || undefined,
-      clubId: userTeam.id,
-      clubName: userTeam.name,
-      starPlayerId: userSquad[9]?.id,
-      starPlayerName: userSquad[9]?.name || 'Mbappé',
-      squadIds: userSquad.slice(0, 11).map((p) => p.id),
-      formation: userFormation,
-      matchFormat: fmt,
-      isReady: true,
-    });
-  };
-
-  const handleGenerateNewJoinCode = (oppUsername?: string) => {
-    SoundEngine.playUIClick();
-    const nextCode = `PLAY-${Math.floor(1000 + Math.random() * 9000)}`;
-    const cleanOpp = (oppUsername ?? expectedOpponentUsername).trim();
-    if (oppUsername !== undefined) setExpectedOpponentUsername(cleanOpp);
-    setHostJoinCode(nextCode);
-    setJoinCodeInput('');
-    sessionStorage.setItem('fe_room_code', nextCode);
-    FriendRoomService.joinRoom({
-      roomCode: nextCode,
-      username: profile.username,
-      expectedOpponentUsername: cleanOpp || undefined,
-      clubId: userTeam.id,
-      clubName: userTeam.name,
-      starPlayerId: userSquad[9]?.id,
-      starPlayerName: userSquad[9]?.name || 'Mbappé',
-      squadIds: userSquad.slice(0, 11).map((p) => p.id),
-      formation: userFormation,
-      matchFormat: onlineMatchFormat,
-      isReady: true,
-    });
-  };
-
-  useEffect(() => {
-    FriendRoomService.registerPresence({
-      username: profile.username,
-      clubId: userTeam.id,
-      clubName: userTeam.name,
-      starPlayerId: userSquad[9]?.id,
-      starPlayerName: userSquad[9]?.name || 'Kylian Mbappé',
-      rating: userSquad[9]?.rating || 94,
-      squadIds: userSquad.slice(0, 11).map((p) => p.id),
-      formation: userFormation,
-    });
-    if (screen !== 'in_match') {
-      FriendRoomService.joinRoom({
-        roomCode: hostJoinCode,
-        username: profile.username,
-        expectedOpponentUsername: expectedOpponentUsername || undefined,
-        clubId: userTeam.id,
-        clubName: userTeam.name,
-        starPlayerId: userSquad[9]?.id,
-        starPlayerName: userSquad[9]?.name || 'Mbappé',
-        squadIds: userSquad.slice(0, 11).map((p) => p.id),
-        formation: userFormation,
-        matchFormat: onlineMatchFormat,
-        isReady: true,
-      });
-    }
-  }, [
-    screen,
-    hostJoinCode,
-    expectedOpponentUsername,
-    profile.username,
-    userTeam.id,
-    userTeam.name,
-    userSquad,
-    userFormation,
-    onlineMatchFormat,
-  ]);
 
   // Restore Account session if token or saved email exists (keeps user permanently logged in)
   useEffect(() => {
@@ -630,6 +504,7 @@ export default function App() {
       localStorage.setItem('fe_profile_stats', JSON.stringify(profile));
       localStorage.setItem('fe_username', profile.username);
       localStorage.setItem('fe_auto_switch_mode', autoSwitchMode);
+      localStorage.setItem('fe_player_upgrades_v1', JSON.stringify(playerUpgrades));
     } catch {
       // ignore storage quota errors
     }
@@ -678,61 +553,8 @@ export default function App() {
     preferredCelebration,
     tournamentStageIndex,
     autoSwitchMode,
+    playerUpgrades,
   ]);
-
-  useEffect(() => {
-    const unsubRoom = FriendRoomService.subscribe((state) => {
-      setFriendRoomState(state);
-      const guest = state.members.find((m) => m.clientId !== FriendRoomService.getClientId());
-      if (guest) {
-        const guestClub = TEAMS_DB.find((t) => t.id === guest.clubId);
-        if (guestClub) setAwayTeam(guestClub);
-      }
-    });
-    const unsubOnline = FriendRoomService.subscribeOnlinePlayers((players) => {
-      setOnlinePlayers(players);
-    });
-    const unsubInvites = FriendRoomService.subscribeInvites((invite) => {
-      setIncomingInvite(invite);
-    });
-    const unsubLobby = FriendRoomService.subscribeLobby((lobby) => {
-      setActiveOnlineLobby(lobby);
-    });
-    const unsubStart = FriendRoomService.onMatchStart((code, role, hostPlayer, guestPlayer) => {
-      const oppPlayer = role === 'host' ? guestPlayer : hostPlayer;
-      if (oppPlayer?.clubId) {
-        const found = TEAMS_DB.find((t) => t.id === oppPlayer.clubId);
-        if (found) setAwayTeam(found);
-      }
-      const resolvedFormat = hostPlayer?.matchFormat || guestPlayer?.matchFormat || '11v11';
-      setOnlineMatchFormat(resolvedFormat);
-      setHostJoinCode(code);
-      setActiveJoinCodeMatch(code);
-      setSelectedMode(resolvedFormat === '11v11' ? 'dream_team_11v11_online' : 'join_code_match');
-      setShowPreMatchGuide(false);
-      setScreen('in_match');
-    });
-    return () => {
-      unsubRoom();
-      unsubOnline();
-      unsubInvites();
-      unsubLobby();
-      unsubStart();
-    };
-  }, []);
-
-  const handleInviteFriendByUsername = (targetUsername: string) => {
-    const clean = targetUsername.trim();
-    if (!clean) return;
-    FriendRoomService.sendInviteByUsername(clean);
-    setScreen('online_match');
-  };
-
-  const handleCopyJoinCode = () => {
-    navigator.clipboard?.writeText(hostJoinCode).catch(() => {});
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 1800);
-  };
 
   const handleMatchComplete = (result: {
     homeScore: number;
@@ -768,29 +590,34 @@ export default function App() {
     if (activeTournamentLabel && won) {
       setTournamentStageIndex((idx) => Math.min(7, idx + 1));
     }
+  };
 
-    if (selectedMode === 'join_code_match' || activeJoinCodeMatch) {
-      const oppName =
-        activeOnlineLobby?.guest?.username || awayTeam.name;
-      setLastOnlineMatchResult({
-        homeScore: result.homeScore,
-        awayScore: result.awayScore,
-        opponentName: oppName,
-        coinsEarned: result.coinsEarned,
-      });
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-      fetch('/api/matches/result', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          homeScore: result.homeScore,
-          awayScore: result.awayScore,
-          coinsEarned: result.coinsEarned,
-          lobbyId: activeOnlineLobby?.lobbyId,
-        }),
-      }).catch(() => {});
-    }
+  const handleApplyUpgradeCard = (card: UpgradeCardItem, targetPlayerId: string) => {
+    if (coins < card.price) return;
+    SoundEngine.playPackOpen();
+    setCoins((c) => Math.max(0, c - card.price));
+    setPlayerUpgrades((prev) => {
+      const curr = prev[targetPlayerId] || {};
+      return {
+        ...prev,
+        [targetPlayerId]: {
+          speed: (curr.speed || 0) + (card.statBoosts.speed || 0),
+          shooting: (curr.shooting || 0) + (card.statBoosts.shooting || 0),
+          shotPower: (curr.shotPower || 0) + (card.statBoosts.shotPower || 0),
+          shotAccuracy: (curr.shotAccuracy || 0) + (card.statBoosts.shotAccuracy || 0),
+          passing: (curr.passing || 0) + (card.statBoosts.passing || 0),
+          dribbling: (curr.dribbling || 0) + (card.statBoosts.dribbling || 0),
+          ballControl: (curr.ballControl || 0) + (card.statBoosts.ballControl || 0),
+          physical: (curr.physical || 0) + (card.statBoosts.physical || 0),
+          stamina: (curr.stamina || 0) + (card.statBoosts.stamina || 0),
+          defending: (curr.defending || 0) + (card.statBoosts.defending || 0),
+          rating: (curr.rating || 0) + (card.statBoosts.rating || 0),
+          weakFoot: (curr.weakFoot || 0) + (card.statBoosts.weakFoot || 0),
+          skillMoves: (curr.skillMoves || 0) + (card.statBoosts.skillMoves || 0),
+          rarity: card.upgradeToSpecialEdition ? 'Special Edition' : curr.rarity,
+        },
+      };
+    });
   };
 
   const handleBuyPlayer = (player: FootballPlayer) => {
@@ -886,105 +713,17 @@ export default function App() {
 
   // Fullscreen 3D Match Viewport when playing
   if (screen === 'in_match') {
-    const myClientId = FriendRoomService.getClientId();
-    const myMember = friendRoomState.members.find((m) => m.clientId === myClientId);
-    const isOnline1v1 =
-      (selectedMode === 'join_code_match' || selectedMode === 'dream_team_11v11_online') &&
-      (friendRoomState.members.length >= 2 || Boolean(activeOnlineLobby?.guest));
-
-    const hostMember =
-      friendRoomState.members.find((m) => m.role === 'host') || friendRoomState.members[0];
-    const guestMember =
-      friendRoomState.members.find((m) => m.role === 'guest') ||
-      friendRoomState.members.find((m) => m.clientId !== hostMember?.clientId);
-
-    const myRole: 'host' | 'guest' =
-      hostMember && hostMember.clientId !== myClientId ? 'guest' : 'host';
-
-    const activeOnlineFormat: '11v11' | '1v1' =
-      selectedMode === 'dream_team_11v11_online'
-        ? '11v11'
-        : friendRoomState.matchFormat || hostMember?.matchFormat || onlineMatchFormat;
-
-    const myTeamSide: 'home' | 'away' =
-      myMember?.teamSide || (myRole === 'host' ? 'home' : 'away');
-    const myAssignedSlotIdx: number =
-      typeof myMember?.assignedSlotIdx === 'number' ? myMember.assignedSlotIdx : 9;
-    const lockToAssignedPlayer =
-      activeOnlineFormat === '11v11' &&
-      (friendRoomState.members.length > 2 || typeof myMember?.assignedSlotIdx === 'number');
-
-    const resolvedHomeTeam =
-      isOnline1v1 && myRole === 'guest' && hostMember
-        ? TEAMS_DB.find((t) => t.id === hostMember.clubId) || awayTeam
-        : userTeam;
-
-    const resolvedAwayTeam =
-      isOnline1v1 && myRole === 'host' && guestMember
-        ? TEAMS_DB.find((t) => t.id === guestMember.clubId) || awayTeam
-        : isOnline1v1 && myRole === 'guest'
-        ? userTeam
-        : awayTeam;
-
-    const resolvedHomeFormation: FormationName =
-      isOnline1v1 && myRole === 'guest' && hostMember?.formation
-        ? (hostMember.formation as FormationName)
-        : userFormation;
-
-    const resolvedHomeSquad = (() => {
-      if (isOnline1v1 && myRole === 'guest' && hostMember) {
-        if (hostMember.squadIds && hostMember.squadIds.length >= 11) {
-          return hostMember.squadIds.map(
-            (id, idx) => PLAYERS_DB.find((p) => p.id === id) || PLAYERS_DB[idx % PLAYERS_DB.length]
-          );
-        }
-        const hostStar =
-          PLAYERS_DB.find(
-            (p) => p.id === hostMember.starPlayerId || p.name === hostMember.starPlayerName
-          ) || PLAYERS_DB[0];
-        const copy = [...userSquad];
-        copy[9] = hostStar;
-        return copy;
-      }
-      return userSquad;
-    })();
-
-    const opponentStarPlayerId = isOnline1v1
-      ? myRole === 'host'
-        ? guestMember?.starPlayerId ||
-          PLAYERS_DB.find((p) => p.name === guestMember?.starPlayerName)?.id
-        : userSquad[9]?.id
-      : undefined;
-
-    const opponentSquadIds = isOnline1v1
-      ? myRole === 'host'
-        ? guestMember?.squadIds
-        : userSquad.slice(0, 11).map((p) => p.id)
-      : undefined;
-
-    const opponentFormation: FormationName | undefined = isOnline1v1
-      ? myRole === 'host'
-        ? (guestMember?.formation as FormationName) || resolvedAwayTeam.defaultFormation
-        : userFormation
-      : undefined;
-
     return (
       <MatchViewport3D
         username={profile.username}
-        homeTeam={resolvedHomeTeam}
-        awayTeam={resolvedAwayTeam}
-        homeSquad={resolvedHomeSquad}
-        homeFormation={resolvedHomeFormation}
+        homeTeam={userTeam}
+        awayTeam={awayTeam}
+        homeSquad={boostedUserSquad}
+        homeFormation={userFormation}
         stadium={selectedStadium}
         weather={selectedWeather}
         mode={selectedMode}
-        difficulty={
-          isOnline1v1 ||
-          selectedMode === 'join_code_match' ||
-          selectedMode === 'dream_team_11v11_online'
-            ? 'World Class'
-            : difficulty
-        }
+        difficulty={difficulty}
         initialCamera={cameraMode}
         controlScheme={controlScheme}
         graphicsQuality={graphicsQuality}
@@ -994,27 +733,7 @@ export default function App() {
         cameraSensitivity={cameraSensitivity}
         autoSwitchMode={autoSwitchMode}
         onChangeAutoSwitchMode={setAutoSwitchMode}
-        joinCodeLabel={activeJoinCodeMatch}
         tournamentStageLabel={activeTournamentLabel}
-        onlineMatchInfo={
-          isOnline1v1
-            ? {
-                isOnline: true,
-                role: myRole,
-                roomCode: activeJoinCodeMatch || friendRoomState.roomCode || hostJoinCode,
-                hostUsername: hostMember?.username || profile.username,
-                guestUsername:
-                  guestMember?.username || activeOnlineLobby?.guest?.username || 'Opponent',
-                matchFormat: activeOnlineFormat,
-                myTeamSide,
-                myAssignedSlotIdx,
-                lockToAssignedPlayer,
-                opponentStarPlayerId,
-                opponentSquadIds,
-                opponentFormation,
-              }
-            : undefined
-        }
         onMatchComplete={handleMatchComplete}
         onNextMatch={
           activeTournamentLabel
@@ -1029,22 +748,7 @@ export default function App() {
               }
         }
         onExitToMenu={() => {
-          if (activeJoinCodeMatch) {
-            const nextCode = `PLAY-${Math.floor(1000 + Math.random() * 9000)}`;
-            setHostJoinCode(nextCode);
-            setActiveJoinCodeMatch(undefined);
-            sessionStorage.setItem('fe_room_code', nextCode);
-          }
           navigateTo('home');
-        }}
-        onReturnToOnlineLobby={() => {
-          if (activeJoinCodeMatch) {
-            const nextCode = `PLAY-${Math.floor(1000 + Math.random() * 9000)}`;
-            setHostJoinCode(nextCode);
-            setActiveJoinCodeMatch(undefined);
-            sessionStorage.setItem('fe_room_code', nextCode);
-          }
-          navigateTo('online_match');
         }}
       />
     );
@@ -1077,27 +781,26 @@ export default function App() {
         {/* Zone 2: 5 single-line clean text navigation links */}
         <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-slate-300">
           <button
-            onClick={() => navigateTo('online_match')}
-            className={`hover:text-white transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              screen === 'online_match' ? 'text-[#10B981] font-semibold' : ''
-            }`}
-          >
-            <span className="w-2 h-2 rounded-full bg-[#10B981]" />
-            Online VS
-          </button>
-          <button
             onClick={() => navigateTo('transfer_market')}
-            className={`hover:text-white transition-colors whitespace-nowrap ${
+            className={`hover:text-white transition-colors whitespace-nowrap cursor-pointer ${
               screen === 'transfer_market' || screen === 'packs'
                 ? 'text-[#F59E0B] font-semibold'
                 : ''
             }`}
           >
-            Player Cards ({PLAYERS_DB.length})
+            Player Market ({allPlayers.length})
+          </button>
+          <button
+            onClick={() => navigateTo('upgrades')}
+            className={`hover:text-white transition-colors whitespace-nowrap cursor-pointer ${
+              screen === 'upgrades' ? 'text-[#EC4899] font-semibold' : ''
+            }`}
+          >
+            Cards & Upgrades
           </button>
           <button
             onClick={() => navigateTo('spin_roulette')}
-            className={`hover:text-white transition-colors whitespace-nowrap ${
+            className={`hover:text-white transition-colors whitespace-nowrap cursor-pointer ${
               screen === 'spin_roulette' ? 'text-[#F59E0B] font-semibold' : 'text-[#F59E0B]'
             }`}
           >
@@ -1105,7 +808,7 @@ export default function App() {
           </button>
           <button
             onClick={() => navigateTo('my_team')}
-            className={`hover:text-white transition-colors whitespace-nowrap ${
+            className={`hover:text-white transition-colors whitespace-nowrap cursor-pointer ${
               screen === 'my_team' ? 'text-[#10B981] font-semibold' : ''
             }`}
           >
@@ -1113,7 +816,7 @@ export default function App() {
           </button>
           <button
             onClick={() => navigateTo('world_cup')}
-            className={`hover:text-white transition-colors whitespace-nowrap ${
+            className={`hover:text-white transition-colors whitespace-nowrap cursor-pointer ${
               screen === 'world_cup' || screen === 'tournaments'
                 ? 'text-[#F59E0B] font-semibold'
                 : ''
@@ -1121,18 +824,14 @@ export default function App() {
           >
             World Cup
           </button>
-          <button
-            onClick={() => navigateTo('play_setup')}
-            className={`hover:text-white transition-colors whitespace-nowrap ${
-              screen === 'play_setup' ? 'text-[#10B981] font-semibold' : ''
-            }`}
-          >
-            Play Modes
-          </button>
         </nav>
 
-        {/* Zone 3: 2 Primary Actions (Sign-In + ONLINE MATCH) */}
+        {/* Zone 3: 2 Primary Actions (Sign-In + PLAY MATCH) */}
         <div className="flex items-center gap-2.5">
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#111722] border border-[#F59E0B]/30 text-xs font-mono font-bold text-[#F59E0B]">
+            <Coins className="w-3.5 h-3.5" />
+            {coins.toLocaleString()}
+          </div>
           <button
             onClick={() => setShowGoogleAuthModal(true)}
             className="px-3.5 py-2 text-xs font-display font-bold text-white bg-[#111722] border border-white/15 rounded-lg hover:border-[#10B981] transition-colors whitespace-nowrap shrink-0 flex items-center gap-2 cursor-pointer"
@@ -1143,10 +842,11 @@ export default function App() {
             {account ? `@${account.username} ✓` : 'Sign In'}
           </button>
           <button
-            onClick={() => navigateTo('online_match')}
-            className="px-4 py-2 text-xs font-display font-bold text-[#070A0E] bg-[#10B981] rounded-lg hover:bg-[#059669] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            onClick={() => navigateTo('play_setup')}
+            className="px-4 py-2 text-xs font-display font-bold text-[#070A0E] bg-[#10B981] rounded-lg hover:bg-[#059669] transition-colors whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5"
           >
-            ONLINE MATCH
+            <Play className="w-3.5 h-3.5 fill-current" />
+            PLAY MATCH
           </button>
         </div>
       </header>
@@ -1154,12 +854,12 @@ export default function App() {
       {/* Mobile-Friendly Quick Nav Strip */}
       <div className="lg:hidden flex items-center gap-2 overflow-x-auto px-4 py-2.5 bg-[#111722] border-b border-white/10 text-xs font-display font-bold">
         <button
-          onClick={() => navigateTo('online_match')}
+          onClick={() => navigateTo('play_setup')}
           className={`px-3 py-1.5 rounded-lg whitespace-nowrap ${
-            screen === 'online_match' ? 'bg-[#10B981] text-[#070A0E]' : 'text-slate-300'
+            screen === 'play_setup' ? 'bg-[#10B981] text-[#070A0E]' : 'text-slate-300'
           }`}
         >
-          Online VS
+          Play Match
         </button>
         <button
           onClick={() => navigateTo('transfer_market')}
@@ -1167,7 +867,15 @@ export default function App() {
             screen === 'transfer_market' ? 'bg-[#F59E0B] text-[#070A0E]' : 'text-slate-300'
           }`}
         >
-          Player Cards ({PLAYERS_DB.length})
+          Player Market ({allPlayers.length})
+        </button>
+        <button
+          onClick={() => navigateTo('upgrades')}
+          className={`px-3 py-1.5 rounded-lg whitespace-nowrap ${
+            screen === 'upgrades' ? 'bg-[#EC4899] text-white' : 'text-[#EC4899]'
+          }`}
+        >
+          Cards & Upgrades
         </button>
         <button
           onClick={() => navigateTo('spin_roulette')}
@@ -1192,14 +900,6 @@ export default function App() {
           }`}
         >
           World Cup
-        </button>
-        <button
-          onClick={() => navigateTo('play_setup')}
-          className={`px-3 py-1.5 rounded-lg whitespace-nowrap ${
-            screen === 'play_setup' ? 'bg-[#10B981] text-[#070A0E]' : 'text-slate-300'
-          }`}
-        >
-          Play Modes
         </button>
         <button
           onClick={() => navigateTo('settings')}
@@ -1257,61 +957,53 @@ export default function App() {
                   </p>
 
                   <p className="text-sm sm:text-base text-slate-300 max-w-xl leading-relaxed">
-                    Experience responsive 3D pitch gameplay with Magnus curved shots, fluid skill moves, manual goalkeeper saves, 8 international & club tournaments, and a live transfer market. Best experienced on Desktop with Keyboard + Mouse.
+                    Experience authentic 3D stadium football with realistic player faces, precision passing & through balls, Magnus finesse shots, overhead volleys, player upgrade cards, and a full Coin Transfer Market.
                   </p>
 
-                  {/* Primary Hero CTA Grid (Including ONLINE VS) */}
+                  {/* Primary Hero CTA Grid (Neatly arranged 4-column layout) */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
                     <button
                       onClick={() => navigateTo('play_setup')}
-                      className="py-3.5 px-4 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg whitespace-nowrap cursor-pointer"
+                      className="col-span-1 sm:col-span-2 py-3.5 px-5 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg whitespace-nowrap cursor-pointer"
                     >
                       <Play className="w-4 h-4 fill-current" />
-                      PLAY NOW
-                    </button>
-
-                    <button
-                      onClick={() => navigateTo('online_match')}
-                      className="py-3.5 px-4 bg-[#38BDF8] hover:bg-[#0284C7] text-[#070A0E] font-display font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg whitespace-nowrap cursor-pointer"
-                    >
-                      <Globe className="w-4 h-4" />
-                      ONLINE VS
+                      PLAY MATCH NOW
                     </button>
 
                     <button
                       onClick={() => navigateTo('world_cup')}
-                      className="col-span-2 sm:col-span-2 py-3.5 px-5 bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E] font-display font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg whitespace-nowrap cursor-pointer"
+                      className="col-span-1 sm:col-span-2 py-3.5 px-5 bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E] font-display font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg whitespace-nowrap cursor-pointer"
                     >
                       <Trophy className="w-4 h-4" />
-                      WORLD CUP
+                      WORLD CUP TOURNAMENT
                     </button>
 
                     <button
                       onClick={() => handleLaunchMatch('quick_match')}
-                      className="py-3 px-4 bg-[#111722]/90 hover:bg-[#192231] border border-white/15 rounded-xl font-display font-semibold text-xs text-white transition-colors whitespace-nowrap"
+                      className="py-3 px-4 bg-[#111722]/90 hover:bg-[#192231] border border-white/15 rounded-xl font-display font-semibold text-xs text-white transition-colors whitespace-nowrap cursor-pointer"
                     >
                       QUICK MATCH
-                    </button>
-
-                    <button
-                      onClick={() => navigateTo('tournaments')}
-                      className="py-3 px-4 bg-[#111722]/90 hover:bg-[#192231] border border-white/15 rounded-xl font-display font-semibold text-xs text-white transition-colors whitespace-nowrap"
-                    >
-                      TOURNAMENTS
-                    </button>
-
-                    <button
-                      onClick={() => navigateTo('my_team')}
-                      className="py-3 px-4 bg-[#111722]/90 hover:bg-[#192231] border border-[#10B981]/50 rounded-xl font-display font-semibold text-xs text-[#10B981] transition-colors whitespace-nowrap"
-                    >
-                      DREAM TEAM (11V11)
                     </button>
 
                     <button
                       onClick={() => navigateTo('transfer_market')}
                       className="py-3 px-4 bg-[#111722]/90 hover:bg-[#192231] border border-[#F59E0B]/40 rounded-xl font-display font-semibold text-xs text-[#F59E0B] transition-colors whitespace-nowrap cursor-pointer"
                     >
-                      PLAYER CARDS ({PLAYERS_DB.length})
+                      PLAYER MARKET ({allPlayers.length})
+                    </button>
+
+                    <button
+                      onClick={() => navigateTo('upgrades')}
+                      className="py-3 px-4 bg-[#111722]/90 hover:bg-[#192231] border border-[#EC4899]/50 rounded-xl font-display font-semibold text-xs text-[#EC4899] transition-colors whitespace-nowrap cursor-pointer"
+                    >
+                      CARDS & UPGRADES
+                    </button>
+
+                    <button
+                      onClick={() => navigateTo('my_team')}
+                      className="py-3 px-4 bg-[#111722]/90 hover:bg-[#192231] border border-[#10B981]/50 rounded-xl font-display font-semibold text-xs text-[#10B981] transition-colors whitespace-nowrap cursor-pointer"
+                    >
+                      DREAM TEAM (11V11)
                     </button>
 
                     <button
@@ -1322,188 +1014,127 @@ export default function App() {
                     </button>
 
                     <button
-                      onClick={() => navigateTo('leaderboard')}
-                      className="py-3 px-4 bg-[#111722]/90 hover:bg-[#192231] border border-white/15 rounded-xl font-display font-semibold text-xs text-white transition-colors whitespace-nowrap"
+                      onClick={() => navigateTo('tournaments')}
+                      className="py-3 px-4 bg-[#111722]/90 hover:bg-[#192231] border border-white/15 rounded-xl font-display font-semibold text-xs text-white transition-colors whitespace-nowrap cursor-pointer"
                     >
-                      LEADERBOARD
+                      TOURNAMENTS
                     </button>
 
                     <button
                       onClick={() => navigateTo('packs')}
-                      className="py-3 px-4 bg-[#111722]/90 hover:bg-[#192231] border border-white/15 rounded-xl font-display font-semibold text-xs text-[#F59E0B] transition-colors whitespace-nowrap"
+                      className="py-3 px-4 bg-[#111722]/90 hover:bg-[#192231] border border-white/15 rounded-xl font-display font-semibold text-xs text-[#F59E0B] transition-colors whitespace-nowrap cursor-pointer"
                     >
                       PLAYER PACKS
                     </button>
 
                     <button
                       onClick={() => navigateTo('profile')}
-                      className="py-3 px-4 bg-[#111722]/90 hover:bg-[#192231] border border-white/15 rounded-xl font-display font-semibold text-xs text-[#38BDF8] transition-colors whitespace-nowrap"
+                      className="py-3 px-4 bg-[#111722]/90 hover:bg-[#192231] border border-white/15 rounded-xl font-display font-semibold text-xs text-[#38BDF8] transition-colors whitespace-nowrap cursor-pointer"
                     >
                       PLAYER PROFILE
                     </button>
                   </div>
                 </div>
 
-                {/* Right 5 Cols: SIMPLE ROOM CODE ONLINE MATCH CARD */}
+                {/* Right 5 Cols: DREAM SQUAD & MARKET SHOWCASE CARD */}
                 <div className="lg:col-span-5">
                   <div className="bg-[#111722]/95 backdrop-blur-xl border border-white/15 rounded-2xl p-6 space-y-4 shadow-2xl">
                     <div className="flex items-center justify-between border-b border-white/10 pb-3.5">
                       <div>
-                        <div className="text-xs font-mono text-[#10B981] flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-[#10B981]" />
-                          ONLINE MATCH · ROOM CODE
+                        <div className="text-xs font-mono text-[#F59E0B] flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-[#F59E0B]" />
+                          ACTIVE CLUB & LEAD SUPERSTAR
                         </div>
                         <h2 className="font-display text-xl font-bold text-white">
-                          Online Match Lobby
+                          {userTeam.name} ({userFormation})
                         </h2>
                       </div>
+                      <div className="px-3 py-1.5 rounded-lg bg-[#070A0E] border border-[#F59E0B]/40 font-mono text-xs font-bold text-[#F59E0B] flex items-center gap-1.5">
+                        <Coins className="w-3.5 h-3.5" />
+                        {coins.toLocaleString()} Coins
+                      </div>
+                    </div>
+
+                    {/* Active Lead Superstar Preview */}
+                    {(() => {
+                      const star = boostedUserSquad[9] || allPlayers[0];
+                      return (
+                        <div className="p-4 rounded-xl bg-[#070A0E] border border-white/10 flex items-center gap-4">
+                          <PlayerPhotoAvatar
+                            player={star}
+                            className="w-20 h-20 rounded-xl border border-[#F59E0B]/50 shrink-0 shadow-lg"
+                            showPositionBadge={true}
+                            showRatingBadge={true}
+                          />
+                          <div className="flex-1 min-w-0 space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-display text-lg font-bold text-white truncate">
+                                {star.name}
+                              </span>
+                              <span className="text-[11px] font-mono font-bold text-[#10B981]">
+                                {star.rarity.toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="text-xs text-slate-400">
+                              {star.nationality} · {star.club} · #{star.number}
+                            </div>
+                            <div className="grid grid-cols-4 gap-1.5 pt-1 font-mono text-[11px]">
+                              <div className="bg-[#111722] rounded px-2 py-1 text-center">
+                                <span className="text-slate-400 block text-[9px]">SPD</span>
+                                <span className="text-[#10B981] font-bold">{star.stats.speed}</span>
+                              </div>
+                              <div className="bg-[#111722] rounded px-2 py-1 text-center">
+                                <span className="text-slate-400 block text-[9px]">SHO</span>
+                                <span className="text-[#F59E0B] font-bold">{star.stats.shooting}</span>
+                              </div>
+                              <div className="bg-[#111722] rounded px-2 py-1 text-center">
+                                <span className="text-slate-400 block text-[9px]">PAS</span>
+                                <span className="text-[#38BDF8] font-bold">{star.stats.passing}</span>
+                              </div>
+                              <div className="bg-[#111722] rounded px-2 py-1 text-center">
+                                <span className="text-slate-400 block text-[9px]">DRI</span>
+                                <span className="text-white font-bold">{star.stats.dribbling}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Quick Squad & Market Actions */}
+                    <div className="grid grid-cols-2 gap-2.5">
                       <button
-                        onClick={() => navigateTo('online_match')}
-                        className="px-3 py-1.5 bg-[#10B981]/20 hover:bg-[#10B981] text-[#10B981] hover:text-[#070A0E] border border-[#10B981]/40 rounded-lg font-display font-bold text-xs transition-colors cursor-pointer"
+                        onClick={() => navigateTo('transfer_market')}
+                        className="py-2.5 px-3 bg-[#F59E0B]/15 hover:bg-[#F59E0B] text-[#F59E0B] hover:text-[#070A0E] border border-[#F59E0B]/40 rounded-xl font-display font-bold text-xs transition-colors cursor-pointer"
                       >
-                        OPEN ONLINE MATCH →
+                        BUY PLAYERS IN MARKET
+                      </button>
+                      <button
+                        onClick={() => navigateTo('upgrades')}
+                        className="py-2.5 px-3 bg-[#EC4899]/15 hover:bg-[#EC4899] text-[#EC4899] hover:text-white border border-[#EC4899]/40 rounded-xl font-display font-bold text-xs transition-colors cursor-pointer"
+                      >
+                        UPGRADE PLAYER STATS
                       </button>
                     </div>
 
-                    {!account ? (
-                      <div className="p-5 rounded-xl bg-[#070A0E] border border-white/10 text-center space-y-3">
-                        <div className="text-xs font-mono text-[#F59E0B] font-bold">
-                          SIGN IN REQUIRED
-                        </div>
-                        <p className="text-xs text-slate-300 leading-relaxed">
-                          Sign in with Google or Email + Password and enter your Username to create or join an Online Match Room Code.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setShowGoogleAuthModal(true)}
-                          className="w-full py-3 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-xs rounded-xl transition-colors cursor-pointer"
-                        >
-                          SIGN IN TO PLAY ONLINE
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        {/* 0. Your Username Input */}
-                        <div>
-                          <label className="block text-[11px] font-mono text-[#10B981] font-bold mb-1">
-                            YOUR USERNAME
-                          </label>
-                          <div className="relative">
-                            <User className="w-3.5 h-3.5 text-[#10B981] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                            <input
-                              type="text"
-                              value={profile.username}
-                              onChange={(e) => handleUpdateUsername(e.target.value)}
-                              placeholder="Enter your username..."
-                              maxLength={32}
-                              className="w-full bg-[#070A0E] border border-white/20 focus:border-[#10B981] rounded-xl pl-9 pr-3 py-2 font-display font-bold text-xs text-white focus:outline-none"
-                            />
-                          </div>
-                        </div>
-
-                        {/* 1. Host Room Code + Opponent Username */}
-                        <div className="p-3.5 rounded-xl bg-[#070A0E] border border-white/10 space-y-2.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-[10px] font-mono text-[#10B981] font-bold">
-                              HOST MATCH (ROOM CODE + OPPONENT USERNAME)
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={handleCopyJoinCode}
-                                className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-[11px] font-mono text-white cursor-pointer"
-                              >
-                                {copiedCode ? 'Copied' : 'Copy'}
-                              </button>
-                              <button
-                                onClick={() => handleGenerateNewJoinCode()}
-                                className="px-2 py-1 bg-[#10B981]/20 hover:bg-[#10B981]/30 text-[#10B981] rounded text-[11px] font-mono font-bold cursor-pointer"
-                              >
-                                New Code
-                              </button>
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <input
-                              type="text"
-                              value={hostJoinCode}
-                              onChange={(e) =>
-                                handleHostRoomWithCode(e.target.value, expectedOpponentUsername)
-                              }
-                              placeholder="Room Code"
-                              className="w-full bg-[#111722] border border-[#10B981]/40 rounded-lg px-3 py-2 font-mono text-xs font-bold text-[#10B981] uppercase tracking-wider focus:outline-none focus:border-[#10B981]"
-                            />
-                            <input
-                              type="text"
-                              value={expectedOpponentUsername}
-                              onChange={(e) =>
-                                handleHostRoomWithCode(hostJoinCode, e.target.value)
-                              }
-                              placeholder="Opponent Username..."
-                              className="w-full bg-[#111722] border border-white/20 rounded-lg px-3 py-2 font-display text-xs font-bold text-white focus:outline-none focus:border-[#10B981]"
-                            />
-                          </div>
-                        </div>
-
-                        {/* 2. Opponent Joins with Same Room Code + Username */}
-                        <div className="p-3.5 rounded-xl bg-[#070A0E] border border-white/10 space-y-2.5">
-                          <div className="text-[10px] font-mono text-[#F59E0B] font-bold">
-                            JOIN MATCH (SAME ROOM CODE + USERNAME)
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <input
-                              type="text"
-                              value={joinCodeInput}
-                              onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
-                              placeholder="Same Room Code"
-                              className="w-full bg-[#111722] border border-white/20 rounded-lg px-3 py-2 font-mono text-xs font-bold text-white tracking-wider uppercase focus:outline-none focus:border-[#F59E0B]"
-                            />
-                            <input
-                              type="text"
-                              value={joinOpponentInput}
-                              onChange={(e) => setJoinOpponentInput(e.target.value)}
-                              placeholder="Same Username..."
-                              className="w-full bg-[#111722] border border-white/20 rounded-lg px-3 py-2 font-display text-xs font-bold text-white focus:outline-none focus:border-[#F59E0B]"
-                            />
-                          </div>
-                          <button
-                            onClick={() => {
-                              handleJoinFriendRoomOnly(
-                                joinCodeInput,
-                                onlineMatchFormat,
-                                joinOpponentInput
-                              );
-                            }}
-                            className="w-full py-2.5 bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E] font-display font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
-                          >
-                            <Play className="w-3.5 h-3.5 fill-current" />
-                            JOIN & START MATCH AUTOMATICALLY
-                          </button>
-                        </div>
-
-                        {/* 3. Connected Players & Instant Auto-Start Status */}
-                        <div className="p-3 bg-[#070A0E]/80 border border-white/10 rounded-xl flex items-center justify-between text-[11px] font-mono">
-                          <span className="text-slate-300">
-                            {friendRoomState.members.length >= 2
-                              ? 'BOTH CONNECTED — STARTING MATCH!'
-                              : expectedOpponentUsername
-                              ? `Waiting for @${expectedOpponentUsername} (${Math.max(1, friendRoomState.members.length)}/2)`
-                              : `Waiting for Opponent (${Math.max(1, friendRoomState.members.length)}/2)`}
-                          </span>
-                          <span className="text-[#10B981] font-bold">AUTO-START ON</span>
-                        </div>
-                      </>
-                    )}
+                    <button
+                      onClick={() => handleLaunchMatch('quick_match', awayTeam)}
+                      className="w-full py-3.5 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-xs sm:text-sm rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      KICK OFF 3D STADIUM MATCH ({userTeam.shortName} VS {awayTeam.shortName})
+                    </button>
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* ALL 9 PLAYABLE MATCH MODES SECTION */}
+            {/* ALL PLAYABLE MATCH MODES SECTION */}
             <section className="max-w-7xl mx-auto px-6">
               <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
                 <div>
                   <div className="text-xs font-mono text-[#10B981] mb-1">
-                    9 PLAYABLE 3D GAMEPLAY MODES
+                    {MATCH_MODES.length} PLAYABLE 3D GAMEPLAY MODES
                   </div>
                   <h2 className="font-display text-2xl sm:text-3xl font-bold text-white">
                     SELECT YOUR MATCH MODE
@@ -1514,7 +1145,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
                 {MATCH_MODES.map((m) => (
                   <div
                     key={m.id}
@@ -1538,7 +1169,7 @@ export default function App() {
 
                     <button
                       onClick={() => handleLaunchMatch(m.id)}
-                      className="w-full py-2.5 bg-white/10 hover:bg-[#10B981] text-white hover:text-[#070A0E] font-display font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-2"
+                      className="w-full py-2.5 bg-white/10 hover:bg-[#10B981] text-white hover:text-[#070A0E] font-display font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <Play className="w-3.5 h-3.5 fill-current" />
                       LAUNCH {m.title.toUpperCase()}
@@ -1559,12 +1190,12 @@ export default function App() {
                     Instant To Learn, Deep Mastery On The Pitch
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                    Control your footballers with responsive keyboard movement while using the mouse to aim through-balls, crosses, and Magnus curved shots into the top corner.
+                    Control your footballers with responsive keyboard movement while using the mouse to aim short passes, through balls, lofted crosses, power shots, finesse curlers, chip shots, and overhead volleys.
                   </p>
                   <div className="pt-2">
                     <button
                       onClick={() => navigateTo('settings')}
-                      className="px-4 py-2.5 bg-white/10 hover:bg-white/15 text-xs font-display font-bold text-white rounded-lg transition-colors"
+                      className="px-4 py-2.5 bg-white/10 hover:bg-white/15 text-xs font-display font-bold text-white rounded-lg transition-colors cursor-pointer"
                     >
                       CUSTOMIZE KEYBINDINGS & CAMERA
                     </button>
@@ -1573,15 +1204,15 @@ export default function App() {
 
                 <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-3 font-mono text-xs">
                   {[
-                    { key: 'P', action: 'Accurate Pass', sub: 'Pinpoint Pass to Teammate' },
-                    { key: 'S', action: 'Shoot (Hold Power)', sub: 'Normal & Power Shots' },
-                    { key: 'B', action: 'Bicycle Kick', sub: 'Acrobatic Overhead Volley' },
-                    { key: 'F / Middle-Click', action: 'Rainbow Flick', sub: 'Arc Ball Over Defender' },
-                    { key: 'C', action: 'Curve Shot', sub: 'Magnus Spin Bending' },
-                    { key: 'K', action: 'Skill Move', sub: 'Roulette, Elastico, Step-over' },
-                    { key: 'I', action: 'Sprint Boost', sub: 'High-Speed Breakaway' },
-                    { key: 'W / O / A / D', action: 'Move Footballer', sub: 'Desktop Keys or Mobile Pad' },
-                    { key: 'V / Q', action: 'GK Save & Switch', sub: 'Manual GK Dive / Switch Player' },
+                    { key: 'P / E', action: 'Short & Through Pass', sub: 'Pinpoint Pass / Through Ball' },
+                    { key: 'S', action: 'Normal & Power Shot', sub: 'Hold for Power Bar Timing' },
+                    { key: 'C / L', action: 'Finesse & Chip Shot', sub: 'Magnus Curl / Lob Keeper' },
+                    { key: 'B', action: 'Volley & Overhead Kick', sub: 'Acrobatic Aerial Finish' },
+                    { key: 'F / K', action: 'Rainbow Flick & Skills', sub: 'Stepovers, Roulette, Fake Shot' },
+                    { key: 'O', action: 'Lofted Cross / Header', sub: 'Whipped Cross Into The Box' },
+                    { key: 'I', action: 'Sprint Boost', sub: 'Explosive Pace Breakaway' },
+                    { key: 'W / A / S / D', action: '360° Movement', sub: 'Natural Stride & Turning' },
+                    { key: 'V / Q', action: 'GK Dive & Switch', sub: 'Manual GK Save / Switch Player' },
                   ].map((ctrl) => (
                     <div
                       key={ctrl.key}
@@ -1598,67 +1229,6 @@ export default function App() {
               </div>
             </section>
           </div>
-        )}
-
-        {/* SCREEN 1B: ONLINE VS 11V11 DREAM TEAM & 1V1 MULTIPLAYER ARENA */}
-        {screen === 'online_match' && (
-          <OnlineMatchCenter
-            username={profile.username}
-            account={account}
-            userTeam={userTeam}
-            awayTeam={awayTeam}
-            leadStar={userSquad[9] || PLAYERS_DB[0]}
-            userSquad={userSquad}
-            onlinePlayers={onlinePlayers}
-            activeLobby={activeOnlineLobby}
-            friendRoomState={friendRoomState}
-            roomCode={hostJoinCode}
-            onlineMatchFormat={onlineMatchFormat}
-            userFormation={userFormation}
-            userSquadOvr={Math.round(
-              userSquad.slice(0, 11).reduce((acc, p) => acc + p.rating, 0) / 11
-            )}
-            lastMatchResult={lastOnlineMatchResult}
-            onSelectOnlineMatchFormat={(fmt) => setOnlineMatchFormat(fmt)}
-            onEditDreamTeam={() => navigateTo('my_team')}
-            onOpenGoogleAuth={() => setShowGoogleAuthModal(true)}
-            onSuccessAuth={(acc, token) => {
-              setAuthToken(token);
-              localStorage.setItem('fe_auth_token_v3', token);
-              applyServerUserProgress(acc);
-            }}
-            onUpdateUsername={handleUpdateUsername}
-            onCreateNewRoom={(oppName) => handleGenerateNewJoinCode(oppName)}
-            onHostRoomWithCode={handleHostRoomWithCode}
-            onJoinRoomByCode={(enteredCode, enteredOppName) => {
-              handleJoinFriendRoomOnly(enteredCode, undefined, enteredOppName);
-            }}
-            onInviteByUsername={handleInviteFriendByUsername}
-            onToggleLobbyReady={(lobbyId, nextReady) => {
-              FriendRoomService.setLobbyReady(lobbyId, nextReady);
-            }}
-            onStartOnlineMatch={(oppTeam, roomCodeLabel) => {
-              FriendRoomService.triggerStartMatch(roomCodeLabel);
-              handleLaunchMatch(
-                onlineMatchFormat === '11v11' ? 'dream_team_11v11_online' : 'join_code_match',
-                oppTeam,
-                undefined,
-                roomCodeLabel
-              );
-            }}
-            onQuickMatchmaking={() => {
-              FriendRoomService.joinMatchmakingQueue({
-                username: profile.username,
-                clubId: userTeam.id,
-                clubName: userTeam.name,
-                starPlayerId: userSquad[9]?.id,
-                starPlayerName: userSquad[9]?.name || 'Mbappé',
-                squadIds: userSquad.slice(0, 11).map((p) => p.id),
-                formation: userFormation,
-                matchFormat: onlineMatchFormat,
-              });
-            }}
-          />
         )}
 
         {/* SCREEN 2: PLAY NOW / QUICK MATCH 3-STEP SETUP LOBBY */}
@@ -1737,18 +1307,12 @@ export default function App() {
                           type="button"
                           onClick={() => {
                             SoundEngine.playUIClick();
-                            const opp = friendRoomState.members.find(
-                              (m) => m.clientId !== FriendRoomService.getClientId()
-                            );
                             setInspectedOpponentSquad({
-                              username: opp?.username || awayTeam.name,
-                              clubName: opp?.clubName || awayTeam.name,
+                              username: awayTeam.name,
+                              clubName: awayTeam.name,
                               clubPrimaryColor: awayTeam.primaryColor,
                               clubSecondaryColor: awayTeam.secondaryColor,
-                              starPlayerName: opp?.starPlayerName,
-                              starPlayerId: opp?.starPlayerId,
-                              squadIds: opp?.squadIds,
-                              formation: opp?.formation || awayTeam.defaultFormation || '4-3-3',
+                              formation: awayTeam.defaultFormation || '4-3-3',
                             });
                           }}
                           className="px-2 py-0.5 rounded bg-[#38BDF8]/15 hover:bg-[#38BDF8]/25 border border-[#38BDF8]/40 text-[#38BDF8] font-mono text-[10px] font-bold flex items-center gap-1 cursor-pointer"
@@ -1834,7 +1398,7 @@ export default function App() {
 
                     {/* Unlocked Players (Realistic eFootball Player Photos on Player Selection Screen) */}
                     <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
-                      {PLAYERS_DB.filter((p) => unlockedPlayerIds.includes(p.id) && p.position !== 'GK').map(
+                      {allPlayers.filter((p) => unlockedPlayerIds.includes(p.id) && p.position !== 'GK').map(
                         (p) => {
                           const isLead = userSquad[9]?.id === p.id;
                           return (
@@ -1885,13 +1449,13 @@ export default function App() {
                     </div>
 
                     {/* Locked World Cup Superstars (Messi, Mbappé, Ronaldo, Neymar, etc.) */}
-                    {PLAYERS_DB.some((p) => !unlockedPlayerIds.includes(p.id)) && (
+                    {allPlayers.some((p) => !unlockedPlayerIds.includes(p.id)) && (
                       <div>
                         <div className="text-xs font-mono text-[#F59E0B] font-bold mb-2">
                           UNLOCK FAMOUS WORLD CUP STARS WITH IN-GAME MONEY:
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                          {PLAYERS_DB.filter((p) => !unlockedPlayerIds.includes(p.id))
+                          {allPlayers.filter((p) => !unlockedPlayerIds.includes(p.id))
                             .slice(0, 8)
                             .map((star) => {
                               const canAfford = coins >= star.price;
@@ -2096,9 +1660,10 @@ export default function App() {
           />
         )}
 
-        {/* SCREEN 5, 6, 7, 7B: MY TEAM (DREAM TEAM 11V11), PLAYER STORE (TRANSFER MARKET), 50-STAR SPIN & PLAYER PACKS */}
+        {/* SCREEN 5, 6, 7, 7B: MY TEAM (DREAM TEAM 11V11), PLAYER MARKET, UPGRADES, 50-STAR SPIN & PLAYER PACKS */}
         {(screen === 'my_team' ||
           screen === 'transfer_market' ||
+          screen === 'upgrades' ||
           screen === 'packs' ||
           screen === 'spin_roulette') && (
           <MyTeamAndMarket
@@ -2106,7 +1671,8 @@ export default function App() {
             coins={coins}
             userTeam={userTeam}
             userFormation={userFormation}
-            userSquad={userSquad}
+            userSquad={boostedUserSquad}
+            allPlayers={allPlayers}
             unlockedPlayerIds={unlockedPlayerIds}
             captainId={captainId}
             preferredCelebration={preferredCelebration}
@@ -2116,32 +1682,9 @@ export default function App() {
             onSelectCaptain={setCaptainId}
             onSelectCelebration={setPreferredCelebration}
             onBuyPlayer={handleBuyPlayer}
+            onApplyUpgradeCard={handleApplyUpgradeCard}
             onOpenPack={handleOpenPack}
             onSpinRoulette={handleSpinRoulette}
-            roomCode={friendRoomState.roomCode || hostJoinCode}
-            friendRoomStatus={friendRoomState.statusLabel || 'Waiting for Opponent'}
-            friendRoomMembersCount={Math.max(1, friendRoomState.members.length)}
-            onPlayDreamTeamOnline={() => {
-              setOnlineMatchFormat('11v11');
-              navigateTo('online_match');
-            }}
-            onQuickMatchDreamTeamOnline={() => {
-              setOnlineMatchFormat('11v11');
-              FriendRoomService.joinMatchmakingQueue({
-                username: profile.username,
-                clubId: userTeam.id,
-                clubName: userTeam.name,
-                starPlayerId: userSquad[9]?.id,
-                starPlayerName: userSquad[9]?.name || 'Mbappé',
-                squadIds: userSquad.slice(0, 11).map((p) => p.id),
-                formation: userFormation,
-                matchFormat: '11v11',
-              });
-              navigateTo('online_match');
-            }}
-            onJoinDreamTeamRoomCode={(enteredCode) => {
-              handleJoinFriendRoomOnly(enteredCode, '11v11');
-            }}
             onPlayDreamTeamOffline={() => {
               handleLaunchMatch('quick_match', awayTeam);
             }}
@@ -2275,7 +1818,7 @@ export default function App() {
         </div>
       )}
 
-      {/* GLOBAL MODALS: GOOGLE SIGN-IN, INCOMING FRIEND INVITE, AND APP PAYMENT CHECKOUT */}
+      {/* GLOBAL MODALS: GOOGLE SIGN-IN AND APP PAYMENT CHECKOUT */}
       <GoogleAuthModal
         isOpen={showGoogleAuthModal}
         currentUsername={profile.username}
@@ -2294,21 +1837,6 @@ export default function App() {
           localStorage.removeItem('fe_auth_token_v3');
           localStorage.removeItem('fe_user_email_v3');
           localStorage.removeItem('fe_saved_account_v3');
-        }}
-      />
-
-      <IncomingInviteModal
-        invite={incomingInvite}
-        onAccept={(inv) => {
-          SoundEngine.playUIClick();
-          FriendRoomService.respondToInvite(inv.lobbyId, true, inv);
-          setIncomingInvite(null);
-          setScreen('online_match');
-        }}
-        onDecline={(inv) => {
-          SoundEngine.playUIClick();
-          FriendRoomService.respondToInvite(inv.lobbyId, false, inv);
-          setIncomingInvite(null);
         }}
       />
 

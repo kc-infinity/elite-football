@@ -82,6 +82,17 @@ export const EFOOTBALL_RARITY_THEMES: Record<PlayerRarity, RarityTheme> = {
       'linear-gradient(125deg, rgba(148,163,184,0.16) 0%, rgba(255,255,255,0.05) 50%, rgba(148,163,184,0.12) 100%)',
     stars: 3,
   },
+  'Special Edition': {
+    accent: '#EC4899',
+    secondary: '#F9A8D4',
+    badgeLabel: 'SPECIAL EDITION · 99',
+    cardSeries: 'SPECIAL EDITION ICON',
+    bgGradient: 'linear-gradient(155deg, #3B0728 0%, #240D47 50%, #090D16 100%)',
+    borderGlow: '0 0 32px rgba(236, 72, 153, 0.55)',
+    foilGradient:
+      'linear-gradient(125deg, rgba(236,72,153,0.32) 0%, rgba(245,158,11,0.18) 50%, rgba(56,189,248,0.22) 100%)',
+    stars: 5,
+  },
 };
 
 function getStatBadgeColor(val: number): string {
@@ -120,13 +131,32 @@ export const EFootballPlayerCard: React.FC<EFootballPlayerCardProps> = ({
   const theme = EFOOTBALL_RARITY_THEMES[player.rarity] || EFOOTBALL_RARITY_THEMES.Rare;
   const starCount = player.rating >= 90 ? 5 : player.rating >= 85 ? 4 : 3;
 
+  const shootPower = Math.min(
+    99,
+    Math.round(player.attributes.shooting * 0.65 + player.attributes.physical * 0.35)
+  );
+  const shootAccuracy = player.attributes.shooting;
+  const ballControl = Math.min(
+    99,
+    Math.round(player.attributes.dribbling * 0.65 + player.attributes.skill * 0.35)
+  );
+  const weakFootStars =
+    player.attributes.weakFoot ||
+    (player.rating >= 94 ? 5 : player.rating >= 88 ? 4 : 3);
+  const skillStars =
+    player.attributes.skillMoves ||
+    (player.attributes.skill >= 92 ? 5 : player.attributes.skill >= 84 ? 4 : 3);
+
   const keyStats = [
-    { label: 'PAC', value: player.attributes.pace },
-    { label: 'SHO', value: player.attributes.shooting },
+    { label: 'SPD', value: player.attributes.pace },
+    { label: 'SHP', value: shootPower },
+    { label: 'SHA', value: shootAccuracy },
     { label: 'PAS', value: player.attributes.passing },
     { label: 'DRI', value: player.attributes.dribbling },
-    { label: 'DEF', value: player.attributes.defending },
+    { label: 'CTL', value: ballControl },
     { label: 'PHY', value: player.attributes.physical },
+    { label: 'STA', value: player.attributes.stamina },
+    { label: 'DEF', value: player.attributes.defending },
   ];
 
   return (
@@ -304,26 +334,42 @@ export const EFootballPlayerCard: React.FC<EFootballPlayerCardProps> = ({
             </div>
 
             {!compact && (
-              <div className="mt-2 flex items-center justify-between px-2 py-1 rounded-lg bg-black/35 border border-white/10 font-mono text-[11px] tabular-nums">
-                <span className="text-slate-300">
-                  CRV <strong className="text-[#F59E0B]">{player.attributes.curve}</strong>
-                </span>
-                <span className="text-slate-500">·</span>
-                <span className="text-slate-300">
-                  SKL <strong className="text-[#38BDF8]">{player.attributes.skill}</strong>
-                </span>
-                <span className="text-slate-500">·</span>
-                <span className="text-slate-300">
-                  STA <strong className="text-white">{player.attributes.stamina}</strong>
-                </span>
+              <div className="mt-2 space-y-1.5">
+                <div className="flex items-center justify-between px-2 py-1 rounded-lg bg-black/40 border border-white/10 font-mono text-[10px] tabular-nums">
+                  <span className="text-slate-300" title="Weak Foot Rating">
+                    WF <strong className="text-[#F59E0B]">{weakFootStars}★</strong>
+                  </span>
+                  <span className="text-slate-500">·</span>
+                  <span className="text-slate-300" title="Skill Moves Rating">
+                    SKILL{' '}
+                    <strong className="text-[#38BDF8]">
+                      {skillStars}★ ({player.attributes.skill})
+                    </strong>
+                  </span>
+                  <span className="text-slate-500">·</span>
+                  <span className="text-slate-300" title="Player Price in Coins">
+                    {player.price > 0 ? (
+                      <strong className="text-[#10B981]">
+                        {player.price.toLocaleString()} Coins
+                      </strong>
+                    ) : (
+                      <strong className="text-[#10B981]">STARTER</strong>
+                    )}
+                  </span>
+                </div>
                 {onInspect && (
-                  <button
-                    type="button"
-                    onClick={() => onInspect(player)}
-                    className="text-[10px] text-[#10B981] hover:underline font-bold cursor-pointer"
-                  >
-                    Full Stats →
-                  </button>
+                  <div className="flex items-center justify-between px-2 py-0.5 text-[10px] font-mono">
+                    <span className="text-slate-400">
+                      {player.nationality} · {player.position}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onInspect(player)}
+                      className="text-[#10B981] hover:underline font-bold cursor-pointer"
+                    >
+                      Inspect Full Card →
+                    </button>
+                  </div>
                 )}
               </div>
             )}

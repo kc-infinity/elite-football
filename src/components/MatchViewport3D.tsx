@@ -85,6 +85,7 @@ interface MatchViewport3DProps {
   onNextMatch?: () => void;
   onExitToMenu: () => void;
   onReturnToOnlineLobby?: () => void;
+  onInviteFriendsAgain?: (opponentUsername?: string) => void;
 }
 
 const LOADING_TIPS = [
@@ -134,6 +135,7 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
   onNextMatch,
   onExitToMenu,
   onReturnToOnlineLobby,
+  onInviteFriendsAgain,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<FootballEngine3D | null>(null);
@@ -1200,15 +1202,31 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
             <div className="flex flex-wrap items-center justify-center gap-3">
               <button
                 onClick={handlePlayAgain}
-                className="px-6 py-3 bg-white/10 hover:bg-white/15 text-white font-display font-bold text-sm rounded-lg transition-colors flex items-center gap-2"
+                className="px-6 py-3 bg-white/10 hover:bg-white/15 text-white font-display font-bold text-sm rounded-lg transition-colors flex items-center gap-2 cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4" />
                 PLAY AGAIN
               </button>
+              {onInviteFriendsAgain && (
+                <button
+                  onClick={() => {
+                    SoundEngine.playUIClick();
+                    const oppName =
+                      onlineMatchInfo?.role === 'host'
+                        ? onlineMatchInfo.guestUsername
+                        : onlineMatchInfo?.hostUsername;
+                    onInviteFriendsAgain(oppName);
+                  }}
+                  className="px-6 py-3 bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-display font-bold text-sm rounded-lg transition-colors flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
+                >
+                  <Users className="w-4 h-4" />
+                  INVITE FRIEND AGAIN
+                </button>
+              )}
               {onNextMatch && (
                 <button
                   onClick={onNextMatch}
-                  className="px-6 py-3 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-sm rounded-lg transition-colors flex items-center gap-2"
+                  className="px-6 py-3 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-sm rounded-lg transition-colors flex items-center gap-2 cursor-pointer"
                 >
                   <Trophy className="w-4 h-4" />
                   NEXT MATCH
@@ -1216,7 +1234,7 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
               )}
               <button
                 onClick={onExitToMenu}
-                className="px-6 py-3 bg-[#38BDF8] hover:bg-[#0284C7] text-[#070A0E] font-display font-bold text-sm rounded-lg transition-colors"
+                className="px-6 py-3 bg-[#38BDF8] hover:bg-[#0284C7] text-[#070A0E] font-display font-bold text-sm rounded-lg transition-colors cursor-pointer"
               >
                 RETURN TO HOME
               </button>

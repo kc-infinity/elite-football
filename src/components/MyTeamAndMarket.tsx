@@ -17,11 +17,17 @@ import {
   Zap,
 } from 'lucide-react';
 import {
+  ALL_SQUAD_POSITIONS,
+  buildOptimalSquadForFormation,
   CELEBRATIONS,
   CelebrationType,
+  findBestSlotIndexForPlayer,
   FootballPlayer,
   FormationName,
   FORMATIONS,
+  getCompatiblePositionsForSlot,
+  getPlayerSlotFitLevel,
+  normalizeSlotPosition,
   PackDefinition,
   PLAYER_PACKS,
   PlayerRarity,
@@ -31,6 +37,8 @@ import {
   TeamData,
   TEAMS_DB,
   TOP_50_SPIN_PLAYERS,
+  UPGRADE_CARDS_DB,
+  UpgradeCardItem,
 } from '../data/gameDatabase';
 import { SoundEngine } from '../engine/SoundEngine';
 import { FriendRoomService } from '../engine/FriendRoomService';
@@ -89,11 +97,12 @@ const SPIN_DRAW_TIERS: SpinDrawTier[] = [
 ];
 
 interface MyTeamAndMarketProps {
-  initialSection: 'my_team' | 'transfer_market' | 'packs' | 'spin_roulette';
+  initialSection: 'my_team' | 'transfer_market' | 'upgrades' | 'packs' | 'spin_roulette';
   coins: number;
   userTeam: TeamData;
   userFormation: FormationName;
   userSquad: FootballPlayer[];
+  allPlayers?: FootballPlayer[];
   unlockedPlayerIds: string[];
   captainId: string;
   preferredCelebration: CelebrationType;
@@ -103,6 +112,7 @@ interface MyTeamAndMarketProps {
   onSelectCaptain: (playerId: string) => void;
   onSelectCelebration: (cel: CelebrationType) => void;
   onBuyPlayer: (player: FootballPlayer) => void;
+  onApplyUpgradeCard?: (card: UpgradeCardItem, targetPlayerId: string) => void;
   onOpenPack: (pack: PackDefinition, pulledPlayer: FootballPlayer) => void;
   onSpinRoulette?: (costCoins: number, pulledPlayer: FootballPlayer) => void;
   roomCode?: string;
@@ -124,6 +134,7 @@ interface MyTeamAndMarketProps {
 }
 
 const RARITY_COLORS: Record<PlayerRarity, string> = {
+  'Special Edition': '#EC4899',
   Legendary: '#F59E0B',
   'World Class': '#10B981',
   Elite: '#A855F7',
@@ -137,6 +148,7 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
   userTeam,
   userFormation,
   userSquad,
+  allPlayers,
   unlockedPlayerIds,
   captainId,
   preferredCelebration,
@@ -146,32 +158,44 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
   onSelectCaptain,
   onSelectCelebration,
   onBuyPlayer,
+  onApplyUpgradeCard,
   onOpenPack,
   onSpinRoulette,
-  roomCode = 'PLAY-7492',
-  friendRoomStatus = 'Waiting for Opponent',
-  friendRoomMembersCount = 1,
-  onPlayDreamTeamOnline,
-  onQuickMatchDreamTeamOnline,
-  onJoinDreamTeamRoomCode,
   onPlayDreamTeamOffline,
   onTriggerPaymentCheckout,
 }) => {
-  const [section, setSection] = useState<'my_team' | 'transfer_market' | 'packs' | 'spin_roulette'>(
-    initialSection
-  );
-  const [selectedSwapIndex, setSelectedSwapIndex] = useState<number | null>(9); // Default ST slot
+  const playersPool = allPlayers && allPlayers.length > 0 ? allPlayers : PLAYERS_DB;
+  const [section, setSection] = useState<
+    'my_team' | 'transfer_market' | 'upgrades' | 'packs' | 'spin_roulette'
+  >(initialSection);
+  const [selectedSwapIndex, setSelectedSwapIndex] = useState<number | null>(1); // Default LB / Slot #2 or any clicked slot
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [squadPositionFilter, setSquadPositionFilter] = useState<'slot_match' | 'all' | PositionCode>('slot_match');
+  const [squadActionBanner, setSquadActionBanner] = useState<string | null>(null);
   const [clubCategoryFilter, setClubCategoryFilter] = useState<'Club' | 'International'>('Club');
-  const [dreamTeamJoinCode, setDreamTeamJoinCode] = useState('');
-  const [copiedDreamCode, setCopiedDreamCode] = useState(false);
   const [scoutOpponentInfo, setScoutOpponentInfo] = useState<OpponentSquadInfo | null>(null);
 
   // Market filters
   const [rarityFilter, setRarityFilter] = useState<'All' | PlayerRarity>('All');
   const [posFilter, setPosFilter] = useState<'All' | PositionCode>('All');
   const [ownershipFilter, setOwnershipFilter] = useState<'all' | 'owned' | 'available'>('all');
+  const [minRatingFilter, setMinRatingFilter] = useState<number>(0);
+  const [maxPriceFilter, setMaxPriceFilter] = useState<number>(0);
+  const [nationalityFilter, setNationalityFilter] = useState<string>('All');
+  const [sortBy, setSortBy] = useState<
+    'rating_desc' | 'price_asc' | 'shooting_power_desc' | 'passing_desc' | 'speed_desc'
+  >('rating_desc');
   const [searchQuery, setSearchQuery] = useState('');
+  const [marketFeedback, setMarketFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  // Upgrade Cards state
+  const [upgradeTargetPlayerId, setUpgradeTargetPlayerId] = useState<string>(
+    userSquad[9]?.id || PLAYERS_DB[0].id
+  );
+  const [upgradeFeedback, setUpgradeFeedback] = useState<string | null>(null);
 
   // Tactics state
   const [mentality, setMentality] = useState(userTeam.tactics.mentality);
@@ -206,8 +230,27 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
     SPIN_DRAW_TIERS.find((t) => t.id === selectedSpinTierId) || SPIN_DRAW_TIERS[2];
 
   const handlePurchasePlayerWithReveal = (player: FootballPlayer) => {
-    if (coins < player.price || unlockedPlayerIds.includes(player.id)) return;
+    if (unlockedPlayerIds.includes(player.id)) {
+      setMarketFeedback({
+        type: 'error',
+        message: `${player.name} is already in your squad collection! Coins were not deducted.`,
+      });
+      return;
+    }
+    if (coins < player.price) {
+      SoundEngine.playUIClick();
+      const needed = player.price - coins;
+      setMarketFeedback({
+        type: 'error',
+        message: `Insufficient Coins! You need ${needed.toLocaleString()} more Coins to buy ${player.name} (Price: ${player.price.toLocaleString()} Coins · Your Balance: ${coins.toLocaleString()} Coins).`,
+      });
+      return;
+    }
     onBuyPlayer(player);
+    setMarketFeedback({
+      type: 'success',
+      message: `Successfully signed ${player.name} (${player.rating} OVR · ${player.position}) for ${player.price.toLocaleString()} Coins! Added to your squad.`,
+    });
     setCardModalState({
       player,
       sourceTitle: 'EFOOTBALL TRANSFER SIGNING',
@@ -293,32 +336,79 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
   };
 
   const handleSwapPlayers = (idxA: number, idxB: number) => {
-    if (idxA === idxB) {
-      setSelectedSwapIndex(null);
-      return;
-    }
+    if (idxA === idxB) return;
     const copy = [...userSquad];
-    const temp = copy[idxA];
-    copy[idxA] = copy[idxB];
-    copy[idxB] = temp;
+    const playerA = copy[idxA];
+    const playerB = copy[idxB];
+    copy[idxA] = playerB;
+    copy[idxB] = playerA;
     onUpdateSquadOrder(copy);
     setSelectedSwapIndex(idxB);
+    const slotA = FORMATIONS[userFormation][idxA]?.label || `Slot #${idxA + 1}`;
+    const slotB = FORMATIONS[userFormation][idxB]?.label || `Slot #${idxB + 1}`;
+    if (playerA && playerB) {
+      setSquadActionBanner(
+        `Swapped ${playerA.name} (${slotA} → ${slotB}) with ${playerB.name} (${slotB} → ${slotA}).`
+      );
+    }
     SoundEngine.playUIClick();
   };
 
-  const handleAssignUnlockedPlayerToSlot = (player: FootballPlayer) => {
+  const handleAssignUnlockedPlayerToSlot = (player: FootballPlayer, explicitSlotIdx?: number) => {
     SoundEngine.playUIClick();
-    const targetSlot = selectedSwapIndex !== null ? selectedSwapIndex : 9;
+    const targetSlot =
+      explicitSlotIdx !== undefined
+        ? explicitSlotIdx
+        : selectedSwapIndex !== null
+        ? selectedSwapIndex
+        : findBestSlotIndexForPlayer(player, userFormation, userSquad);
+
     const copy = [...userSquad];
-    const existingIdx = copy.findIndex((p) => p.id === player.id);
-    if (existingIdx >= 0) {
-      const temp = copy[targetSlot];
-      copy[targetSlot] = copy[existingIdx];
-      copy[existingIdx] = temp;
-    } else {
-      copy[targetSlot] = player;
+    const existingIdx = copy.findIndex((p) => p?.id === player.id);
+    const slotLabel = FORMATIONS[userFormation][targetSlot]?.label || player.position;
+    const previousOccupant = copy[targetSlot];
+
+    if (existingIdx === targetSlot) {
+      setSquadActionBanner(`${player.name} is already active at ${slotLabel}.`);
+      return;
     }
-    onUpdateSquadOrder(copy);
+
+    if (existingIdx >= 0 && existingIdx < 11) {
+      // Swap between two Starting XI positions
+      const otherSlotLabel = FORMATIONS[userFormation][existingIdx]?.label || `Slot #${existingIdx + 1}`;
+      copy[targetSlot] = player;
+      copy[existingIdx] = previousOccupant;
+      setSquadActionBanner(
+        `Swapped ${player.name} into ${slotLabel} and moved ${previousOccupant?.name || 'player'} to ${otherSlotLabel}!`
+      );
+    } else if (existingIdx >= 11) {
+      // Swap from reserve bench into Starting XI targetSlot
+      copy[targetSlot] = player;
+      copy[existingIdx] = previousOccupant;
+      setSquadActionBanner(
+        `Placed ${player.name} (${player.position} · OVR ${player.rating}) into ${slotLabel} (replaced ${previousOccupant?.name || 'player'})!`
+      );
+    } else {
+      // Player wasn't in userSquad array yet — place into targetSlot and keep previous occupant in reserves
+      copy[targetSlot] = player;
+      if (previousOccupant && !copy.some((p) => p?.id === previousOccupant.id)) {
+        copy.push(previousOccupant);
+      }
+      setSquadActionBanner(
+        `Placed ${player.name} (${player.position} · OVR ${player.rating}) into ${slotLabel} (replaced ${previousOccupant?.name || 'player'})!`
+      );
+    }
+    onUpdateSquadOrder(copy.filter(Boolean));
+  };
+
+  const handleAutoFillBestSquad = () => {
+    SoundEngine.playUIClick();
+    const unlockedPool = playersPool.filter((p) => unlockedPlayerIds.includes(p.id));
+    const optimal = buildOptimalSquadForFormation(unlockedPool, userSquad, userFormation);
+    onUpdateSquadOrder(optimal);
+    setSquadActionBanner(
+      `Auto-arranged your highest-rated unlocked players into their natural ${userFormation} positions!`
+    );
   };
 
   const handleTriggerPackOpen = (pack: PackDefinition) => {
@@ -344,20 +434,62 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
     });
   };
 
-  const filteredMarketPlayers = PLAYERS_DB.filter((p) => {
-    if (ownershipFilter === 'owned' && !unlockedPlayerIds.includes(p.id)) return false;
-    if (ownershipFilter === 'available' && unlockedPlayerIds.includes(p.id)) return false;
-    if (rarityFilter !== 'All' && p.rarity !== rarityFilter) return false;
-    if (posFilter !== 'All' && p.position !== posFilter) return false;
-    if (
-      searchQuery.trim() &&
-      !p.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-      !p.nationality.toLowerCase().includes(searchQuery.toLowerCase())
-    ) {
-      return false;
-    }
-    return true;
-  });
+  const allNationalities = React.useMemo(() => {
+    const set = new Set<string>();
+    playersPool.forEach((p) => set.add(p.nationality));
+    return Array.from(set).sort();
+  }, [playersPool]);
+
+  const filteredMarketPlayers = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const filtered = playersPool.filter((p) => {
+      if (ownershipFilter === 'owned' && !unlockedPlayerIds.includes(p.id)) return false;
+      if (ownershipFilter === 'available' && unlockedPlayerIds.includes(p.id)) return false;
+      if (rarityFilter !== 'All' && p.rarity !== rarityFilter) return false;
+      if (posFilter !== 'All' && p.position !== posFilter) return false;
+      if (minRatingFilter > 0 && p.rating < minRatingFilter) return false;
+      if (maxPriceFilter > 0 && p.price > maxPriceFilter) return false;
+      if (nationalityFilter !== 'All' && p.nationality !== nationalityFilter) return false;
+      if (
+        q &&
+        !p.name.toLowerCase().includes(q) &&
+        !p.nationality.toLowerCase().includes(q) &&
+        !p.club.toLowerCase().includes(q) &&
+        !p.position.toLowerCase().includes(q)
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    return filtered.sort((a, b) => {
+      if (sortBy === 'rating_desc') return b.rating - a.rating || b.price - a.price;
+      if (sortBy === 'price_asc') return a.price - b.price || b.rating - a.rating;
+      if (sortBy === 'shooting_power_desc') {
+        const shpA = a.attributes.shooting * 0.65 + a.attributes.physical * 0.35;
+        const shpB = b.attributes.shooting * 0.65 + b.attributes.physical * 0.35;
+        return shpB - shpA || b.rating - a.rating;
+      }
+      if (sortBy === 'passing_desc') {
+        return b.attributes.passing - a.attributes.passing || b.rating - a.rating;
+      }
+      if (sortBy === 'speed_desc') {
+        return b.attributes.pace - a.attributes.pace || b.rating - a.rating;
+      }
+      return 0;
+    });
+  }, [
+    playersPool,
+    ownershipFilter,
+    unlockedPlayerIds,
+    rarityFilter,
+    posFilter,
+    minRatingFilter,
+    maxPriceFilter,
+    nationalityFilter,
+    searchQuery,
+    sortBy,
+  ]);
 
   const avgTeamRating = Math.round(
     userSquad.slice(0, 11).reduce((acc, p) => acc + p.rating, 0) / 11
@@ -369,13 +501,15 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6 mb-8">
         <div>
           <div className="text-xs font-mono text-[#10B981] mb-1">
-            DREAM TEAM 11V11 SQUAD BUILDER · ONLINE 11V11 MULTIPLAYER · GLOBAL TRANSFERS
+            DREAM TEAM 11V11 SQUAD BUILDER · PLAYER MARKET · UPGRADE CARDS
           </div>
           <h1 className="font-display text-3xl md:text-4xl font-bold text-white">
             {section === 'my_team'
               ? `DREAM TEAM 11V11: ${userTeam.name.toUpperCase()}`
               : section === 'transfer_market'
-              ? `PLAYER STORE & TRANSFER MARKET (${PLAYERS_DB.length})`
+              ? `PLAYER BUYING MARKET (${playersPool.length} PLAYERS)`
+              : section === 'upgrades'
+              ? 'COLLECTIBLE UPGRADE & BOOST CARDS'
               : section === 'spin_roulette'
               ? '50-STAR FOOTBALL ROULETTE SPIN (500,000 COINS)'
               : 'PLAYER PACKS VAULT'}
@@ -414,7 +548,21 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                   : 'text-slate-300 hover:text-white'
               }`}
             >
-              Player Store ({PLAYERS_DB.length})
+              Player Market ({playersPool.length})
+            </button>
+            <button
+              onClick={() => {
+                SoundEngine.playUIClick();
+                setSection('upgrades');
+              }}
+              className={`px-3.5 py-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                section === 'upgrades'
+                  ? 'bg-[#EC4899] text-white font-bold'
+                  : 'text-[#F9A8D4] hover:text-white'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5" />
+              Upgrade Cards ({UPGRADE_CARDS_DB.length})
             </button>
             <button
               onClick={() => {
@@ -450,133 +598,61 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
       {/* SECTION 1: MY TEAM, FORMATIONS (DRAG & SWAP), TACTICS & CELEBRATIONS */}
       {section === 'my_team' && (
         <div className="space-y-8">
-          {/* 11V11 DREAM TEAM AGAINST ONLINE BANNER & LIVE ROOM / MATCHMAKING LAUNCHER */}
+          {/* 11V11 DREAM TEAM STADIUM KICK-OFF BANNER */}
           <div className="bg-gradient-to-r from-[#111722] via-[#132235] to-[#111722] border-2 border-[#10B981]/60 rounded-2xl p-6 shadow-2xl">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
               <div className="space-y-2 max-w-2xl">
                 <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-[#10B981] font-bold">
-                  <Wifi className="w-4 h-4 animate-pulse" />
-                  <span>11V11 DREAM TEAM AGAINST ONLINE · FULL STARTING XI MULTIPLAYER</span>
+                  <Shield className="w-4 h-4" />
+                  <span>11V11 DREAM TEAM · FULL STARTING XI STADIUM SIMULATION</span>
                   <span className="px-2.5 py-0.5 rounded bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/40">
-                    {friendRoomStatus} ({friendRoomMembersCount}/2)
+                    SQUAD OVR {avgTeamRating}
                   </span>
                 </div>
                 <h2 className="font-display text-2xl sm:text-3xl font-bold text-white">
-                  PLAY 11V11 DREAM TEAM AGAINST ONLINE OPPONENTS
+                  PLAY 11V11 WITH YOUR CUSTOM DREAM TEAM
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-300">
-                  Take your custom 11-player <span className="text-white font-semibold">{userTeam.name}</span> Starting XI ({userFormation}, OVR {avgTeamRating}) into a live 11v11 online match! Control all 11 players with real-time player switching (<span className="font-mono text-[#10B981]">Q</span>), passing, through balls, Rainbow Flicks, and shots synchronized online.
+                  Lead your custom 11-player <span className="text-white font-semibold">{userTeam.name}</span> Starting XI ({userFormation}, OVR {avgTeamRating}) onto the 3D stadium pitch! Control all 11 footballers with real-time player switching (<span className="font-mono text-[#10B981]">Q</span>), pinpoint short & through passes, finesse shots, headers, and skill moves.
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-3 shrink-0">
-                {onQuickMatchDreamTeamOnline && (
-                  <button
-                    onClick={() => {
-                      SoundEngine.playUIClick();
-                      onQuickMatchDreamTeamOnline();
-                    }}
-                    className="px-5 py-3.5 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-sm rounded-xl transition-all flex items-center gap-2 shadow-lg cursor-pointer"
-                  >
-                    <Zap className="w-4 h-4 fill-current" />
-                    11V11 ONLINE QUICK MATCH
-                  </button>
-                )}
-                {onPlayDreamTeamOnline && (
-                  <button
-                    onClick={() => {
-                      SoundEngine.playUIClick();
-                      onPlayDreamTeamOnline();
-                    }}
-                    className="px-5 py-3.5 bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E] font-display font-bold text-sm rounded-xl transition-all flex items-center gap-2 shadow-lg cursor-pointer"
-                  >
-                    <Wifi className="w-4 h-4" />
-                    OPEN 11V11 ONLINE LOBBY
-                  </button>
-                )}
                 {onPlayDreamTeamOffline && (
                   <button
                     onClick={() => {
                       SoundEngine.playUIClick();
                       onPlayDreamTeamOffline();
                     }}
-                    className="px-4 py-3.5 bg-white/10 hover:bg-white/15 border border-white/15 text-white font-display font-bold text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer"
+                    className="px-6 py-3.5 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-sm rounded-xl transition-all flex items-center gap-2 shadow-lg cursor-pointer"
                   >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    11V11 VS AI
+                    <Play className="w-4 h-4 fill-current" />
+                    PLAY 11V11 DREAM TEAM MATCH
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={() => {
                     SoundEngine.playUIClick();
-                    const state = FriendRoomService.getCurrentRoomState();
-                    const opp = state.members.find(
-                      (m) => m.clientId !== FriendRoomService.getClientId()
-                    );
-                    setScoutOpponentInfo({
-                      username: opp?.username || 'OnlineRival_XI',
-                      clubName: opp?.clubName || 'FC Barcelona',
-                      starPlayerName: opp?.starPlayerName || 'Lionel Messi',
-                      starPlayerId: opp?.starPlayerId,
-                      squadIds: opp?.squadIds,
-                      formation: opp?.formation || '4-3-3',
-                    });
+                    setSection('transfer_market');
                   }}
-                  className="px-4 py-3.5 bg-[#38BDF8]/15 hover:bg-[#38BDF8]/25 border border-[#38BDF8]/40 text-[#38BDF8] font-display font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                  className="px-5 py-3.5 bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E] font-display font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center gap-2 shadow-lg cursor-pointer"
                 >
-                  <Eye className="w-4 h-4" />
-                  VIEW OPPONENT SQUAD (XI)
+                  <Coins className="w-4 h-4" />
+                  BUY PLAYERS IN MARKET
                 </button>
-              </div>
-            </div>
-
-            {/* Direct 11v11 Room Code Bar inside Dream Team */}
-            <div className="mt-5 pt-5 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-[#070A0E]/90 border border-white/15 rounded-xl p-3.5 flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-[10px] font-mono text-slate-400">
-                    YOUR 11V11 DREAM TEAM ROOM CODE (HOST)
-                  </div>
-                  <div className="font-mono text-xl font-bold text-[#10B981] tracking-wider">
-                    {roomCode}
-                  </div>
-                </div>
                 <button
+                  type="button"
                   onClick={() => {
-                    navigator.clipboard?.writeText(roomCode).catch(() => {});
-                    setCopiedDreamCode(true);
-                    setTimeout(() => setCopiedDreamCode(false), 1800);
+                    SoundEngine.playUIClick();
+                    setSection('upgrades');
                   }}
-                  className="px-3.5 py-2 bg-[#10B981]/20 hover:bg-[#10B981]/30 border border-[#10B981]/40 text-[#10B981] font-display font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                  className="px-4 py-3.5 bg-[#EC4899]/20 hover:bg-[#EC4899] text-[#F9A8D4] hover:text-white border border-[#EC4899]/50 font-display font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
                 >
-                  {copiedDreamCode ? 'COPIED!' : 'COPY ROOM CODE'}
+                  <Zap className="w-4 h-4" />
+                  UPGRADE CARDS
                 </button>
               </div>
-
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!dreamTeamJoinCode.trim() || !onJoinDreamTeamRoomCode) return;
-                  SoundEngine.playUIClick();
-                  onJoinDreamTeamRoomCode(dreamTeamJoinCode.trim().toUpperCase());
-                }}
-                className="bg-[#070A0E]/90 border border-white/15 rounded-xl p-2.5 flex items-center gap-2"
-              >
-                <input
-                  type="text"
-                  value={dreamTeamJoinCode}
-                  onChange={(e) => setDreamTeamJoinCode(e.target.value.toUpperCase())}
-                  placeholder="Enter Opponent's 11v11 Room Code (e.g. PLAY-7492)"
-                  className="flex-1 bg-transparent px-3 py-2 font-mono text-sm font-bold text-white uppercase placeholder:text-slate-500 placeholder:font-sans placeholder:text-xs focus:outline-none"
-                />
-                <button
-                  type="submit"
-                  className="px-4 py-2.5 bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E] font-display font-bold text-xs rounded-lg transition-colors whitespace-nowrap cursor-pointer"
-                >
-                  JOIN 11V11 MATCH
-                </button>
-              </form>
             </div>
           </div>
 
@@ -590,11 +666,21 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                     Starting XI Pitch Formation ({userFormation})
                   </h2>
                   <p className="text-xs text-slate-400">
-                    Drag players between positions or click two players to swap their roles.
+                    Click any position on the pitch (e.g. LB, CB, GK, CM, ST) to select & place an available player there, or drag/swap between positions.
                   </p>
                 </div>
-                <div className="font-mono text-sm text-[#F59E0B] font-bold">
-                  SQUAD OVR {avgTeamRating}
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={handleAutoFillBestSquad}
+                    className="px-3 py-1.5 rounded-lg bg-[#10B981]/20 hover:bg-[#10B981] text-[#10B981] hover:text-[#070A0E] border border-[#10B981]/40 font-display font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    AUTO-FILL BEST XI
+                  </button>
+                  <div className="font-mono text-sm text-[#F59E0B] font-bold">
+                    SQUAD OVR {avgTeamRating}
+                  </div>
                 </div>
               </div>
 
@@ -607,7 +693,7 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                       SoundEngine.playUIClick();
                       onSelectFormation(form);
                     }}
-                    className={`px-3 py-1.5 rounded-lg font-mono text-xs font-semibold transition-colors ${
+                    className={`px-3 py-1.5 rounded-lg font-mono text-xs font-semibold transition-colors cursor-pointer ${
                       userFormation === form
                         ? 'bg-[#10B981] text-[#070A0E]'
                         : 'bg-[#070A0E] text-slate-300 border border-white/10 hover:border-white/25'
@@ -628,7 +714,7 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
 
                 {/* 11 Starting Players */}
                 {FORMATIONS[userFormation].map((slot, idx) => {
-                  const player = userSquad[idx] || PLAYERS_DB[idx];
+                  const player = userSquad[idx] || playersPool[idx] || PLAYERS_DB[idx];
                   // Map slot.x in [-0.92, -0.08] across full pitch width [8%, 88%]
                   const leftPct = ((slot.x + 0.96) / 0.95) * 82 + 7;
                   const topPct = ((slot.z + 0.85) / 1.7) * 78 + 11;
@@ -648,13 +734,11 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                         }
                       }}
                       onClick={() => {
-                        if (selectedSwapIndex === null) {
-                          setSelectedSwapIndex(idx);
-                        } else {
-                          handleSwapPlayers(selectedSwapIndex, idx);
-                        }
+                        SoundEngine.playUIClick();
+                        setSelectedSwapIndex(idx);
+                        setSquadPositionFilter('slot_match');
                       }}
-                      className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing transition-transform hover:scale-105 ${
+                      className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-transform hover:scale-105 group ${
                         isSelected ? 'scale-110 z-20' : 'z-10'
                       }`}
                       style={{ left: `${leftPct}%`, top: `${topPct}%` }}
@@ -665,136 +749,464 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                         isSelected={isSelected}
                         isCaptain={isCaptain}
                       />
+                      {/* Direct Pitch Swap Pill when another position is selected */}
+                      {selectedSwapIndex !== null && selectedSwapIndex !== idx && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSwapPlayers(selectedSwapIndex, idx);
+                          }}
+                          className="mt-0.5 mx-auto block px-1.5 py-0.5 rounded bg-[#38BDF8] hover:bg-[#0284C7] text-[#070A0E] font-mono text-[9px] font-bold shadow-md opacity-90 hover:opacity-100 cursor-pointer"
+                          title={`Swap ${FORMATIONS[userFormation][selectedSwapIndex]?.label} with ${slot.label}`}
+                        >
+                          ⇄ Swap
+                        </button>
+                      )}
                     </div>
                   );
                 })}
               </div>
 
-              {/* World Cup Squad Pool: Unlocked Players First + Unlockable Superstars */}
-              <div className="mt-6 space-y-5">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-xs font-mono text-[#10B981] font-bold">
-                      YOUR UNLOCKED WORLD CUP PLAYERS ({unlockedPlayerIds.length} AVAILABLE)
-                    </div>
-                    <div className="text-[11px] text-slate-400">
-                      Click any unlocked player to place into Slot #{selectedSwapIndex !== null ? selectedSwapIndex + 1 : 10} ({FORMATIONS[userFormation][selectedSwapIndex ?? 9]?.label || 'ST'})
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 gap-2.5">
-                    {PLAYERS_DB.filter((p) => unlockedPlayerIds.includes(p.id)).map((p) => {
-                      const inStartingXI = userSquad.slice(0, 11).some((s) => s.id === p.id);
-                      return (
-                        <button
-                          key={p.id}
-                          onClick={() => handleAssignUnlockedPlayerToSlot(p)}
-                          title={`${p.name} (${p.position} · OVR ${p.rating} · ${p.nationality})`}
-                          className={`p-2 rounded-xl border flex flex-col items-center text-center transition-all cursor-pointer ${
-                            inStartingXI
-                              ? 'bg-[#192231] border-[#10B981] ring-1 ring-[#10B981]/50'
-                              : 'bg-[#070A0E] border-white/10 hover:border-white/35'
+              {/* Quick 11-Slot Position Bar (Click any position: GK, LB, CB, RB, CDM, CM, CAM, LM, RM, LW, RW, CF, ST) */}
+              <div className="mt-4 p-3 rounded-xl bg-[#070A0E] border border-white/10">
+                <div className="text-[11px] font-mono text-slate-400 mb-2 flex items-center justify-between">
+                  <span>CLICK ANY POSITION SLOT TO REPLACE OR SWAP PLAYER:</span>
+                  <span className="text-[#10B981] font-bold">
+                    ACTIVE SLOT: {FORMATIONS[userFormation][selectedSwapIndex ?? 0]?.label || 'LB'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-11 gap-1.5">
+                  {FORMATIONS[userFormation].map((slot, idx) => {
+                    const occupant = userSquad[idx] || playersPool[idx] || PLAYERS_DB[idx];
+                    const isSel = selectedSwapIndex === idx;
+                    const fit = getPlayerSlotFitLevel(occupant.position, slot.role, slot.label);
+                    return (
+                      <button
+                        key={`bar_${slot.label}_${idx}`}
+                        type="button"
+                        onClick={() => {
+                          SoundEngine.playUIClick();
+                          setSelectedSwapIndex(idx);
+                          setSquadPositionFilter('slot_match');
+                        }}
+                        className={`p-1.5 rounded-lg border text-center transition-all cursor-pointer ${
+                          isSel
+                            ? 'bg-[#10B981] text-[#070A0E] border-[#10B981] font-bold shadow-md'
+                            : 'bg-[#111722] text-white border-white/10 hover:border-white/30'
+                        }`}
+                      >
+                        <div className="font-mono text-[10px] font-bold leading-none">
+                          {slot.label}
+                        </div>
+                        <div
+                          className={`text-[9px] truncate mt-0.5 ${
+                            isSel ? 'text-[#070A0E] font-semibold' : 'text-slate-300'
                           }`}
                         >
-                          <PlayerPhotoAvatar
-                            player={p}
-                            className="w-16 h-16 sm:w-18 sm:h-18 rounded-xl border border-white/20 shadow-md"
-                            showPositionBadge={true}
-                            showRatingBadge={true}
-                          />
-                          <div className="text-xs font-sans font-bold text-white truncate mt-1.5 w-full leading-tight">
-                            {p.name}
-                          </div>
-                          <div className="text-[10px] font-mono text-slate-300 truncate mt-0.5 w-full">
-                            {inStartingXI ? (
-                              <span className="text-[#10B981] font-bold">STARTING XI</span>
-                            ) : (
-                              <span>#{p.number} · {p.nationality}</span>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Locked World Cup Superstars (Messi, Mbappé, Ronaldo, Neymar, etc.) */}
-                {PLAYERS_DB.some((p) => !unlockedPlayerIds.includes(p.id)) && (
-                  <div className="pt-4 border-t border-white/10">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <div className="text-xs font-mono text-[#F59E0B] font-bold">
-                          UNLOCK MORE WORLD CUP SUPERSTARS (MESSI, MBAPPÉ, RONALDO, NEYMAR & MORE)
+                          {occupant.name.split(' ').slice(-1)[0]}
                         </div>
-                        <p className="text-[11px] text-slate-400">
-                          Unlock legendary World Cup players using your in-game Coins to add them immediately to your squad.
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => setSection('transfer_market')}
-                        className="text-xs font-mono text-[#10B981] hover:underline whitespace-nowrap"
-                      >
-                        View Full Market →
+                        <div
+                          className={`text-[9px] font-mono leading-none mt-0.5 ${
+                            isSel
+                              ? 'text-[#070A0E]'
+                              : fit === 'exact'
+                              ? 'text-[#10B981]'
+                              : fit === 'compatible'
+                              ? 'text-[#F59E0B]'
+                              : 'text-rose-400'
+                          }`}
+                        >
+                          {occupant.position}·{occupant.rating}
+                        </div>
                       </button>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      {PLAYERS_DB.filter((p) => !unlockedPlayerIds.includes(p.id))
-                        .slice(0, 9)
-                        .map((star) => {
-                          const canAfford = coins >= star.price;
+                    );
+                  })}
+                </div>
+              </div>
+
+              {squadActionBanner && (
+                <div className="mt-3 p-3 rounded-xl bg-[#10B981]/15 border border-[#10B981]/50 text-[#10B981] text-xs font-medium flex items-center justify-between gap-2">
+                  <span>✓ {squadActionBanner}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSquadActionBanner(null)}
+                    className="text-[11px] font-mono underline cursor-pointer"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+
+              {/* POSITION-AWARE AVAILABLE PLAYERS SELECTOR */}
+              {(() => {
+                const activeSlotIdx = selectedSwapIndex ?? 0;
+                const activeSlot = FORMATIONS[userFormation][activeSlotIdx] || FORMATIONS[userFormation][0];
+                const currentOccupant =
+                  userSquad[activeSlotIdx] || playersPool[activeSlotIdx] || PLAYERS_DB[activeSlotIdx];
+                const canonicalPos = normalizeSlotPosition(activeSlot.role, activeSlot.label);
+                const { exact: exactPositions, compatible: compatiblePositions } =
+                  getCompatiblePositionsForSlot(activeSlot.role, activeSlot.label);
+
+                // All unlocked players (including any in userSquad)
+                const unlockedSet = new Set([
+                  ...unlockedPlayerIds,
+                  ...userSquad.map((p) => p?.id).filter(Boolean),
+                ]);
+                const allUnlockedPlayers = playersPool.filter((p) => unlockedSet.has(p.id));
+
+                // Players matching the selected slot position (exact + compatible)
+                const matchingSlotPlayers = allUnlockedPlayers
+                  .filter((p) => compatiblePositions.includes(p.position))
+                  .sort((a, b) => {
+                    const fitA = exactPositions.includes(a.position) ? 2 : 1;
+                    const fitB = exactPositions.includes(b.position) ? 2 : 1;
+                    if (fitB !== fitA) return fitB - fitA;
+                    // Put available bench players for this position right before already-assigned players
+                    const inXIA = userSquad.slice(0, 11).some((s) => s?.id === a.id) ? 1 : 0;
+                    const inXIB = userSquad.slice(0, 11).some((s) => s?.id === b.id) ? 1 : 0;
+                    if (inXIA !== inXIB) return inXIA - inXIB;
+                    return b.rating - a.rating;
+                  });
+
+                // Displayed list based on squadPositionFilter
+                const displayedUnlockedPlayers = (() => {
+                  if (squadPositionFilter === 'slot_match') {
+                    // If user has matching players, show them first; also append remaining players below or if none match
+                    if (matchingSlotPlayers.length > 0) {
+                      return matchingSlotPlayers;
+                    }
+                    return [...allUnlockedPlayers].sort((a, b) => b.rating - a.rating);
+                  }
+                  if (squadPositionFilter === 'all') {
+                    return [...allUnlockedPlayers].sort((a, b) => {
+                      const fitA = exactPositions.includes(a.position)
+                        ? 2
+                        : compatiblePositions.includes(a.position)
+                        ? 1
+                        : 0;
+                      const fitB = exactPositions.includes(b.position)
+                        ? 2
+                        : compatiblePositions.includes(b.position)
+                        ? 1
+                        : 0;
+                      if (fitB !== fitA) return fitB - fitA;
+                      return b.rating - a.rating;
+                    });
+                  }
+                  // Specific PositionCode filter (GK, LB, CB, RB, CDM, CM, CAM, LM, RM, LW, RW, CF, ST)
+                  return allUnlockedPlayers
+                    .filter((p) => p.position === squadPositionFilter)
+                    .sort((a, b) => b.rating - a.rating);
+                })();
+
+                return (
+                  <div className="mt-5 space-y-5">
+                    <div className="p-4 rounded-xl bg-[#070A0E] border border-[#10B981]/40 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+                        <div>
+                          <div className="text-xs font-mono text-[#10B981] font-bold">
+                            SELECT PLAYER FOR POSITION: {activeSlot.label} (NATURAL: {exactPositions.join(' / ')})
+                          </div>
+                          <div className="text-xs text-slate-300 mt-0.5">
+                            Currently in <span className="text-white font-bold">{activeSlot.label}</span>:{' '}
+                            <span className="text-[#F59E0B] font-bold">
+                              {currentOccupant.name} ({currentOccupant.position} · OVR {currentOccupant.rating})
+                            </span>
+                            {' · '}Click any player below to replace or swap into{' '}
+                            <span className="text-[#10B981] font-bold">{activeSlot.label}</span>.
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setSquadPositionFilter('slot_match')}
+                            className={`px-3 py-1.5 rounded-lg font-mono text-xs font-bold transition-colors cursor-pointer ${
+                              squadPositionFilter === 'slot_match'
+                                ? 'bg-[#10B981] text-[#070A0E]'
+                                : 'bg-[#111722] text-slate-300 border border-white/10 hover:text-white'
+                            }`}
+                          >
+                            Best for {activeSlot.label} ({matchingSlotPlayers.length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSquadPositionFilter('all')}
+                            className={`px-3 py-1.5 rounded-lg font-mono text-xs font-bold transition-colors cursor-pointer ${
+                              squadPositionFilter === 'all'
+                                ? 'bg-[#38BDF8] text-[#070A0E]'
+                                : 'bg-[#111722] text-slate-300 border border-white/10 hover:text-white'
+                            }`}
+                          >
+                            All Unlocked ({allUnlockedPlayers.length})
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Filter by any specific position (GK, LB, CB, RB, CDM, CM, CAM, LM, RM, LW, RW, CF, ST) */}
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className="text-[10px] font-mono text-slate-400 mr-1">
+                          FILTER BY POSITION:
+                        </span>
+                        {ALL_SQUAD_POSITIONS.map((posCode) => {
+                          const countForPos = allUnlockedPlayers.filter(
+                            (p) => p.position === posCode
+                          ).length;
+                          const isActiveFilter =
+                            squadPositionFilter === posCode ||
+                            (squadPositionFilter === 'slot_match' && canonicalPos === posCode);
                           return (
-                            <div
-                              key={star.id}
-                              className="p-3.5 rounded-xl bg-[#070A0E] border border-[#F59E0B]/30 flex flex-col justify-between gap-2.5"
+                            <button
+                              key={posCode}
+                              type="button"
+                              onClick={() => {
+                                SoundEngine.playUIClick();
+                                setSquadPositionFilter(posCode);
+                                // Also auto-select the corresponding slot on the pitch if current slot doesn't match posCode
+                                const currentFit = getPlayerSlotFitLevel(
+                                  posCode,
+                                  activeSlot.role,
+                                  activeSlot.label
+                                );
+                                if (currentFit !== 'exact') {
+                                  const matchingSlotIdx = FORMATIONS[userFormation].findIndex(
+                                    (s) =>
+                                      getPlayerSlotFitLevel(posCode, s.role, s.label) === 'exact'
+                                  );
+                                  if (matchingSlotIdx >= 0) {
+                                    setSelectedSwapIndex(matchingSlotIdx);
+                                  }
+                                }
+                              }}
+                              className={`px-2 py-1 rounded text-[10px] font-mono font-bold transition-colors cursor-pointer ${
+                                isActiveFilter
+                                  ? 'bg-[#F59E0B] text-[#070A0E]'
+                                  : 'bg-[#111722] text-slate-300 border border-white/10 hover:border-white/30'
+                              }`}
                             >
-                              <div className="flex items-center gap-3">
-                                <div className="flex flex-col items-center shrink-0">
-                                  <PlayerPhotoAvatar
-                                    player={star}
-                                    className="w-14 h-14 rounded-xl border border-[#F59E0B]/40"
-                                    showPositionBadge={true}
-                                    showRatingBadge={true}
-                                  />
-                                  <div className="text-[10px] font-sans font-bold text-white truncate max-w-[76px] mt-1 leading-tight text-center">
-                                    {star.name}
-                                  </div>
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="font-display font-bold text-sm text-white truncate">
-                                    {star.name}
-                                  </div>
-                                  <div className="flex items-center justify-between text-xs font-mono mb-0.5 mt-0.5">
-                                    <span className="text-[#F59E0B] font-bold">
-                                      {star.position} · OVR {star.rating}
-                                    </span>
-                                    <span className="text-slate-400 text-[10px]">{star.nationality}</span>
-                                  </div>
-                                  <div className="text-[11px] text-slate-300 truncate">
-                                    {star.club}
-                                  </div>
-                                  <div className="text-[10px] font-mono text-slate-400 truncate mt-0.5">
-                                    PAC {star.attributes.pace} · SHO {star.attributes.shooting} · DRI {star.attributes.dribbling}
-                                  </div>
-                                </div>
-                              </div>
-                              <button
-                                disabled={!canAfford}
-                                onClick={() => handlePurchasePlayerWithReveal(star)}
-                                className={`w-full py-2 rounded-lg font-display font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
-                                  canAfford
-                                    ? 'bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E]'
-                                    : 'bg-white/5 text-slate-500 cursor-not-allowed'
-                                }`}
-                              >
-                                <Coins className="w-3.5 h-3.5" />
-                                UNLOCK CARD ({star.price.toLocaleString()} COINS)
-                              </button>
-                            </div>
+                              {posCode} ({countForPos})
+                            </button>
                           );
                         })}
+                      </div>
+
+                      {/* Available Players Grid for Selected Position */}
+                      {displayedUnlockedPlayers.length === 0 ? (
+                        <div className="p-6 text-center rounded-xl bg-[#111722] border border-white/10 space-y-2">
+                          <div className="text-xs font-display font-bold text-white">
+                            No unlocked {squadPositionFilter} players in your squad yet.
+                          </div>
+                          <div className="flex items-center justify-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setSquadPositionFilter('all')}
+                              className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-mono text-white cursor-pointer"
+                            >
+                              Show All Unlocked Players ({allUnlockedPlayers.length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (
+                                  squadPositionFilter !== 'slot_match' &&
+                                  squadPositionFilter !== 'all'
+                                ) {
+                                  setPosFilter(squadPositionFilter);
+                                } else {
+                                  setPosFilter(canonicalPos);
+                                }
+                                setSection('transfer_market');
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-[#F59E0B] text-[#070A0E] text-xs font-mono font-bold cursor-pointer"
+                            >
+                              Buy {squadPositionFilter === 'slot_match' ? canonicalPos : squadPositionFilter} Players in Market →
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2.5">
+                          {displayedUnlockedPlayers.map((p) => {
+                            const existingXIIdx = userSquad
+                              .slice(0, 11)
+                              .findIndex((s) => s?.id === p.id);
+                            const isCurrentInSelectedSlot = existingXIIdx === activeSlotIdx;
+                            const isInAnotherXISlot =
+                              existingXIIdx >= 0 && existingXIIdx !== activeSlotIdx;
+                            const otherSlotLabel = isInAnotherXISlot
+                              ? FORMATIONS[userFormation][existingXIIdx]?.label ||
+                                `Slot #${existingXIIdx + 1}`
+                              : '';
+                            const fitLevel = getPlayerSlotFitLevel(
+                              p.position,
+                              activeSlot.role,
+                              activeSlot.label
+                            );
+
+                            return (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => handleAssignUnlockedPlayerToSlot(p, activeSlotIdx)}
+                                title={`${p.name} (${p.position} · OVR ${p.rating} · ${p.nationality})`}
+                                className={`p-2.5 rounded-xl border flex flex-col items-center text-center transition-all cursor-pointer ${
+                                  isCurrentInSelectedSlot
+                                    ? 'bg-[#192231] border-[#10B981] ring-2 ring-[#10B981]'
+                                    : fitLevel === 'exact' && !isInAnotherXISlot
+                                    ? 'bg-[#111722] border-[#10B981]/70 hover:border-[#10B981] shadow-md'
+                                    : isInAnotherXISlot
+                                    ? 'bg-[#0B121C] border-white/15 hover:border-[#38BDF8]'
+                                    : 'bg-[#111722] border-white/15 hover:border-white/40'
+                                }`}
+                              >
+                                <div className="w-full flex items-center justify-between text-[9px] font-mono mb-1">
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded font-bold ${
+                                      fitLevel === 'exact'
+                                        ? 'bg-[#10B981]/20 text-[#10B981]'
+                                        : fitLevel === 'compatible'
+                                        ? 'bg-[#F59E0B]/20 text-[#F59E0B]'
+                                        : 'bg-white/10 text-slate-400'
+                                    }`}
+                                  >
+                                    {p.position}
+                                  </span>
+                                  <span className="text-[#F59E0B] font-bold">OVR {p.rating}</span>
+                                </div>
+
+                                <PlayerPhotoAvatar
+                                  player={p}
+                                  className="w-15 h-15 rounded-xl border border-white/20 shadow-md"
+                                  showPositionBadge={false}
+                                  showRatingBadge={false}
+                                />
+
+                                <div className="text-xs font-sans font-bold text-white truncate mt-1.5 w-full leading-tight">
+                                  {p.name}
+                                </div>
+                                <div className="text-[10px] font-mono text-slate-400 truncate w-full">
+                                  {p.nationality}
+                                </div>
+
+                                <div
+                                  className={`mt-1.5 w-full py-1 px-1.5 rounded text-[9px] font-mono font-bold truncate ${
+                                    isCurrentInSelectedSlot
+                                      ? 'bg-[#10B981]/20 text-[#10B981]'
+                                      : isInAnotherXISlot
+                                      ? 'bg-[#38BDF8]/20 text-[#38BDF8]'
+                                      : 'bg-[#10B981] text-[#070A0E]'
+                                  }`}
+                                >
+                                  {isCurrentInSelectedSlot
+                                    ? `✓ ACTIVE AT ${activeSlot.label}`
+                                    : isInAnotherXISlot
+                                    ? `⇄ SWAP (${otherSlotLabel})`
+                                    : `+ PLACE AT ${activeSlot.label}`}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
+
+                    {/* Locked Superstars matching this position or top available in Market */}
+                    {playersPool.some((p) => !unlockedSet.has(p.id)) && (
+                      <div className="pt-4 border-t border-white/10">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <div className="text-xs font-mono text-[#F59E0B] font-bold">
+                              SIGN NEW {canonicalPos} & WORLD CUP SUPERSTARS WITH COINS
+                            </div>
+                            <p className="text-[11px] text-slate-400">
+                              Unlock players below to place them directly into your {activeSlot.label} position.
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setPosFilter(canonicalPos);
+                              setSection('transfer_market');
+                            }}
+                            className="text-xs font-mono text-[#10B981] hover:underline whitespace-nowrap cursor-pointer"
+                          >
+                            Scout All {canonicalPos} in Market →
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                          {playersPool
+                            .filter((p) => !unlockedSet.has(p.id))
+                            .sort((a, b) => {
+                              const fitA = exactPositions.includes(a.position)
+                                ? 2
+                                : compatiblePositions.includes(a.position)
+                                ? 1
+                                : 0;
+                              const fitB = exactPositions.includes(b.position)
+                                ? 2
+                                : compatiblePositions.includes(b.position)
+                                ? 1
+                                : 0;
+                              if (fitB !== fitA) return fitB - fitA;
+                              return b.rating - a.rating;
+                            })
+                            .slice(0, 6)
+                            .map((star) => {
+                              const canAfford = coins >= star.price;
+                              return (
+                                <div
+                                  key={star.id}
+                                  className="p-3.5 rounded-xl bg-[#070A0E] border border-[#F59E0B]/30 flex flex-col justify-between gap-2.5"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex flex-col items-center shrink-0">
+                                      <PlayerPhotoAvatar
+                                        player={star}
+                                        className="w-14 h-14 rounded-xl border border-[#F59E0B]/40"
+                                        showPositionBadge={true}
+                                        showRatingBadge={true}
+                                      />
+                                      <div className="text-[10px] font-sans font-bold text-white truncate max-w-[76px] mt-1 leading-tight text-center">
+                                        {star.name}
+                                      </div>
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="font-display font-bold text-sm text-white truncate">
+                                        {star.name}
+                                      </div>
+                                      <div className="flex items-center justify-between text-xs font-mono mb-0.5 mt-0.5">
+                                        <span className="text-[#F59E0B] font-bold">
+                                          {star.position} · OVR {star.rating}
+                                        </span>
+                                        <span className="text-slate-400 text-[10px]">{star.nationality}</span>
+                                      </div>
+                                      <div className="text-[11px] text-slate-300 truncate">
+                                        {star.club}
+                                      </div>
+                                      <div className="text-[10px] font-mono text-slate-400 truncate mt-0.5">
+                                        PAC {star.attributes.pace} · SHO {star.attributes.shooting} · DRI {star.attributes.dribbling}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <button
+                                    disabled={!canAfford}
+                                    onClick={() => handlePurchasePlayerWithReveal(star)}
+                                    className={`w-full py-2 rounded-lg font-display font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
+                                      canAfford
+                                        ? 'bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E]'
+                                        : 'bg-white/5 text-slate-500 cursor-not-allowed'
+                                    }`}
+                                  >
+                                    <Coins className="w-3.5 h-3.5" />
+                                    BUY & ADD ({star.price.toLocaleString()} COINS)
+                                  </button>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -1026,18 +1438,38 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
             )}
           </div>
 
-          {/* Filter Bar */}
+          {/* Advanced Player Search & Filter Bar */}
           <div className="bg-[#111722] border border-white/10 rounded-2xl p-5 flex flex-col gap-4">
-            {/* Ownership Filter Tabs (All Cards / Purchased eFootball Cards / Available to Buy) */}
+            {/* Feedback Banner for Coin Purchases / Insufficient Coins */}
+            {marketFeedback && (
+              <div
+                className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 text-xs font-mono ${
+                  marketFeedback.type === 'success'
+                    ? 'bg-[#10B981]/15 border-[#10B981] text-[#10B981]'
+                    : 'bg-red-500/15 border-red-500/60 text-red-300'
+                }`}
+              >
+                <span>{marketFeedback.message}</span>
+                <button
+                  type="button"
+                  onClick={() => setMarketFeedback(null)}
+                  className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white text-[10px] cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {/* Ownership Filter Tabs */}
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3.5">
               <div className="flex flex-wrap items-center gap-2">
                 {(
                   [
-                    { id: 'all', label: `All eFootball Cards (${PLAYERS_DB.length})` },
-                    { id: 'owned', label: `My Purchased / Club Cards (${unlockedPlayerIds.length})` },
+                    { id: 'all', label: `All Players (${playersPool.length})` },
+                    { id: 'owned', label: `My Squad Collection (${unlockedPlayerIds.length})` },
                     {
                       id: 'available',
-                      label: `Available to Sign (${PLAYERS_DB.length - unlockedPlayerIds.length})`,
+                      label: `Available to Buy (${playersPool.length - unlockedPlayerIds.length})`,
                     },
                   ] as const
                 ).map((tab) => (
@@ -1059,29 +1491,54 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                 ))}
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  SoundEngine.playUIClick();
-                  setSection('spin_roulette');
-                }}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-[#070A0E] font-display font-bold text-xs flex items-center gap-1.5 shadow-lg cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                SPIN / DRAW PLAYER CARDS
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    SoundEngine.playUIClick();
+                    setSection('upgrades');
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-[#EC4899]/20 hover:bg-[#EC4899] text-[#F9A8D4] hover:text-white border border-[#EC4899]/50 font-display font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  UPGRADE PLAYER CARDS
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    SoundEngine.playUIClick();
+                    setSection('spin_roulette');
+                  }}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#F59E0B] to-[#D97706] text-[#070A0E] font-display font-bold text-xs flex items-center gap-1.5 shadow-lg cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  SPIN / DRAW CARDS
+                </button>
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-4">
+            {/* Row 1: Rarity Filter Buttons (Common, Rare, Elite, World Class, Legendary, Special Edition) */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-1.5">
-                {(['All', 'Legendary', 'World Class', 'Elite', 'Rare', 'Common'] as const).map((r) => (
+                <span className="text-[11px] font-mono text-slate-400 mr-1">RARITY:</span>
+                {(
+                  [
+                    'All',
+                    'Special Edition',
+                    'Legendary',
+                    'World Class',
+                    'Elite',
+                    'Rare',
+                    'Common',
+                  ] as const
+                ).map((r) => (
                   <button
                     key={r}
                     onClick={() => setRarityFilter(r)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap cursor-pointer ${
                       rarityFilter === r
                         ? 'bg-[#10B981] text-[#070A0E] font-bold'
-                        : 'bg-[#070A0E] text-slate-300 hover:text-white'
+                        : 'bg-[#070A0E] text-slate-300 hover:text-white border border-white/10'
                     }`}
                   >
                     {r}
@@ -1089,135 +1546,467 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                 ))}
               </div>
 
-              <div className="flex flex-wrap items-center gap-3">
-                <select
-                  value={posFilter}
-                  onChange={(e) => setPosFilter(e.target.value as typeof posFilter)}
-                  className="bg-[#070A0E] border border-white/15 rounded-lg px-3 py-2 text-xs text-white font-mono"
-                >
-                  <option value="All">All Positions</option>
-                  <option value="ST">ST (Striker)</option>
-                  <option value="LW">LW (Left Wing)</option>
-                  <option value="RW">RW (Right Wing)</option>
-                  <option value="CAM">CAM (Attacking Mid)</option>
-                  <option value="CM">CM (Central Mid)</option>
-                  <option value="CDM">CDM (Defensive Mid)</option>
-                  <option value="LB">LB (Left Back)</option>
-                  <option value="CB">CB (Center Back)</option>
-                  <option value="RB">RB (Right Back)</option>
-                  <option value="GK">GK (Goalkeeper)</option>
-                </select>
-
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search footballer or nation..."
-                    className="bg-[#070A0E] border border-white/15 rounded-lg pl-8 pr-3 py-2 text-xs text-white placeholder:text-slate-500 w-56"
-                  />
-                </div>
+              {/* Quick Position Filter Pills for ST, CF, LW, RW, CAM, CM, CDM, LB, RB, CB, GK */}
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="text-[11px] font-mono text-slate-400 mr-1">POS:</span>
+                {(
+                  [
+                    'All',
+                    'ST',
+                    'CF',
+                    'LW',
+                    'RW',
+                    'CAM',
+                    'CM',
+                    'CDM',
+                    'LB',
+                    'RB',
+                    'CB',
+                    'GK',
+                  ] as const
+                ).map((pos) => (
+                  <button
+                    key={pos}
+                    onClick={() => setPosFilter(pos)}
+                    className={`px-2.5 py-1 rounded-md font-mono text-[11px] font-bold transition-colors cursor-pointer ${
+                      posFilter === pos
+                        ? 'bg-[#F59E0B] text-[#070A0E]'
+                        : 'bg-[#070A0E] text-slate-300 hover:text-white border border-white/10'
+                    }`}
+                  >
+                    {pos}
+                  </button>
+                ))}
               </div>
+            </div>
+
+            {/* Row 2: Search Input + Overall Rating Filter + Coin Price Filter + Nationality Filter + Sort Dropdown */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5 pt-2 border-t border-white/10">
+              <div className="relative lg:col-span-2">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search player name, nation, club, or position..."
+                  className="w-full bg-[#070A0E] border border-white/15 focus:border-[#10B981] rounded-lg pl-8 pr-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none"
+                />
+              </div>
+
+              <select
+                value={minRatingFilter}
+                onChange={(e) => setMinRatingFilter(Number(e.target.value))}
+                className="bg-[#070A0E] border border-white/15 rounded-lg px-3 py-2 text-xs text-white font-mono"
+              >
+                <option value={0}>All Overall Ratings</option>
+                <option value={82}>82+ OVR Rating</option>
+                <option value={85}>85+ OVR Rating</option>
+                <option value={88}>88+ OVR Rating</option>
+                <option value={90}>90+ OVR Rating</option>
+                <option value={93}>93+ OVR Rating</option>
+                <option value={95}>95+ OVR Rating</option>
+              </select>
+
+              <select
+                value={maxPriceFilter}
+                onChange={(e) => setMaxPriceFilter(Number(e.target.value))}
+                className="bg-[#070A0E] border border-white/15 rounded-lg px-3 py-2 text-xs text-white font-mono"
+              >
+                <option value={0}>All Coin Prices</option>
+                <option value={25000}>Under 25,000 Coins</option>
+                <option value={50000}>Under 50,000 Coins</option>
+                <option value={80000}>Under 80,000 Coins</option>
+                <option value={110000}>Under 110,000 Coins</option>
+                <option value={150000}>Under 150,000 Coins</option>
+                <option value={250000}>Under 250,000 Coins</option>
+              </select>
+
+              <select
+                value={nationalityFilter}
+                onChange={(e) => setNationalityFilter(e.target.value)}
+                className="bg-[#070A0E] border border-white/15 rounded-lg px-3 py-2 text-xs text-white font-mono"
+              >
+                <option value="All">All Nationalities ({allNationalities.length})</option>
+                {allNationalities.map((nat) => (
+                  <option key={nat} value={nat}>
+                    {nat}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                className="bg-[#070A0E] border border-[#10B981]/40 rounded-lg px-3 py-2 text-xs text-[#10B981] font-mono font-bold"
+              >
+                <option value="rating_desc">Sort: Highest Rating</option>
+                <option value="price_asc">Sort: Lowest Price</option>
+                <option value="shooting_power_desc">Sort: Greatest Shooting Power</option>
+                <option value="passing_desc">Sort: Best Passing Accuracy</option>
+                <option value="speed_desc">Sort: Highest Speed</option>
+              </select>
             </div>
           </div>
 
-          {/* Authentic eFootball Foil Player Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {filteredMarketPlayers.map((player) => {
-              const isOwned = unlockedPlayerIds.includes(player.id);
-              const isInStartingXI = userSquad.slice(0, 11).some((s) => s.id === player.id);
-              const isLeadStar = userSquad[9]?.id === player.id;
-              const canAfford = coins >= player.price;
+          {/* Empty State When No Players Match Search */}
+          {filteredMarketPlayers.length === 0 ? (
+            <div className="bg-[#111722] border border-white/15 rounded-2xl p-12 text-center space-y-4">
+              <div className="text-sm font-mono text-[#F59E0B] font-bold">
+                NO PLAYERS MATCH YOUR SEARCH FILTERS
+              </div>
+              <p className="text-xs text-slate-300 max-w-md mx-auto">
+                No football players matched your current combination of name search, position ({posFilter}), rating, price, nationality, or rarity.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setPosFilter('All');
+                  setRarityFilter('All');
+                  setMinRatingFilter(0);
+                  setMaxPriceFilter(0);
+                  setNationalityFilter('All');
+                  setOwnershipFilter('all');
+                  setSortBy('rating_desc');
+                }}
+                className="px-5 py-2.5 rounded-xl bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-xs transition-colors cursor-pointer"
+              >
+                RESET ALL SEARCH FILTERS
+              </button>
+            </div>
+          ) : (
+            /* Authentic eFootball Foil Player Cards Grid */
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+              {filteredMarketPlayers.map((player) => {
+                const isOwned = unlockedPlayerIds.includes(player.id);
+                const isInStartingXI = userSquad.slice(0, 11).some((s) => s.id === player.id);
+                const isLeadStar = userSquad[9]?.id === player.id;
+                const canAfford = coins >= player.price;
 
-              return (
-                <EFootballPlayerCard
-                  key={player.id}
-                  player={player}
-                  isOwned={isOwned}
-                  isLeadStar={isLeadStar}
-                  isInStartingXI={isInStartingXI}
-                  onInspect={(p) =>
-                    setCardModalState({
-                      player: p,
-                      sourceTitle: 'EFOOTBALL PLAYER CARD SHOWCASE',
-                      sourceSubtitle: `${p.club} · ${p.nationality}`,
-                      skipAnimation: true,
-                    })
-                  }
-                  footerSlot={
-                    isOwned ? (
-                      isLeadStar ? (
-                        <div className="w-full py-2.5 bg-[#10B981]/20 border border-[#10B981] rounded-xl text-center font-mono text-xs text-[#10B981] font-bold flex items-center justify-center gap-1.5">
-                          <Check className="w-4 h-4" /> ACTIVE LEAD STAR (YOU)
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => {
-                            setSelectedSwapIndex(9);
-                            handleAssignUnlockedPlayerToSlot(player);
-                          }}
-                          className="w-full py-2.5 bg-white/10 hover:bg-[#10B981] text-white hover:text-[#070A0E] border border-white/15 rounded-xl font-display font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                        >
-                          <Check className="w-4 h-4" /> EQUIP AS LEAD STAR (YOU)
-                        </button>
-                      )
-                    ) : (
-                      <div className="space-y-2">
-                        <button
-                          disabled={!canAfford}
-                          onClick={() => handlePurchasePlayerWithReveal(player)}
-                          className={`w-full py-2.5 rounded-xl font-display font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer ${
-                            canAfford
-                              ? 'bg-[#10B981] hover:bg-[#059669] text-[#070A0E] shadow-md'
-                              : 'bg-white/5 text-slate-500 cursor-not-allowed'
-                          }`}
-                        >
-                          <Coins className="w-3.5 h-3.5" />
-                          SIGN CARD ({player.price.toLocaleString()} COINS)
-                        </button>
-
-                        {onTriggerPaymentCheckout && (
+                return (
+                  <EFootballPlayerCard
+                    key={player.id}
+                    player={player}
+                    isOwned={isOwned}
+                    isLeadStar={isLeadStar}
+                    isInStartingXI={isInStartingXI}
+                    onInspect={(p) =>
+                      setCardModalState({
+                        player: p,
+                        sourceTitle: 'EFOOTBALL PLAYER CARD SHOWCASE',
+                        sourceSubtitle: `${p.club} · ${p.nationality}`,
+                        skipAnimation: true,
+                      })
+                    }
+                    footerSlot={
+                      isOwned ? (
+                        isLeadStar ? (
+                          <div className="w-full py-2.5 bg-[#10B981]/20 border border-[#10B981] rounded-xl text-center font-mono text-xs text-[#10B981] font-bold flex items-center justify-center gap-1.5">
+                            <Check className="w-4 h-4" /> OWNED · ACTIVE LEAD STAR (YOU)
+                          </div>
+                        ) : (
                           <button
                             onClick={() => {
-                              SoundEngine.playUIClick();
-                              const usd =
-                                player.rating >= 95
-                                  ? 6.99
-                                  : player.rating >= 92
-                                  ? 4.99
-                                  : player.rating >= 89
-                                  ? 2.99
-                                  : 1.99;
-                              onTriggerPaymentCheckout({
-                                itemType: 'player',
-                                itemId: player.id,
-                                itemName: `${player.name} (${player.rating} OVR)`,
-                                subtitle: `${player.nationality} · ${player.position} · ${player.club}`,
-                                amountUsd: usd,
-                                coinsAdded: 0,
-                                playerToUnlock: player,
-                              });
+                              setSelectedSwapIndex(9);
+                              handleAssignUnlockedPlayerToSlot(player);
                             }}
-                            className="w-full py-2 rounded-xl bg-[#070A0E] hover:bg-[#192231] border border-[#38BDF8]/40 text-[#38BDF8] font-display font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                            className="w-full py-2.5 bg-white/10 hover:bg-[#10B981] text-white hover:text-[#070A0E] border border-white/15 rounded-xl font-display font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                           >
-                            <CreditCard className="w-3.5 h-3.5" />
-                            INSTANT SIGN ($
-                            {(player.rating >= 95
-                              ? 6.99
-                              : player.rating >= 92
-                              ? 4.99
-                              : player.rating >= 89
-                              ? 2.99
-                              : 1.99
-                            ).toFixed(2)}
-                            )
+                            <Check className="w-4 h-4" /> OWNED · EQUIP TO SQUAD
                           </button>
-                        )}
+                        )
+                      ) : (
+                        <div className="space-y-2">
+                          <button
+                            onClick={() => handlePurchasePlayerWithReveal(player)}
+                            className={`w-full py-2.5 rounded-xl font-display font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer ${
+                              canAfford
+                                ? 'bg-[#10B981] hover:bg-[#059669] text-[#070A0E] shadow-md'
+                                : 'bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-300'
+                            }`}
+                          >
+                            <Coins className="w-3.5 h-3.5" />
+                            {canAfford
+                              ? `BUY (${player.price.toLocaleString()} COINS)`
+                              : `BUY (${player.price.toLocaleString()} COINS · NEED ${(player.price - coins).toLocaleString()} MORE)`}
+                          </button>
+
+                          {onTriggerPaymentCheckout && (
+                            <button
+                              onClick={() => {
+                                SoundEngine.playUIClick();
+                                const usd =
+                                  player.rating >= 95
+                                    ? 6.99
+                                    : player.rating >= 92
+                                    ? 4.99
+                                    : player.rating >= 89
+                                    ? 2.99
+                                    : 1.99;
+                                onTriggerPaymentCheckout({
+                                  itemType: 'player',
+                                  itemId: player.id,
+                                  itemName: `${player.name} (${player.rating} OVR)`,
+                                  subtitle: `${player.nationality} · ${player.position} · ${player.club}`,
+                                  amountUsd: usd,
+                                  coinsAdded: 0,
+                                  playerToUnlock: player,
+                                });
+                              }}
+                              className="w-full py-2 rounded-xl bg-[#070A0E] hover:bg-[#192231] border border-[#38BDF8]/40 text-[#38BDF8] font-display font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <CreditCard className="w-3.5 h-3.5" />
+                              INSTANT SIGN ($
+                              {(player.rating >= 95
+                                ? 6.99
+                                : player.rating >= 92
+                                ? 4.99
+                                : player.rating >= 89
+                                ? 2.99
+                                : 1.99
+                              ).toFixed(2)}
+                              )
+                            </button>
+                          )}
+                        </div>
+                      )
+                    }
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SECTION 2B: COLLECTIBLE UPGRADE CARDS & SPECIAL EDITION EVOLUTIONS */}
+      {section === 'upgrades' && (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-[#111722] via-[#27102C] to-[#111722] border-2 border-[#EC4899]/50 rounded-2xl p-6 space-y-5 shadow-2xl">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/10 pb-4">
+              <div>
+                <div className="text-xs font-mono text-[#EC4899] font-bold flex items-center gap-1.5">
+                  <Zap className="w-4 h-4" />
+                  COLLECTIBLE TRAINING, BOOST & SPECIAL EDITION UPGRADE CARDS
+                </div>
+                <h2 className="font-display text-2xl sm:text-3xl font-bold text-white mt-1">
+                  BOOST YOUR PLAYERS’ STATS & IN-MATCH PERFORMANCE
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl">
+                  Select a footballer from your collection below, then purchase Shooting, Passing, Speed, Strength, Stamina, Training, or Special Edition cards to permanently boost their attributes on the pitch!
+                </p>
+              </div>
+
+              {/* Target Player Selector for Upgrades */}
+              <div className="bg-[#070A0E] border border-white/15 rounded-xl p-3.5 min-w-[270px]">
+                <label className="block text-[10px] font-mono text-[#10B981] font-bold mb-1.5">
+                  SELECT PLAYER TO UPGRADE:
+                </label>
+                <select
+                  value={upgradeTargetPlayerId}
+                  onChange={(e) => setUpgradeTargetPlayerId(e.target.value)}
+                  className="w-full bg-[#111722] border border-white/20 rounded-lg px-3 py-2 text-xs text-white font-bold"
+                >
+                  {playersPool
+                    .filter((p) => unlockedPlayerIds.includes(p.id))
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.position} · OVR {p.rating} · {p.rarity})
+                      </option>
+                    ))}
+                </select>
+              </div>
+            </div>
+
+            {marketFeedback && (
+              <div
+                className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 text-xs font-mono ${
+                  marketFeedback.type === 'success'
+                    ? 'bg-[#10B981]/15 border-[#10B981] text-[#10B981]'
+                    : 'bg-red-500/15 border-red-500/60 text-red-300'
+                }`}
+              >
+                <span>{marketFeedback.message}</span>
+                <button
+                  type="button"
+                  onClick={() => setMarketFeedback(null)}
+                  className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white text-[10px] cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {/* Selected Target Player Live Stat Preview */}
+            {(() => {
+              const targetPlayer =
+                playersPool.find((p) => p.id === upgradeTargetPlayerId) || userSquad[9] || playersPool[0];
+              if (!targetPlayer) return null;
+              return (
+                <div className="bg-[#070A0E] border border-white/15 rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <PlayerPhotoAvatar
+                      player={targetPlayer}
+                      className="w-16 h-16 rounded-xl border-2 border-[#10B981]"
+                      showPositionBadge={true}
+                      showRatingBadge={true}
+                    />
+                    <div>
+                      <div className="text-[11px] font-mono text-[#10B981] font-bold">
+                        ACTIVE UPGRADE TARGET · {targetPlayer.rarity.toUpperCase()}
                       </div>
-                    )
-                  }
-                />
+                      <div className="font-display text-xl font-bold text-white">
+                        {targetPlayer.name} (OVR {targetPlayer.rating})
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        {targetPlayer.nationality} · {targetPlayer.club}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 font-mono text-xs w-full md:w-auto">
+                    {[
+                      { label: 'SPD', val: targetPlayer.attributes.pace },
+                      { label: 'SHO', val: targetPlayer.attributes.shooting },
+                      { label: 'PAS', val: targetPlayer.attributes.passing },
+                      { label: 'DRI', val: targetPlayer.attributes.dribbling },
+                      { label: 'PHY', val: targetPlayer.attributes.physical },
+                      { label: 'STA', val: targetPlayer.attributes.stamina },
+                    ].map((s) => (
+                      <div
+                        key={s.label}
+                        className="px-3 py-1.5 rounded-lg bg-[#111722] border border-white/10 text-center"
+                      >
+                        <div className="text-[10px] text-slate-400">{s.label}</div>
+                        <div className="text-sm font-bold text-[#F59E0B]">{s.val}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Rarity Filter for Collectible Upgrade Cards */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-mono text-slate-400">CARD RARITY:</span>
+              {(['All', 'Common', 'Rare', 'Elite', 'Legendary', 'Special Edition'] as const).map(
+                (r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setUpgradeRarityFilter(r)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                      upgradeRarityFilter === r
+                        ? 'bg-[#EC4899] text-white font-bold'
+                        : 'bg-[#070A0E] text-slate-300 border border-white/10 hover:text-white'
+                    }`}
+                  >
+                    {r}
+                  </button>
+                )
+              )}
+            </div>
+          </div>
+
+          {/* Grid of Collectible Upgrade & Boost Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {UPGRADE_CARDS_DB.filter(
+              (c) => upgradeRarityFilter === 'All' || c.rarity === upgradeRarityFilter
+            ).map((card) => {
+              const canAfford = coins >= card.price;
+              const targetPlayer =
+                playersPool.find((p) => p.id === upgradeTargetPlayerId) || userSquad[9] || playersPool[0];
+
+              return (
+                <div
+                  key={card.id}
+                  className="bg-[#111722] border-2 rounded-2xl overflow-hidden flex flex-col justify-between transition-all hover:-translate-y-1 shadow-xl"
+                  style={{ borderColor: `${card.accentColor}77` }}
+                >
+                  <div>
+                    {/* Collectible Card Artwork Header */}
+                    <div
+                      className="relative h-36 p-4 flex items-center justify-between overflow-hidden"
+                      style={{
+                        background: `radial-gradient(circle at 30% 30%, ${card.accentColor}44 0%, #070A0E 85%)`,
+                      }}
+                    >
+                      <div className="space-y-1 z-10">
+                        <span
+                          className="inline-block px-2.5 py-0.5 rounded-full font-mono text-[10px] font-extrabold uppercase tracking-wider border"
+                          style={{
+                            color: card.accentColor,
+                            borderColor: card.accentColor,
+                            backgroundColor: `${card.accentColor}1A`,
+                          }}
+                        >
+                          {card.rarity} · {card.category}
+                        </span>
+                        <h3 className="font-display text-lg font-bold text-white leading-snug max-w-[210px]">
+                          {card.name}
+                        </h3>
+                        <div className="font-mono text-xs text-[#F59E0B] font-bold">
+                          +{card.ratingBonus} OVR RATING BOOST
+                        </div>
+                      </div>
+
+                      {/* Bespoke SVG Card Crest Artwork */}
+                      <div
+                        className="w-20 h-24 rounded-xl border-2 flex flex-col items-center justify-center shrink-0 shadow-2xl"
+                        style={{
+                          borderColor: card.accentColor,
+                          background: `linear-gradient(145deg, ${card.accentColor}33, #090D16)`,
+                        }}
+                      >
+                        <Zap className="w-8 h-8 mb-1" style={{ color: card.accentColor }} />
+                        <span className="font-mono text-[10px] font-black text-white">
+                          +{card.ratingBonus} OVR
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="p-5 space-y-3">
+                      <p className="text-xs text-slate-300 leading-relaxed">{card.description}</p>
+                      <div className="p-2.5 rounded-xl bg-[#070A0E] border border-white/10 font-mono text-[11px] text-[#10B981] font-bold">
+                        EFFECT: {card.effectSummary}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-5 pt-0 space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!targetPlayer) return;
+                        if (coins < card.price) {
+                          SoundEngine.playUIClick();
+                          setMarketFeedback({
+                            type: 'error',
+                            message: `Insufficient Coins! You need ${(card.price - coins).toLocaleString()} more Coins to buy ${card.name}.`,
+                          });
+                          return;
+                        }
+                        if (onApplyUpgradeCard) {
+                          onApplyUpgradeCard(targetPlayer.id, card);
+                        }
+                        setMarketFeedback({
+                          type: 'success',
+                          message: `Applied ${card.name} to ${targetPlayer.name}! Stats & in-match performance permanently boosted!`,
+                        });
+                      }}
+                      className={`w-full py-3 rounded-xl font-display font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                        canAfford
+                          ? 'text-[#070A0E] shadow-lg hover:brightness-110'
+                          : 'bg-red-500/15 border border-red-500/40 text-red-300'
+                      }`}
+                      style={canAfford ? { backgroundColor: card.accentColor } : undefined}
+                    >
+                      <Coins className="w-4 h-4" />
+                      {canAfford
+                        ? `BUY & UPGRADE ${targetPlayer?.name.split(' ').pop()?.toUpperCase()} (${card.price.toLocaleString()} COINS)`
+                        : `NEED ${card.price.toLocaleString()} COINS`}
+                    </button>
+                  </div>
+                </div>
               );
             })}
           </div>
