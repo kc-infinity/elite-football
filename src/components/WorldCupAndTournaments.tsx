@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { Award, CheckCircle2, ChevronRight, Play, Shield, Sparkles, Trophy } from 'lucide-react';
 import {
+  buildOptimalSquadForFormation,
   FootballPlayer,
   FormationName,
   FORMATIONS,
+  getPlayerSlotFitLevel,
   STADIUMS,
   TeamData,
   TEAMS_DB,
@@ -19,8 +21,10 @@ interface WorldCupAndTournamentsProps {
   userTeam: TeamData;
   userFormation: FormationName;
   userSquad: FootballPlayer[];
+  allUnlockedPlayers?: FootballPlayer[];
   onSelectUserTeam: (team: TeamData) => void;
   onSelectFormation: (formation: FormationName) => void;
+  onUpdateSquadOrder?: (newSquad: FootballPlayer[]) => void;
   onStartTournamentMatch: (config: {
     opponent: TeamData;
     stageLabel: string;
@@ -48,8 +52,10 @@ export const WorldCupAndTournaments: React.FC<WorldCupAndTournamentsProps> = ({
   userTeam,
   userFormation,
   userSquad,
+  allUnlockedPlayers = [],
   onSelectUserTeam,
   onSelectFormation,
+  onUpdateSquadOrder,
   onStartTournamentMatch,
   tournamentStageIndex,
   onAdvanceStageSimulation,
@@ -58,6 +64,7 @@ export const WorldCupAndTournaments: React.FC<WorldCupAndTournamentsProps> = ({
   const [activeTab, setActiveTab] = useState<'world_cup' | 'tournaments'>(initialTab);
   const [selectedTournament, setSelectedTournament] = useState<TournamentDefinition>(TOURNAMENTS_LIST[0]);
   const [wcStep, setWcStep] = useState<'country' | 'squad' | 'bracket'>('bracket');
+  const [selectedSlotIdx, setSelectedSlotIdx] = useState<number>(0);
 
   const internationalTeams = TEAMS_DB.filter((t) => t.category === 'International');
   const opponentsPool = TEAMS_DB.filter((t) => t.id !== userTeam.id);
@@ -228,14 +235,14 @@ export const WorldCupAndTournaments: React.FC<WorldCupAndTournamentsProps> = ({
 
           {/* Step 2: Choose Squad & Formation */}
           {wcStep === 'squad' && (
-            <div className="bg-[#111722] border border-white/10 rounded-2xl p-6">
-              <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+            <div className="bg-[#111722] border border-white/10 rounded-2xl p-6 space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <h3 className="font-display text-xl font-bold text-white">
                     2. {userTeam.name} Starting XI & Tactical Formation
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Select your preferred formation before entering the World Cup Group Stage.
+                    Click any position below (GK, RB, CB, LB, CDM, CM, CAM, LM, RM, LW, RW, ST, CF) to select, replace, or swap players from your unlocked squad.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -246,7 +253,7 @@ export const WorldCupAndTournaments: React.FC<WorldCupAndTournamentsProps> = ({
                         SoundEngine.playUIClick();
                         onSelectFormation(form);
                       }}
-                      className={`px-3 py-1.5 rounded text-xs font-mono font-semibold transition-colors ${
+                      className={`px-3 py-1.5 rounded text-xs font-mono font-semibold transition-colors cursor-pointer ${
                         userFormation === form
                           ? 'bg-[#10B981] text-[#070A0E]'
                           : 'bg-white/5 text-slate-300 hover:bg-white/10'
@@ -255,9 +262,27 @@ export const WorldCupAndTournaments: React.FC<WorldCupAndTournamentsProps> = ({
                       {form}
                     </button>
                   ))}
+                  {onUpdateSquadOrder && allUnlockedPlayers.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SoundEngine.playUIClick();
+                        onUpdateSquadOrder(
+                          buildOptimalSquadForFormation(
+                            allUnlockedPlayers,
+                            userSquad,
+                            userFormation
+                          )
+                        );
+                      }}
+                      className="px-3 py-1.5 rounded text-xs font-mono font-bold bg-[#38BDF8]/15 border border-[#38BDF8]/40 text-[#38BDF8] hover:bg-[#38BDF8] hover:text-[#070A0E] transition-colors cursor-pointer"
+                    >
+                      Auto-Fill Best XI
+                    </button>
+                  )}
                   <button
                     onClick={() => setWcStep('bracket')}
-                    className="ml-2 px-4 py-2 bg-[#F59E0B] text-[#070A0E] font-display font-bold text-xs rounded-lg"
+                    className="ml-2 px-4 py-2 bg-[#F59E0B] text-[#070A0E] font-display font-bold text-xs rounded-lg cursor-pointer"
                   >
                     Proceed to Group Stage
                   </button>
@@ -267,10 +292,20 @@ export const WorldCupAndTournaments: React.FC<WorldCupAndTournamentsProps> = ({
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                 {userSquad.slice(0, 11).map((player, idx) => {
                   const slot = FORMATIONS[userFormation][idx];
+                  const isSelected = selectedSlotIdx === idx;
                   return (
-                    <div
-                      key={player.id}
-                      className="p-3 rounded-xl bg-[#070A0E]/80 border border-white/10 flex items-center justify-between gap-3"
+                    <button
+                      key={`${slot?.label || idx}_${player.id}`}
+                      type="button"
+                      onClick={() => {
+                        SoundEngine.playUIClick();
+                        setSelectedSlotIdx(idx);
+                      }}
+                      className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-left transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-[#192231] border-[#F59E0B] ring-2 ring-[#F59E0B]/60'
+                          : 'bg-[#070A0E]/80 border-white/10 hover:border-white/30'
+                      }`}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <PlayerPhotoAvatar
@@ -282,21 +317,102 @@ export const WorldCupAndTournaments: React.FC<WorldCupAndTournamentsProps> = ({
                           <div className="text-xs font-mono text-[#10B981] font-bold">
                             {slot?.label || player.position} · #{player.number}
                           </div>
-                          <div className="text-[11px] text-slate-300 truncate">
-                            {player.nationality}
+                          <div className="text-xs font-display font-bold text-white truncate">
+                            {player.name}
                           </div>
-                          <div className="text-[10px] font-mono text-slate-400">
-                            PAC {player.attributes.pace} · SHO {player.attributes.shooting}
+                          <div className="text-[11px] text-slate-300 truncate">
+                            {player.nationality} ({player.position})
                           </div>
                         </div>
                       </div>
                       <div className="font-mono text-lg font-bold text-[#F59E0B] shrink-0">
                         {player.rating}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
+
+              {onUpdateSquadOrder && allUnlockedPlayers.length > 0 && (() => {
+                const activeSlot = FORMATIONS[userFormation][selectedSlotIdx] || FORMATIONS[userFormation][0];
+                const sortedCandidates = [...allUnlockedPlayers].sort((a, b) => {
+                  const fitLevelA = getPlayerSlotFitLevel(a.position, activeSlot.role, activeSlot.label);
+                  const fitLevelB = getPlayerSlotFitLevel(b.position, activeSlot.role, activeSlot.label);
+                  const scoreA = fitLevelA === 'exact' ? 2 : fitLevelA === 'compatible' ? 1 : 0;
+                  const scoreB = fitLevelB === 'exact' ? 2 : fitLevelB === 'compatible' ? 1 : 0;
+                  if (scoreB !== scoreA) return scoreB - scoreA;
+                  return b.rating - a.rating;
+                });
+                return (
+                  <div className="p-4 rounded-xl bg-[#070A0E] border border-[#10B981]/40 space-y-3">
+                    <div className="text-xs font-mono text-[#10B981] font-bold">
+                      SELECT PLAYER FOR {activeSlot.label} POSITION (CLICK TO REPLACE OR SWAP):
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
+                      {sortedCandidates.map((cand) => {
+                        const existingIdx = userSquad.slice(0, 11).findIndex((p) => p.id === cand.id);
+                        const isActiveHere = existingIdx === selectedSlotIdx;
+                        const fit = getPlayerSlotFitLevel(cand.position, activeSlot.role, activeSlot.label);
+                        return (
+                          <button
+                            key={cand.id}
+                            type="button"
+                            onClick={() => {
+                              SoundEngine.playUIClick();
+                              const copy = [...userSquad];
+                              const prevAtTarget = copy[selectedSlotIdx];
+                              const fullIdx = copy.findIndex((p) => p.id === cand.id);
+                              if (fullIdx >= 0 && fullIdx < 11) {
+                                copy[selectedSlotIdx] = copy[fullIdx];
+                                copy[fullIdx] = prevAtTarget;
+                              } else if (fullIdx >= 11) {
+                                copy[selectedSlotIdx] = cand;
+                                if (prevAtTarget) copy[fullIdx] = prevAtTarget;
+                              } else {
+                                copy[selectedSlotIdx] = cand;
+                                if (prevAtTarget && !copy.some((p) => p.id === prevAtTarget.id)) {
+                                  copy.push(prevAtTarget);
+                                }
+                              }
+                              onUpdateSquadOrder(copy);
+                            }}
+                            className={`p-2 rounded-xl border flex flex-col items-center text-center transition-all cursor-pointer ${
+                              isActiveHere
+                                ? 'bg-[#192231] border-[#10B981] ring-2 ring-[#10B981]'
+                                : fit === 'exact'
+                                ? 'bg-[#111722] border-[#10B981]/60 hover:border-[#10B981]'
+                                : 'bg-[#111722] border-white/10 hover:border-white/30'
+                            }`}
+                          >
+                            <div className="w-full flex items-center justify-between text-[9px] font-mono mb-1">
+                              <span className={fit === 'exact' ? 'text-[#10B981] font-bold' : 'text-slate-400'}>
+                                {cand.position}
+                              </span>
+                              <span className="text-[#F59E0B] font-bold">OVR {cand.rating}</span>
+                            </div>
+                            <PlayerPhotoAvatar
+                              player={cand}
+                              className="w-12 h-12 rounded-lg border border-white/20"
+                              showPositionBadge={false}
+                              showRatingBadge={false}
+                            />
+                            <div className="text-xs font-bold text-white truncate w-full mt-1">
+                              {cand.name}
+                            </div>
+                            <div className="text-[9px] font-mono text-[#10B981] mt-0.5 truncate w-full">
+                              {isActiveHere
+                                ? `✓ AT ${activeSlot.label}`
+                                : existingIdx >= 0
+                                ? `⇄ SWAP (${FORMATIONS[userFormation][existingIdx]?.label})`
+                                : `+ PLACE AT ${activeSlot.label}`}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
 

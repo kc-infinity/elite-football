@@ -809,12 +809,10 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
               <div className="flex items-center gap-2.5 min-w-0">
                 <PlayerPhotoAvatar
                   player={
-                    PLAYERS_DB.find((p) => p.name === hud.controlledPlayerName) || {
-                      id: 'hud_active',
-                      name: hud.controlledPlayerName,
-                      position: (hud.controlledPlayerRole as FootballPlayer['position']) || 'ST',
-                      rating: hud.controlledPlayerRating,
-                    }
+                    homeSquad.find((p) => p.name === hud.controlledPlayerName) ||
+                    PLAYERS_DB.find((p) => p.name === hud.controlledPlayerName) ||
+                    homeSquad[0] ||
+                    PLAYERS_DB[0]
                   }
                   className="w-11 h-11 rounded-lg border border-[#10B981]/50"
                   showRatingBadge={true}

@@ -834,6 +834,7 @@ interface PitchPlayerBadgeProps {
   isCaptain?: boolean;
   isSelected?: boolean;
   isLeadStar?: boolean;
+  compact?: boolean;
   onClick?: () => void;
 }
 
@@ -843,6 +844,7 @@ export const PitchPlayerPhotoNode: React.FC<PitchPlayerBadgeProps> = ({
   isCaptain,
   isSelected,
   isLeadStar,
+  compact,
   onClick,
 }) => {
   const accent = RARITY_ACCENT[player.rarity] || '#10B981';

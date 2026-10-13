@@ -195,6 +195,9 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
   const [upgradeTargetPlayerId, setUpgradeTargetPlayerId] = useState<string>(
     userSquad[9]?.id || PLAYERS_DB[0].id
   );
+  const [upgradeRarityFilter, setUpgradeRarityFilter] = useState<
+    'All' | 'Common' | 'Rare' | 'Elite' | 'Legendary' | 'Special Edition'
+  >('All');
   const [upgradeFeedback, setUpgradeFeedback] = useState<string | null>(null);
 
   // Tactics state
@@ -1700,19 +1703,34 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                     }
                     footerSlot={
                       isOwned ? (
-                        isLeadStar ? (
-                          <div className="w-full py-2.5 bg-[#10B981]/20 border border-[#10B981] rounded-xl text-center font-mono text-xs text-[#10B981] font-bold flex items-center justify-center gap-1.5">
-                            <Check className="w-4 h-4" /> OWNED · ACTIVE LEAD STAR (YOU)
-                          </div>
+                        isInStartingXI ? (
+                          <button
+                            onClick={() => {
+                              const currentSlotIdx = userSquad
+                                .slice(0, 11)
+                                .findIndex((s) => s.id === player.id);
+                              setSelectedSwapIndex(currentSlotIdx >= 0 ? currentSlotIdx : 0);
+                              setSquadPositionFilter('slot_match');
+                              setSection('my_team');
+                            }}
+                            className="w-full py-2.5 bg-[#10B981]/20 hover:bg-[#10B981]/30 border border-[#10B981] rounded-xl text-center font-mono text-xs text-[#10B981] font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Check className="w-4 h-4" /> IN STARTING XI ({FORMATIONS[userFormation][userSquad.slice(0, 11).findIndex((s) => s.id === player.id)]?.label || player.position})
+                          </button>
                         ) : (
                           <button
                             onClick={() => {
-                              setSelectedSwapIndex(9);
-                              handleAssignUnlockedPlayerToSlot(player);
+                              const bestIdx = findBestSlotIndexForPlayer(
+                                player,
+                                userFormation,
+                                userSquad
+                              );
+                              handleAssignUnlockedPlayerToSlot(player, bestIdx);
+                              setSection('my_team');
                             }}
                             className="w-full py-2.5 bg-white/10 hover:bg-[#10B981] text-white hover:text-[#070A0E] border border-white/15 rounded-xl font-display font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                           >
-                            <Check className="w-4 h-4" /> OWNED · EQUIP TO SQUAD
+                            <Check className="w-4 h-4" /> OWNED · PLACE AT {FORMATIONS[userFormation][findBestSlotIndexForPlayer(player, userFormation, userSquad)]?.label || player.position}
                           </button>
                         )
                       ) : (
@@ -1986,7 +2004,7 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                           return;
                         }
                         if (onApplyUpgradeCard) {
-                          onApplyUpgradeCard(targetPlayer.id, card);
+                          onApplyUpgradeCard(card, targetPlayer.id);
                         }
                         setMarketFeedback({
                           type: 'success',
@@ -2358,13 +2376,17 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                   </button>
                   <button
                     onClick={() => {
-                      setSelectedSwapIndex(9);
-                      handleAssignUnlockedPlayerToSlot(rouletteWinner);
+                      const bestIdx = findBestSlotIndexForPlayer(
+                        rouletteWinner,
+                        userFormation,
+                        userSquad
+                      );
+                      handleAssignUnlockedPlayerToSlot(rouletteWinner, bestIdx);
                       setSection('my_team');
                     }}
                     className="px-5 py-3 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-xs rounded-xl transition-colors cursor-pointer"
                   >
-                    PUT IN STARTING XI (LEAD STAR)
+                    PLACE AT {FORMATIONS[userFormation][findBestSlotIndexForPlayer(rouletteWinner, userFormation, userSquad)]?.label || rouletteWinner.position} IN SQUAD
                   </button>
                   <button
                     disabled={coins < activeSpinTier.costCoins}
@@ -2493,8 +2515,9 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
         spinAgainLabel={cardModalState?.spinAgainLabel}
         onSpinAgain={cardModalState?.onSpinAgain}
         onEquipToSquad={(player) => {
-          setSelectedSwapIndex(9);
-          handleAssignUnlockedPlayerToSlot(player);
+          const bestIdx = findBestSlotIndexForPlayer(player, userFormation, userSquad);
+          handleAssignUnlockedPlayerToSlot(player, bestIdx);
+          setSection('my_team');
         }}
         onClose={() => {
           setCardModalState(null);

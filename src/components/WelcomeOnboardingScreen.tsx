@@ -3,7 +3,7 @@ import { Check, ChevronRight, Eye, EyeOff, Lock, Mail, ShieldCheck, User } from 
 import { FootballPlayer, TeamData } from '../data/gameDatabase';
 import { useAppIcon } from '../data/appIconStore';
 import { SoundEngine } from '../engine/SoundEngine';
-import { AuthenticatedAccount } from './OnlineMatchAndAuthModal';
+import { AuthenticatedAccount } from './AuthAndCheckoutModal';
 import heroStadiumImg from '../assets/images/hero_stadium_backdrop_1791305638088.jpg';
 
 interface WelcomeOnboardingScreenProps {

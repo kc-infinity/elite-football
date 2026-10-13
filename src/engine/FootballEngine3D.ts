@@ -412,9 +412,7 @@ export class FootballEngine3D {
       FORMATIONS[this.config.onlineConfig?.awayFormation || this.config.awayTeam.defaultFormation] ||
       FORMATIONS['4-3-3'];
 
-    const is1v1 =
-      mode === '1v1' ||
-      (mode === 'join_code_match' && this.config.onlineConfig?.matchFormat === '1v1');
+    const is1v1 = mode === '1v1';
     const isAttackVsDef = mode === 'attack_vs_defense';
 
     // Spawn Home Players (Attacking from Left -X toward Right +X)
@@ -428,14 +426,11 @@ export class FootballEngine3D {
 
       const p3d = createArticulatedPlayer3D(
         pData,
+        this.config.homeTeam,
         'home',
         slot.role,
         worldX,
-        worldZ,
-        this.config.homeTeam.primaryColor,
-        this.config.homeTeam.secondaryColor,
-        this.config.homeTeam.shortsColor,
-        this.config.homeTeam.gkColor
+        worldZ
       );
       p3d.celebrationType = this.config.preferredCelebration || pData.celebration;
       this.scene.add(p3d.root);
@@ -463,14 +458,11 @@ export class FootballEngine3D {
 
         const p3d = createArticulatedPlayer3D(
           pData,
+          this.config.awayTeam,
           'away',
           slot.role,
           worldX,
-          worldZ,
-          this.config.awayTeam.primaryColor,
-          this.config.awayTeam.secondaryColor,
-          this.config.awayTeam.shortsColor,
-          this.config.awayTeam.gkColor
+          worldZ
         );
         this.scene.add(p3d.root);
         this.players.push(p3d);
@@ -982,11 +974,7 @@ export class FootballEngine3D {
   }
 
   private is1v1Match(): boolean {
-    return (
-      this.config.mode === '1v1' ||
-      (this.config.mode === 'join_code_match' && this.config.onlineConfig?.matchFormat === '1v1') ||
-      this.players.length <= 6
-    );
+    return this.config.mode === '1v1' || this.players.length <= 6;
   }
 
   private findBestTeammateForPass(
@@ -1627,8 +1615,6 @@ export class FootballEngine3D {
       m === '11v11' ||
       m === 'world_cup' ||
       m === 'tournament' ||
-      m === 'join_code_match' ||
-      m === 'dream_team_11v11_online' ||
       m === '1v1' ||
       m === 'attack_vs_defense'
     );
@@ -2669,11 +2655,7 @@ export class FootballEngine3D {
     }
 
     // 5. AI Tactical Movement for Teammates & Opponents
-    const isOnlineChallenge =
-      this.isOnlineMatch() ||
-      this.config.mode === 'join_code_match' ||
-      this.config.mode === 'dream_team_11v11_online' ||
-      this.config.mode === '1v1';
+    const isOnlineChallenge = this.isOnlineMatch() || this.config.mode === '1v1';
     const baseDiffMult =
       this.config.difficulty === 'World Class'
         ? 1.18

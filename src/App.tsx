@@ -21,12 +21,17 @@ import {
   Trophy,
   User,
   Users,
+  Wifi,
+  Globe,
   Zap,
 } from 'lucide-react';
 import {
+  buildOptimalSquadForFormation,
   CelebrationType,
+  findBestSlotIndexForPlayer,
   FootballPlayer,
   FormationName,
+  FORMATIONS,
   MATCH_MODES,
   MatchModeId,
   PackDefinition,
@@ -50,7 +55,7 @@ import {
 } from './engine/FootballEngine3D';
 import { SoundEngine } from './engine/SoundEngine';
 import { PlayerPhotoAvatar } from './components/PlayerPhotoAvatar';
-import { MatchViewport3D } from './components/MatchViewport3D';
+import { MatchViewport3D, OnlineMatchViewportInfo } from './components/MatchViewport3D';
 import { OpponentSquadInfo, OpponentSquadPopup } from './components/OpponentSquadPopup';
 import { WorldCupAndTournaments } from './components/WorldCupAndTournaments';
 import { MyTeamAndMarket } from './components/MyTeamAndMarket';
@@ -64,7 +69,8 @@ import {
   GoogleAuthModal,
   PaymentCheckoutItem,
   PaymentCheckoutModal,
-} from './components/OnlineMatchAndAuthModal';
+} from './components/AuthAndCheckoutModal';
+import { OnlineMatchModal, OnlineMatchLaunchPayload } from './components/OnlineMatchModal';
 import { useAppIcon } from './data/appIconStore';
 import heroStadiumImg from './assets/images/hero_stadium_backdrop_1791305638088.jpg';
 
@@ -85,16 +91,16 @@ type ActiveScreen =
   | 'settings';
 
 interface SavedPlayerBoost {
-  speed?: number;
+  pace?: number;
   shooting?: number;
-  shotPower?: number;
-  shotAccuracy?: number;
   passing?: number;
   dribbling?: number;
-  ballControl?: number;
+  defending?: number;
   physical?: number;
   stamina?: number;
-  defending?: number;
+  skill?: number;
+  curve?: number;
+  reactions?: number;
   rating?: number;
   weakFoot?: number;
   skillMoves?: number;
@@ -205,28 +211,32 @@ export default function App() {
     return {};
   });
 
-  const applyBoostToPlayer = (p: FootballPlayer, boosts: Record<string, SavedPlayerBoost>): FootballPlayer => {
+  const applyBoostToPlayer = (
+    p: FootballPlayer,
+    boosts: Record<string, SavedPlayerBoost>
+  ): FootballPlayer => {
     const b = boosts[p.id];
     if (!b) return p;
     const clampStat = (val: number) => Math.min(99, Math.max(40, val));
+    const clampStars = (val: number) => Math.min(5, Math.max(1, val)) as 1 | 2 | 3 | 4 | 5;
     return {
       ...p,
       rating: clampStat(p.rating + (b.rating || 0)),
       rarity: b.rarity || p.rarity,
-      weakFoot: Math.min(5, Math.max(1, (p.weakFoot ?? 4) + (b.weakFoot || 0))) as 1 | 2 | 3 | 4 | 5,
-      skillMoves: Math.min(5, Math.max(1, (p.skillMoves ?? 4) + (b.skillMoves || 0))) as 1 | 2 | 3 | 4 | 5,
-      stats: {
-        ...p.stats,
-        speed: clampStat(p.stats.speed + (b.speed || 0)),
-        shooting: clampStat(p.stats.shooting + (b.shooting || 0)),
-        shotPower: clampStat((p.stats.shotPower ?? p.stats.shooting) + (b.shotPower || 0)),
-        shotAccuracy: clampStat((p.stats.shotAccuracy ?? p.stats.shooting) + (b.shotAccuracy || 0)),
-        passing: clampStat(p.stats.passing + (b.passing || 0)),
-        dribbling: clampStat(p.stats.dribbling + (b.dribbling || 0)),
-        ballControl: clampStat((p.stats.ballControl ?? p.stats.dribbling) + (b.ballControl || 0)),
-        physical: clampStat(p.stats.physical + (b.physical || 0)),
-        stamina: clampStat((p.stats.stamina ?? p.stats.physical) + (b.stamina || 0)),
-        defending: clampStat(p.stats.defending + (b.defending || 0)),
+      attributes: {
+        ...p.attributes,
+        pace: clampStat(p.attributes.pace + (b.pace || 0)),
+        shooting: clampStat(p.attributes.shooting + (b.shooting || 0)),
+        passing: clampStat(p.attributes.passing + (b.passing || 0)),
+        dribbling: clampStat(p.attributes.dribbling + (b.dribbling || 0)),
+        defending: clampStat(p.attributes.defending + (b.defending || 0)),
+        physical: clampStat(p.attributes.physical + (b.physical || 0)),
+        stamina: clampStat((p.attributes.stamina ?? p.attributes.physical) + (b.stamina || 0)),
+        skill: clampStat(p.attributes.skill + (b.skill || 0)),
+        curve: clampStat(p.attributes.curve + (b.curve || 0)),
+        reactions: clampStat(p.attributes.reactions + (b.reactions || 0)),
+        weakFoot: clampStars((p.attributes.weakFoot ?? 4) + (b.weakFoot || 0)),
+        skillMoves: clampStars((p.attributes.skillMoves ?? 4) + (b.skillMoves || 0)),
       },
     };
   };
@@ -262,6 +272,8 @@ export default function App() {
   });
   const [showGoogleAuthModal, setShowGoogleAuthModal] = useState<boolean>(false);
   const [checkoutItem, setCheckoutItem] = useState<PaymentCheckoutItem | null>(null);
+  const [showOnlineMatchModal, setShowOnlineMatchModal] = useState<boolean>(false);
+  const [onlineMatchInfo, setOnlineMatchInfo] = useState<OnlineMatchViewportInfo | null>(null);
 
   // Tournament Progression State
   const [tournamentStageIndex, setTournamentStageIndex] = useState<number>(() => {
@@ -472,6 +484,34 @@ export default function App() {
     setScreen('in_match');
   };
 
+  const handleLaunchOnlineMatch = (data: OnlineMatchLaunchPayload) => {
+    SoundEngine.playWhistle();
+    setShowOnlineMatchModal(false);
+
+    if (data.opponentClubId) {
+      const oppClub = TEAMS_DB.find((t) => t.id === data.opponentClubId);
+      if (oppClub) setAwayTeam(oppClub);
+    }
+
+    setOnlineMatchInfo({
+      isOnline: true,
+      role: data.role,
+      roomCode: data.roomCode,
+      hostUsername: data.hostUsername,
+      guestUsername: data.guestUsername,
+      matchFormat: data.matchFormat,
+      myTeamSide: data.role === 'host' ? 'home' : 'away',
+      myAssignedSlotIdx: 9,
+      lockToAssignedPlayer: data.matchFormat === '11v11',
+      opponentStarPlayerId: data.opponentStarPlayerId,
+      opponentSquadIds: data.opponentSquadIds,
+      opponentFormation: data.opponentFormation,
+    });
+
+    setSelectedMode(data.matchFormat === '1v1' ? '1v1' : '11v11');
+    setScreen('in_match');
+  };
+
   // Restore Account session if token or saved email exists (keeps user permanently logged in)
   useEffect(() => {
     const savedEmail = localStorage.getItem('fe_user_email_v3') || account?.email || '';
@@ -592,6 +632,34 @@ export default function App() {
     }
   };
 
+  const placeNewPlayerInMatchingPosition = (
+    prevSquad: FootballPlayer[],
+    newPlayer: FootballPlayer,
+    formation: FormationName
+  ): FootballPlayer[] => {
+    const copy = [...prevSquad];
+    const existingIdx = copy.findIndex((p) => p.id === newPlayer.id);
+    const bestSlotIdx = findBestSlotIndexForPlayer(newPlayer, formation, copy);
+
+    if (existingIdx >= 0 && existingIdx < 11) {
+      return copy;
+    }
+
+    const displaced = copy[bestSlotIdx];
+    copy[bestSlotIdx] = newPlayer;
+    if (existingIdx >= 11) {
+      // Remove duplicate from reserves and place displaced player there
+      if (displaced && displaced.id !== newPlayer.id) {
+        copy[existingIdx] = displaced;
+      } else {
+        copy.splice(existingIdx, 1);
+      }
+    } else if (displaced && !copy.some((p) => p.id === displaced.id)) {
+      copy.push(displaced);
+    }
+    return copy;
+  };
+
   const handleApplyUpgradeCard = (card: UpgradeCardItem, targetPlayerId: string) => {
     if (coins < card.price) return;
     SoundEngine.playPackOpen();
@@ -601,20 +669,20 @@ export default function App() {
       return {
         ...prev,
         [targetPlayerId]: {
-          speed: (curr.speed || 0) + (card.statBoosts.speed || 0),
-          shooting: (curr.shooting || 0) + (card.statBoosts.shooting || 0),
-          shotPower: (curr.shotPower || 0) + (card.statBoosts.shotPower || 0),
-          shotAccuracy: (curr.shotAccuracy || 0) + (card.statBoosts.shotAccuracy || 0),
-          passing: (curr.passing || 0) + (card.statBoosts.passing || 0),
-          dribbling: (curr.dribbling || 0) + (card.statBoosts.dribbling || 0),
-          ballControl: (curr.ballControl || 0) + (card.statBoosts.ballControl || 0),
-          physical: (curr.physical || 0) + (card.statBoosts.physical || 0),
-          stamina: (curr.stamina || 0) + (card.statBoosts.stamina || 0),
-          defending: (curr.defending || 0) + (card.statBoosts.defending || 0),
-          rating: (curr.rating || 0) + (card.statBoosts.rating || 0),
-          weakFoot: (curr.weakFoot || 0) + (card.statBoosts.weakFoot || 0),
-          skillMoves: (curr.skillMoves || 0) + (card.statBoosts.skillMoves || 0),
-          rarity: card.upgradeToSpecialEdition ? 'Special Edition' : curr.rarity,
+          pace: (curr.pace || 0) + (card.statBonuses.pace || 0),
+          shooting: (curr.shooting || 0) + (card.statBonuses.shooting || 0),
+          passing: (curr.passing || 0) + (card.statBonuses.passing || 0),
+          dribbling: (curr.dribbling || 0) + (card.statBonuses.dribbling || 0),
+          defending: (curr.defending || 0) + (card.statBonuses.defending || 0),
+          physical: (curr.physical || 0) + (card.statBonuses.physical || 0),
+          stamina: (curr.stamina || 0) + (card.statBonuses.stamina || 0),
+          skill: (curr.skill || 0) + (card.statBonuses.skill || 0),
+          curve: (curr.curve || 0) + (card.statBonuses.curve || 0),
+          reactions: (curr.reactions || 0) + (card.statBonuses.reactions || 0),
+          rating: (curr.rating || 0) + (card.ratingBonus || 0),
+          weakFoot: (curr.weakFoot || 0) + (card.statBonuses.weakFoot || 0),
+          skillMoves: (curr.skillMoves || 0) + (card.statBonuses.skillMoves || 0),
+          rarity: card.upgradeRarityTo || curr.rarity,
         },
       };
     });
@@ -624,17 +692,9 @@ export default function App() {
     if (coins < player.price || unlockedPlayerIds.includes(player.id)) return;
     SoundEngine.playPackOpen();
     setCoins((c) => c - player.price);
-    setUnlockedPlayerIds((prev) => [...prev, player.id]);
-    // Place newly unlocked superstar into Striker slot (#9) so they immediately lead the attack & 1v1!
-    setUserSquad((prev) => {
-      const copy = [...prev];
-      const displaced = copy[9];
-      copy[9] = player;
-      if (displaced && !copy.some((p) => p.id === displaced.id)) {
-        copy.push(displaced);
-      }
-      return copy;
-    });
+    setUnlockedPlayerIds((prev) => (prev.includes(player.id) ? prev : [...prev, player.id]));
+    // Place newly unlocked player directly into their matching position slot (e.g., LB -> LB slot, ST -> ST slot)
+    setUserSquad((prev) => placeNewPlayerInMatchingPosition(prev, player, userFormation));
     setProfile((prev) => ({
       ...prev,
       unlockedAchievementIds: Array.from(
@@ -645,10 +705,10 @@ export default function App() {
 
   const handleOpenPack = (pack: PackDefinition, pulledPlayer: FootballPlayer) => {
     setCoins((c) => Math.max(0, c - pack.price));
-    if (!unlockedPlayerIds.includes(pulledPlayer.id)) {
-      setUnlockedPlayerIds((prev) => [...prev, pulledPlayer.id]);
-      setUserSquad((prev) => [pulledPlayer, ...prev.filter((p) => p.id !== pulledPlayer.id)]);
-    }
+    setUnlockedPlayerIds((prev) =>
+      prev.includes(pulledPlayer.id) ? prev : [...prev, pulledPlayer.id]
+    );
+    setUserSquad((prev) => placeNewPlayerInMatchingPosition(prev, pulledPlayer, userFormation));
   };
 
   const handleSpinRoulette = (costCoins: number, pulledPlayer: FootballPlayer) => {
@@ -656,19 +716,7 @@ export default function App() {
     setUnlockedPlayerIds((prev) =>
       prev.includes(pulledPlayer.id) ? prev : [...prev, pulledPlayer.id]
     );
-    setUserSquad((prev) => {
-      const copy = [...prev];
-      const existingIdx = copy.findIndex((p) => p.id === pulledPlayer.id);
-      if (existingIdx >= 0) {
-        return copy;
-      }
-      const displaced = copy[9];
-      copy[9] = pulledPlayer;
-      if (displaced && !copy.some((p) => p.id === displaced.id)) {
-        copy.push(displaced);
-      }
-      return copy;
-    });
+    setUserSquad((prev) => placeNewPlayerInMatchingPosition(prev, pulledPlayer, userFormation));
   };
 
   // Show Welcome Username & Favourite Club Selection Screen at the very beginning
@@ -734,9 +782,16 @@ export default function App() {
         autoSwitchMode={autoSwitchMode}
         onChangeAutoSwitchMode={setAutoSwitchMode}
         tournamentStageLabel={activeTournamentLabel}
+        onlineMatchInfo={onlineMatchInfo || undefined}
         onMatchComplete={handleMatchComplete}
         onNextMatch={
-          activeTournamentLabel
+          onlineMatchInfo
+            ? () => {
+                setOnlineMatchInfo(null);
+                setShowOnlineMatchModal(true);
+                navigateTo('home');
+              }
+            : activeTournamentLabel
             ? () => {
                 setScreen('world_cup');
               }
@@ -748,6 +803,7 @@ export default function App() {
               }
         }
         onExitToMenu={() => {
+          setOnlineMatchInfo(null);
           navigateTo('home');
         }}
       />
@@ -826,8 +882,19 @@ export default function App() {
           </button>
         </nav>
 
-        {/* Zone 3: 2 Primary Actions (Sign-In + PLAY MATCH) */}
+        {/* Zone 3: Primary Actions (Online Match + Sign-In + PLAY MATCH) */}
         <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => {
+              SoundEngine.playUIClick();
+              setShowOnlineMatchModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#38BDF8]/15 hover:bg-[#38BDF8]/25 text-[#38BDF8] border border-[#38BDF8]/40 font-display font-bold text-xs transition-all whitespace-nowrap shrink-0 cursor-pointer shadow-sm shadow-[#38BDF8]/15"
+          >
+            <Globe className="w-3.5 h-3.5" />
+            ONLINE MATCH
+          </button>
+
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#111722] border border-[#F59E0B]/30 text-xs font-mono font-bold text-[#F59E0B]">
             <Coins className="w-3.5 h-3.5" />
             {coins.toLocaleString()}
@@ -853,6 +920,16 @@ export default function App() {
 
       {/* Mobile-Friendly Quick Nav Strip */}
       <div className="lg:hidden flex items-center gap-2 overflow-x-auto px-4 py-2.5 bg-[#111722] border-b border-white/10 text-xs font-display font-bold">
+        <button
+          onClick={() => {
+            SoundEngine.playUIClick();
+            setShowOnlineMatchModal(true);
+          }}
+          className="px-3 py-1.5 rounded-lg whitespace-nowrap bg-[#38BDF8]/20 text-[#38BDF8] border border-[#38BDF8]/40 font-display font-bold text-xs flex items-center gap-1.5 shrink-0 cursor-pointer"
+        >
+          <Globe className="w-3.5 h-3.5" />
+          Online Match
+        </button>
         <button
           onClick={() => navigateTo('play_setup')}
           className={`px-3 py-1.5 rounded-lg whitespace-nowrap ${
@@ -960,7 +1037,7 @@ export default function App() {
                     Experience authentic 3D stadium football with realistic player faces, precision passing & through balls, Magnus finesse shots, overhead volleys, player upgrade cards, and a full Coin Transfer Market.
                   </p>
 
-                  {/* Primary Hero CTA Grid (Neatly arranged 4-column layout) */}
+                  {/* Primary Hero CTA Grid (Neatly arranged layout) */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
                     <button
                       onClick={() => navigateTo('play_setup')}
@@ -968,6 +1045,17 @@ export default function App() {
                     >
                       <Play className="w-4 h-4 fill-current" />
                       PLAY MATCH NOW
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        SoundEngine.playUIClick();
+                        setShowOnlineMatchModal(true);
+                      }}
+                      className="col-span-1 sm:col-span-2 py-3.5 px-5 bg-gradient-to-r from-[#38BDF8] to-[#0284C7] hover:from-[#0284C7] hover:to-[#0369A1] text-white font-display font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#38BDF8]/20 whitespace-nowrap cursor-pointer"
+                    >
+                      <Globe className="w-4 h-4" />
+                      ONLINE MATCH (ROOM CODE)
                     </button>
 
                     <button
@@ -1081,19 +1169,19 @@ export default function App() {
                             <div className="grid grid-cols-4 gap-1.5 pt-1 font-mono text-[11px]">
                               <div className="bg-[#111722] rounded px-2 py-1 text-center">
                                 <span className="text-slate-400 block text-[9px]">SPD</span>
-                                <span className="text-[#10B981] font-bold">{star.stats.speed}</span>
+                                <span className="text-[#10B981] font-bold">{star.attributes.pace}</span>
                               </div>
                               <div className="bg-[#111722] rounded px-2 py-1 text-center">
                                 <span className="text-slate-400 block text-[9px]">SHO</span>
-                                <span className="text-[#F59E0B] font-bold">{star.stats.shooting}</span>
+                                <span className="text-[#F59E0B] font-bold">{star.attributes.shooting}</span>
                               </div>
                               <div className="bg-[#111722] rounded px-2 py-1 text-center">
                                 <span className="text-slate-400 block text-[9px]">PAS</span>
-                                <span className="text-[#38BDF8] font-bold">{star.stats.passing}</span>
+                                <span className="text-[#38BDF8] font-bold">{star.attributes.passing}</span>
                               </div>
                               <div className="bg-[#111722] rounded px-2 py-1 text-center">
                                 <span className="text-slate-400 block text-[9px]">DRI</span>
-                                <span className="text-white font-bold">{star.stats.dribbling}</span>
+                                <span className="text-white font-bold">{star.attributes.dribbling}</span>
                               </div>
                             </div>
                           </div>
@@ -1146,6 +1234,40 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                {/* DEDICATED REAL-TIME ONLINE MULTIPLAYER MATCH CARD */}
+                <div className="bg-gradient-to-b from-[#192231] to-[#070A0E] border-2 border-[#38BDF8] hover:border-[#38BDF8]/80 rounded-2xl p-6 flex flex-col justify-between transition-all shadow-[0_0_30px_rgba(56,189,248,0.2)] relative overflow-hidden">
+                  <div className="absolute top-0 right-0 bg-[#38BDF8] text-[#070A0E] text-[10px] font-mono font-bold px-3 py-1 rounded-bl-xl uppercase tracking-wider flex items-center gap-1">
+                    <Wifi className="w-3 h-3 animate-pulse" />
+                    MULTIPLAYER
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-slate-400 font-mono mb-2">
+                      <span className="text-[#38BDF8] font-bold">1v1 & 11v11 · Real-Time</span>
+                      <span className="text-[#F59E0B]">+8,000 Coins</span>
+                    </div>
+                    <h3 className="font-display text-xl font-bold text-white mb-1">
+                      Online Match (Room Code)
+                    </h3>
+                    <div className="text-xs text-[#38BDF8] font-medium mb-3">
+                      Play Against Real Players Online
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed mb-6">
+                      Play against another real player online using the fast Username + Room Code system. 60 FPS real-time sync with automatic match kick-off as soon as both players connect.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      SoundEngine.playUIClick();
+                      setShowOnlineMatchModal(true);
+                    }}
+                    className="w-full py-2.5 bg-[#38BDF8] hover:bg-[#0284C7] text-[#070A0E] font-display font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#38BDF8]/20"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    PLAY ONLINE MATCH
+                  </button>
+                </div>
+
                 {MATCH_MODES.map((m) => (
                   <div
                     key={m.id}
@@ -1244,13 +1366,26 @@ export default function App() {
                 </h1>
               </div>
 
-              <button
-                onClick={() => handleLaunchMatch(selectedMode, awayTeam)}
-                className="px-8 py-4 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-base rounded-xl transition-all flex items-center gap-2 shadow-xl whitespace-nowrap"
-              >
-                <Play className="w-5 h-5 fill-current" />
-                START 3D MATCH NOW
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    SoundEngine.playUIClick();
+                    setShowOnlineMatchModal(true);
+                  }}
+                  className="px-5 py-4 bg-[#38BDF8]/15 hover:bg-[#38BDF8]/25 text-[#38BDF8] border border-[#38BDF8]/40 font-display font-bold text-sm rounded-xl transition-all flex items-center gap-2 shadow-lg cursor-pointer whitespace-nowrap"
+                >
+                  <Globe className="w-4 h-4" />
+                  ONLINE MATCH (ROOM CODE)
+                </button>
+
+                <button
+                  onClick={() => handleLaunchMatch(selectedMode, awayTeam)}
+                  className="px-8 py-4 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-base rounded-xl transition-all flex items-center gap-2 shadow-xl whitespace-nowrap cursor-pointer"
+                >
+                  <Play className="w-5 h-5 fill-current" />
+                  START 3D MATCH NOW
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -1398,30 +1533,29 @@ export default function App() {
 
                     {/* Unlocked Players (Realistic eFootball Player Photos on Player Selection Screen) */}
                     <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
-                      {allPlayers.filter((p) => unlockedPlayerIds.includes(p.id) && p.position !== 'GK').map(
+                      {allPlayers.filter((p) => unlockedPlayerIds.includes(p.id)).map(
                         (p) => {
-                          const isLead = userSquad[9]?.id === p.id;
+                          const existingSlotIdx = userSquad
+                            .slice(0, 11)
+                            .findIndex((item) => item.id === p.id);
+                          const isStarting = existingSlotIdx >= 0;
+                          const slotLabel = isStarting
+                            ? FORMATIONS[userFormation][existingSlotIdx]?.label || p.position
+                            : FORMATIONS[userFormation][
+                                findBestSlotIndexForPlayer(p, userFormation, userSquad)
+                              ]?.label || p.position;
                           return (
                             <button
                               key={p.id}
                               title={`${p.name} (${p.position} · OVR ${p.rating})`}
                               onClick={() => {
                                 SoundEngine.playUIClick();
-                                setUserSquad((prev) => {
-                                  const copy = [...prev];
-                                  const idx = copy.findIndex((item) => item.id === p.id);
-                                  if (idx >= 0) {
-                                    const tmp = copy[9];
-                                    copy[9] = copy[idx];
-                                    copy[idx] = tmp;
-                                  } else {
-                                    copy[9] = p;
-                                  }
-                                  return copy;
-                                });
+                                setUserSquad((prev) =>
+                                  placeNewPlayerInMatchingPosition(prev, p, userFormation)
+                                );
                               }}
                               className={`p-2 rounded-xl border flex flex-col items-center text-center transition-all cursor-pointer ${
-                                isLead
+                                isStarting
                                   ? 'bg-[#192231] border-[#10B981] ring-2 ring-[#10B981]'
                                   : 'bg-[#070A0E] border-white/10 hover:border-white/30'
                               }`}
@@ -1436,10 +1570,14 @@ export default function App() {
                                 {p.name}
                               </div>
                               <div className="text-[10px] font-mono mt-0.5 truncate w-full">
-                                {isLead ? (
-                                  <span className="text-[#10B981] font-bold">ACTIVE STAR</span>
+                                {isStarting ? (
+                                  <span className="text-[#10B981] font-bold">
+                                    ✓ ACTIVE ({slotLabel})
+                                  </span>
                                 ) : (
-                                  <span className="text-slate-300">#{p.number} · {p.nationality}</span>
+                                  <span className="text-slate-300">
+                                    + PLACE AT {slotLabel}
+                                  </span>
                                 )}
                               </div>
                             </button>
@@ -1637,9 +1775,17 @@ export default function App() {
             initialTab={screen === 'world_cup' ? 'world_cup' : 'tournaments'}
             userTeam={userTeam}
             userFormation={userFormation}
-            userSquad={userSquad}
+            userSquad={boostedUserSquad}
+            allUnlockedPlayers={allPlayers.filter((p) => unlockedPlayerIds.includes(p.id))}
             onSelectUserTeam={setUserTeam}
-            onSelectFormation={setUserFormation}
+            onSelectFormation={(nextFormation) => {
+              setUserFormation(nextFormation);
+              const unlockedPool = allPlayers.filter((p) => unlockedPlayerIds.includes(p.id));
+              setUserSquad((prev) =>
+                buildOptimalSquadForFormation(unlockedPool, prev, nextFormation)
+              );
+            }}
+            onUpdateSquadOrder={setUserSquad}
             tournamentStageIndex={tournamentStageIndex}
             onStartTournamentMatch={({ opponent, stageLabel, isFinal }) => {
               if (isFinal) {
@@ -1687,6 +1833,18 @@ export default function App() {
             onSpinRoulette={handleSpinRoulette}
             onPlayDreamTeamOffline={() => {
               handleLaunchMatch('quick_match', awayTeam);
+            }}
+            onPlayDreamTeamOnline={() => {
+              SoundEngine.playUIClick();
+              setShowOnlineMatchModal(true);
+            }}
+            onQuickMatchDreamTeamOnline={() => {
+              SoundEngine.playUIClick();
+              setShowOnlineMatchModal(true);
+            }}
+            onJoinDreamTeamRoomCode={() => {
+              SoundEngine.playUIClick();
+              setShowOnlineMatchModal(true);
             }}
             onTriggerPaymentCheckout={(item) => setCheckoutItem(item)}
           />
@@ -1851,17 +2009,25 @@ export default function App() {
           }
           if (playerUnlocked && !unlockedPlayerIds.includes(playerUnlocked.id)) {
             setUnlockedPlayerIds((prev) => [...prev, playerUnlocked.id]);
-            setUserSquad((prev) => {
-              const copy = [...prev];
-              const displaced = copy[9];
-              copy[9] = playerUnlocked;
-              if (displaced && !copy.some((p) => p.id === displaced.id)) {
-                copy.push(displaced);
-              }
-              return copy;
-            });
+            setUserSquad((prev) =>
+              placeNewPlayerInMatchingPosition(prev, playerUnlocked, userFormation)
+            );
           }
         }}
+      />
+
+      <OnlineMatchModal
+        isOpen={showOnlineMatchModal}
+        onClose={() => setShowOnlineMatchModal(false)}
+        currentUsername={profile.username}
+        onUpdateUsername={(newName) => {
+          setProfile((prev) => ({ ...prev, username: newName }));
+          localStorage.setItem('fe_username', newName);
+        }}
+        userTeam={userTeam}
+        userSquad={boostedUserSquad}
+        userFormation={userFormation}
+        onLaunchMatch={handleLaunchOnlineMatch}
       />
 
       {inspectedOpponentSquad && (
