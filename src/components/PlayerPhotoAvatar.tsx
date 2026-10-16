@@ -831,6 +831,7 @@ export const PlayerPhotoAvatar: React.FC<PlayerPhotoAvatarProps> = ({
 interface PitchPlayerBadgeProps {
   player: FootballPlayer;
   slotLabel?: string;
+  fitLevel?: 'exact' | 'compatible' | 'out_of_position';
   isCaptain?: boolean;
   isSelected?: boolean;
   isLeadStar?: boolean;
@@ -841,6 +842,7 @@ interface PitchPlayerBadgeProps {
 export const PitchPlayerPhotoNode: React.FC<PitchPlayerBadgeProps> = ({
   player,
   slotLabel,
+  fitLevel,
   isCaptain,
   isSelected,
   isLeadStar,
@@ -872,10 +874,30 @@ export const PitchPlayerPhotoNode: React.FC<PitchPlayerBadgeProps> = ({
       >
         <PlayerPhotoAvatar player={player} className="w-full h-full" />
 
-        {/* Top Left Position Tag */}
-        <span className="absolute top-1 left-1 z-20 px-1 py-0.5 rounded bg-black/80 text-[8px] font-mono font-bold text-[#10B981] leading-none">
-          {slotLabel || player.position}
-        </span>
+        {/* Top Left Position Tag + Fit Indicator */}
+        <div className="absolute top-1 left-1 z-20 flex items-center gap-0.5">
+          <span className="px-1 py-0.5 rounded bg-black/85 text-[8px] font-mono font-bold text-[#10B981] leading-none">
+            {slotLabel || player.position}
+          </span>
+          {fitLevel && (
+            <span
+              className={`w-2 h-2 rounded-full border border-black/80 ${
+                fitLevel === 'exact'
+                  ? 'bg-emerald-400 shadow-[0_0_6px_#10B981]'
+                  : fitLevel === 'compatible'
+                  ? 'bg-amber-400 shadow-[0_0_6px_#F59E0B]'
+                  : 'bg-rose-500 shadow-[0_0_6px_#EF4444]'
+              }`}
+              title={
+                fitLevel === 'exact'
+                  ? '100% Exact Position Match'
+                  : fitLevel === 'compatible'
+                  ? 'Compatible Secondary Role'
+                  : 'Out of Position'
+              }
+            />
+          )}
+        </div>
 
         {/* Top Right Captain / YOU Badge */}
         {isLeadStar ? (

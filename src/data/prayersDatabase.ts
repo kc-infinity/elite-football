@@ -1,0 +1,173 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+export interface PrayerItem {
+  id: string;
+  title: string;
+  arabicTitle: string;
+  category: 'daily_prayer' | 'match_dua' | 'protection_dua' | 'gratitude_dua';
+  categoryLabel: string;
+  timeOrContext: string;
+  imageUrl: string;
+  imageCaption: string;
+  arabicText: string;
+  transliteration: string;
+  translation: string;
+  significance: string;
+  reference: string;
+}
+
+export const PRAYERS_AND_DUAS_DB: PrayerItem[] = [
+  {
+    id: 'fajr_prayer',
+    title: 'Fajr Prayer (Dawn Prayer)',
+    arabicTitle: 'صلاة الفجر',
+    category: 'daily_prayer',
+    categoryLabel: 'Obligatory Daily Prayer',
+    timeOrContext: 'From true dawn until just before sunrise',
+    imageUrl: '/src/assets/images/fajr_dawn_prayer_1792147367425.jpg',
+    imageCaption: 'The Grand Mosque at first light of dawn during the congregational Fajr prayer.',
+    arabicText: 'الصَّلَاةُ خَيْرٌ مِنَ النَّوْمِ · اللَّهُمَّ بَارِكْ لِأُمَّتِي فِي بُكُورِهَا',
+    transliteration: "As-salatu khayrum-minan-nawm. Allahumma barik li-ummati fi bukuriha.",
+    translation: 'Prayer is better than sleep. O Allah, bless my community in their early morning endeavors.',
+    significance: 'The dawn prayer marks the beginning of the day with complete spiritual clarity, inner peace, and physical discipline before athletic training and match preparation.',
+    reference: 'Sahih Muslim 657 & Sunan Abi Dawud 2606',
+  },
+  {
+    id: 'dhuhr_prayer',
+    title: 'Dhuhr Prayer (Midday Prayer)',
+    arabicTitle: 'صلاة الظهر',
+    category: 'daily_prayer',
+    categoryLabel: 'Obligatory Daily Prayer',
+    timeOrContext: 'When the sun passes its zenith until the shadow equals the object length',
+    imageUrl: '/src/assets/images/dhuhr_midday_prayer_1792147367778.jpg',
+    imageCaption: 'Sunlit marble courtyard and colonnade arches during the tranquil midday Dhuhr prayer.',
+    arabicText: 'أَقِمِ الصَّلَاةَ لِدُلُوكِ الشَّمْسِ إِلَىٰ غَسَقِ اللَّيْلِ',
+    transliteration: "Aqimis-salata li-dulukish-shamsi ila ghasaqil-layl.",
+    translation: 'Establish prayer from the decline of the sun until the darkness of the night.',
+    significance: 'A midday spiritual pause during intense tactical sessions, recalibrating the athlete’s intention, humility, and mental focus toward gratitude.',
+    reference: 'Surah Al-Isra 17:78',
+  },
+  {
+    id: 'asr_prayer',
+    title: 'Asr Prayer (Late Afternoon Prayer)',
+    arabicTitle: 'صلاة العصر',
+    category: 'daily_prayer',
+    categoryLabel: 'Obligatory Daily Prayer',
+    timeOrContext: 'Late afternoon before the sun turns yellow and sets',
+    imageUrl: '/src/assets/images/asr_afternoon_prayer_1792147369708.jpg',
+    imageCaption: 'Warm golden late afternoon rays illuminating worshippers in peaceful Asr prayer.',
+    arabicText: 'حَافِظُوا عَلَى الصَّلَوَاتِ وَالصَّلَاةِ الْوُسْطَىٰ وَقُومُوا لِلَّهِ قَانِتِينَ',
+    transliteration: "Hafidhu 'alas-salawati was-salatil-wusta wa qumu lillahi qanitin.",
+    translation: 'Maintain with care the prayers and especially the middle prayer, and stand before Allah devoutly obedient.',
+    significance: 'The middle prayer of the afternoon protects the heart against stress and fatigue, providing renewed strength before late afternoon kick-offs.',
+    reference: 'Surah Al-Baqarah 2:238',
+  },
+  {
+    id: 'maghrib_prayer',
+    title: 'Maghrib Prayer (Sunset Prayer)',
+    arabicTitle: 'صلاة المغرب',
+    category: 'daily_prayer',
+    categoryLabel: 'Obligatory Daily Prayer',
+    timeOrContext: 'Immediately after sunset as evening begins',
+    imageUrl: '/src/assets/images/maghrib_sunset_prayer_1792147370285.jpg',
+    imageCaption: 'Majestic sunset reflection across tranquil waters as the Adhan calls for Maghrib prayer.',
+    arabicText: 'اللَّهُمَّ هَذَا إِقْبَالُ لَيْلِكَ وَإِدْبَارُ نَهَارِكَ وَأَصْوَاتُ دُعَاتِكَ فَاغْفِرْ لِي',
+    transliteration: "Allahumma hadha iqbalu laylika wa idbaru naharika wa aswatu du'atika faghfir li.",
+    translation: 'O Allah, this is the approach of Your night, the departure of Your day, and the voices of Your callers, so forgive me.',
+    significance: 'Conducted right as evening falls after matches, offering heartfelt thankfulness for completing the day in health and good spirits.',
+    reference: 'Sunan Abi Dawud 530',
+  },
+  {
+    id: 'isha_night_prayer',
+    title: 'Isha & Night Reflection (Tahajjud & Night Prayer)',
+    arabicTitle: 'صلاة العشاء وقيام الليل',
+    category: 'daily_prayer',
+    categoryLabel: 'Obligatory & Voluntary Night Prayer',
+    timeOrContext: 'From the disappearance of the red twilight throughout the night',
+    imageUrl: '/src/assets/images/isha_night_prayer_1792147369295.jpg',
+    imageCaption: 'Serene nocturnal mosque illuminated by warm lanterns under a crescent moon for Isha and night supplication.',
+    arabicText: 'وَمِنَ اللَّيْلِ فَتَهَجَّدْ بِهِ نَافِلَةً لَّكَ عَسَىٰ أَن يَبْعَثَكَ رَبُّكَ مَقَامًا مَّحْمُودًا',
+    transliteration: "Wa minal-layli fatahajjad bihi nafilatan laka 'asa an yab'athaka rabbuka maqaman mahmuda.",
+    translation: 'And from part of the night, pray with it as additional worship for you; it is expected that your Lord will resurrect you to a praised station.',
+    significance: 'Closing the day in quiet contemplation, recovering mentally and physically, and placing trust in Allah for tomorrow’s challenges.',
+    reference: 'Surah Al-Isra 17:79',
+  },
+  {
+    id: 'dua_victory_success',
+    title: 'Dua for Success, Ease & Victory',
+    arabicTitle: 'دعاء التوفيق والفتح والنجاح',
+    category: 'match_dua',
+    categoryLabel: 'Pre-Match & Competition Dua',
+    timeOrContext: 'Before stepping onto the pitch or during intense competitive moments',
+    imageUrl: '/src/assets/images/dhuhr_midday_prayer_1792147367778.jpg',
+    imageCaption: 'Athletes and believers gathering in quiet supplication seeking divine assistance and ease.',
+    arabicText: 'رَبِّ اشْرَحْ لِي صَدْرِي وَيَسِّرْ لِي أَمْرِي · اللَّهُمَّ لَا سَهْلَ إِلَّا مَا جَعَلْتَهُ سَهْلًا وَأَنْتَ تَجْعَلُ الْحَزْنَ إِذَا شِئْتَ سَهْلًا',
+    transliteration: "Rabbish-rah li sadri wa yassir li amri. Allahumma la sahla illa ma ja'altahu sahla, wa anta taj'alul-hazna idha shi'ta sahla.",
+    translation: 'My Lord, expand for me my breast and ease for me my task. O Allah, there is no ease except that which You make easy, and You can make grief and difficulty easy if You will.',
+    significance: 'Recited by many international footballers in the tunnel before stepping out onto the stadium grass, removing anxiety and granting composure.',
+    reference: 'Surah Taha 20:25-26 & Sahih Ibn Hibban 974',
+  },
+  {
+    id: 'dua_sujood_gratitude',
+    title: 'Dua of Gratitude & Prostration (Sujood ash-Shukr)',
+    arabicTitle: 'دعاء سجود الشكر والحمد',
+    category: 'gratitude_dua',
+    categoryLabel: 'Goal Celebration & Post-Match Gratitude',
+    timeOrContext: 'After scoring a goal or completing a hard-fought match victory',
+    imageUrl: '/src/assets/images/asr_afternoon_prayer_1792147369708.jpg',
+    imageCaption: 'The sacred act of prostration (Sujood) on the turf in humble gratitude to the Creator.',
+    arabicText: 'سَجَدَ وَجْهِيَ لِلَّذِي خَلَقَهُ وَصَوَّرَهُ وَشَقَّ سَمْعَهُ وَبَصَرَهُ بِحَوْلِهِ وَقُوَّتِهِ فَتَبَارَكَ اللَّهُ أَحْسَنُ الْخَالِقِينَ · الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ',
+    transliteration: "Sajada wajhiya lilladhi khalaqahu wa sawwarahu wa shaqqa sam'ahu wa basarahu bi-hawlihi wa quwwatihi fa-tabarakallahu ahsanul-khaliqin. Alhamdulillahi Rabbil-'alamin.",
+    translation: 'My face has prostrated to the One Who created it, fashioned it, and brought forth its hearing and sight by His might and power. Blessed is Allah, the Best of creators. All praise is due to Allah, Lord of the worlds.',
+    significance: 'Famous worldwide on global football pitches when players drop to the grass in Sujood after a goal, acknowledging that all talent and success belongs to Allah.',
+    reference: 'Sunan Abi Dawud 1414 & Sahih Muslim 771',
+  },
+  {
+    id: 'dua_protection_injury',
+    title: 'Dua for Physical Protection & Strength',
+    arabicTitle: 'دعاء الحفظ والوقاية من الإصابات',
+    category: 'protection_dua',
+    categoryLabel: 'Player Health & Safety Supplication',
+    timeOrContext: 'Before kick-off, training, or physical duels on the field',
+    imageUrl: '/src/assets/images/fajr_dawn_prayer_1792147367425.jpg',
+    imageCaption: 'Supplication for divine guardianship over health, body, and limbs during competition.',
+    arabicText: 'بِسْمِ اللَّهِ الَّذِي لَا يَضُرُّ مَعَ اسْمِهِ شَيْءٌ فِي الْأَرْضِ وَلَا فِي السَّمَاءِ وَهُوَ السَّمِيعُ الْعَلِيمُ',
+    transliteration: "Bismillahilladhi la yadurru ma'asmihi shay'un fil-ardi wa la fis-sama'i wa huwas-Sami'ul-'Alim.",
+    translation: 'In the Name of Allah, with Whose Name nothing can cause harm in the earth nor in the heavens, and He is the All-Hearing, the All-Knowing.',
+    significance: 'Athletes recite this prophetic supplication to seek protection against career-threatening injuries, physical harm, and unforeseen accidents.',
+    reference: 'Sunan Abi Dawud 5088 & Jami at-Tirmidhi 3388',
+  },
+  {
+    id: 'dua_patience_sabr',
+    title: 'Dua for Patience & Steadfastness (Sabr)',
+    arabicTitle: 'دعاء الصبر والثبات والعزيمة',
+    category: 'match_dua',
+    categoryLabel: 'Mental Toughness & Adversity Dua',
+    timeOrContext: 'When trailing behind in a match, facing setbacks, or enduring intense pressure',
+    imageUrl: '/src/assets/images/maghrib_sunset_prayer_1792147370285.jpg',
+    imageCaption: 'Seeking steadfast firmness of feet and heart under fierce pressure and critical moments.',
+    arabicText: 'رَبَّنَا أَفْرِغْ عَلَيْنَا صَبْرًا وَثَبِّتْ أَقْدَامَنَا وَانصُرْنَا عَلَى الْقَوْمِ الْكَافِرِينَ',
+    transliteration: "Rabbana afrigh 'alayna sabran wa thabbit aqdamana wansurna 'alal-qawmil-kafirin.",
+    translation: 'Our Lord, pour upon us patience and plant firmly our feet and give us victory.',
+    significance: 'Teaches unshakeable mental fortitude (Sabr), emotional composure under referee decisions, and persistent determination until the final whistle.',
+    reference: 'Surah Al-Baqarah 2:250',
+  },
+  {
+    id: 'dua_travel_safar',
+    title: 'Dua for Journey & Away Matches (Safar)',
+    arabicTitle: 'دعاء السفر والمباريات الخارجية',
+    category: 'protection_dua',
+    categoryLabel: 'Team Travel Supplication',
+    timeOrContext: 'Boarding team buses, flights, or traveling to away tournament stadiums',
+    imageUrl: '/src/assets/images/isha_night_prayer_1792147369295.jpg',
+    imageCaption: 'Team travelers making supplication for safe transit and a successful return home.',
+    arabicText: 'سُبْحَانَ الَّذِي سَخَّرَ لَنَا هَٰذَا وَمَا كُنَّا لَهُ مُقْرِنِينَ وَإِنَّا إِلَىٰ رَبِّنَا لَمُنقَلِبُونَ',
+    transliteration: "Subhanalladhi sakh-khara lana hadha wa ma kunna lahu muqrinin, wa inna ila Rabbina lamunqalibun.",
+    translation: 'Glory be to Him Who has brought this under our control, whereas we were unable of ourselves to subdue it, and to our Lord surely we will return.',
+    significance: 'Spoken by traveling squads when boarding planes or coaches to international fixtures, uniting teammates in safety and shared purpose.',
+    reference: 'Surah Az-Zukhruf 43:13-14 & Sahih Muslim 1342',
+  },
+];

@@ -114,6 +114,7 @@ export interface MatchHUDState {
   isMatchOver: boolean;
   cameraMode: CameraMode;
   manualGKActive: boolean;
+  autoPlay: boolean;
   autoSwitchMode: AutoSwitchMode;
   practiceDrill: PracticeDrill;
   challengeScore: number;
@@ -129,6 +130,8 @@ export interface MatchHUDState {
     awayShotsOnTarget: number;
     homePasses: number;
     awayPasses: number;
+    homePassesCompleted?: number;
+    awayPassesCompleted?: number;
     homeTackles: number;
     awayTackles: number;
     homeSaves: number;
@@ -234,6 +237,8 @@ export class FootballEngine3D {
   private isPaused = false;
   private isMatchOver = false;
   private manualGKActive = false;
+  private autoPlayActive = false;
+  private autoPlayTimer = 0;
   private autoSwitchMode: AutoSwitchMode = 'auto';
   private autoSwitchCooldown = 0;
   private practiceDrill: PracticeDrill = 'Free Play';
@@ -250,6 +255,8 @@ export class FootballEngine3D {
     awayShotsOnTarget: 0,
     homePasses: 0,
     awayPasses: 0,
+    homePassesCompleted: 0,
+    awayPassesCompleted: 0,
     homeTackles: 0,
     awayTackles: 0,
     homeSaves: 0,
@@ -694,6 +701,31 @@ export class FootballEngine3D {
     }
   }
 
+  public setAutoPlay(enabled: boolean) {
+    this.autoPlayActive = enabled;
+    this.emitHUD();
+    this.setCommentary(
+      enabled
+        ? 'AUTO PLAY ENABLED · AI DRIVING (TOUCH TO TAKE MANUAL CONTROL)'
+        : 'MANUAL PLAY ACTIVE'
+    );
+  }
+
+  public toggleAutoPlay(): boolean {
+    this.autoPlayActive = !this.autoPlayActive;
+    this.emitHUD();
+    this.setCommentary(
+      this.autoPlayActive
+        ? 'AUTO PLAY ENABLED · AI DRIVING (TOUCH TO TAKE MANUAL CONTROL)'
+        : 'MANUAL PLAY ACTIVE'
+    );
+    return this.autoPlayActive;
+  }
+
+  public isAutoPlayActive(): boolean {
+    return this.autoPlayActive;
+  }
+
   public triggerInstantReplay(reason = 'HIGHLIGHT REPLAY') {
     if (this.replayBuffer.length < 20) return;
     this.isReplaying = true;
@@ -848,10 +880,22 @@ export class FootballEngine3D {
       return;
     }
 
-    // Shoot charging (S)
-    if (e.code === kb.shoot && this.chargingAction === 'none') {
+    // Play Code: Shoot charging (S key - code 'KeyS' or key 's'/'S')
+    const isShootKey =
+      e.code === kb.shoot ||
+      e.code === 'KeyS' ||
+      e.key === 's' ||
+      e.key === 'S';
+
+    if (isShootKey && this.chargingAction === 'none') {
       this.chargingAction = 'shoot';
-      this.chargeLevel = 20;
+      this.chargeLevel = 25;
+      const p = this.getControlledPlayer();
+      if (p) {
+        // Prepare shot stance & orient toward target goal
+        const goalX = p.teamSide === 'home' ? PITCH_WIDTH / 2 : -PITCH_WIDTH / 2;
+        p.facingAngle = Math.atan2(0 - p.z, goalX - p.x);
+      }
     }
     // Curve Shot charging (C)
     if (e.code === kb.curveShot && this.chargingAction === 'none') {
@@ -864,16 +908,16 @@ export class FootballEngine3D {
       this.chargeLevel = 30;
     }
 
-    // Pass (P)
-    if (e.code === kb.pass) {
+    // Pass (P key - code 'KeyP' or key 'p'/'P')
+    if (e.code === kb.pass || e.code === 'KeyP' || e.key === 'p' || e.key === 'P') {
       this.executePass('short');
     }
-    // Through Pass (U)
-    if (e.code === kb.throughPass) {
+    // Through Pass (U key - code 'KeyU' or key 'u'/'U')
+    if (e.code === kb.throughPass || e.code === 'KeyU' || e.key === 'u' || e.key === 'U') {
       this.executePass('through');
     }
-    // Cross / Lob (X)
-    if (e.code === kb.cross) {
+    // Cross / Lob (X key - code 'KeyX' or key 'x'/'X')
+    if (e.code === kb.cross || e.code === 'KeyX' || e.key === 'x' || e.key === 'X') {
       this.executePass('cross');
     }
     // Bicycle Kick (B)
@@ -921,8 +965,14 @@ export class FootballEngine3D {
     this.keysDown.delete(e.code);
     const kb = this.config.keyBindings;
 
+    const isShootKey =
+      e.code === kb.shoot ||
+      e.code === 'KeyS' ||
+      e.key === 's' ||
+      e.key === 'S';
+
     if (
-      (e.code === kb.shoot && this.chargingAction === 'shoot') ||
+      (isShootKey && this.chargingAction === 'shoot') ||
       (e.code === kb.curveShot && this.chargingAction === 'curve') ||
       (e.code === 'KeyL' && this.chargingAction === 'chip')
     ) {
@@ -993,12 +1043,55 @@ export class FootballEngine3D {
       const dx = mate.x - passer.x;
       const dz = mate.z - passer.z;
       const dist = Math.hypot(dx, dz);
-      if (dist < 1.2) return;
+      if (dist < 1.0) return;
 
-      const dot = (dx / dist) * aimDir.x + (dz / dist) * aimDir.y;
-      const forwardBonus = dx * attackDir > 0 ? (type === 'through' ? 1.15 : 0.55) : -0.15;
-      const distPenalty = type === 'short' ? dist * 0.045 : dist * 0.022;
-      const score = dot * 3.2 + forwardBonus - distPenalty;
+      const normX = dx / dist;
+      const normZ = dz / dist;
+      const dot = normX * aimDir.x + normZ * aimDir.y;
+
+      // If user is intentionally aiming backward/sideways, reward matching direction
+      const isAimingBackward = aimDir.x * attackDir < -0.2;
+      const forwardBonus = isAimingBackward
+        ? dx * attackDir < 0
+          ? 1.8
+          : -0.8
+        : dx * attackDir > 0
+        ? type === 'through'
+          ? 2.0
+          : 0.9
+        : 0.1;
+
+      const distPenalty = type === 'short' ? dist * 0.022 : dist * 0.012;
+
+      // Passing lane check: penalize teammates whose direct line is blocked by opponents
+      let coveragePenalty = 0;
+      let closestOppToMate = Infinity;
+      this.players.forEach((opp) => {
+        if (opp.teamSide === mySide) return;
+        const dMate = Math.hypot(opp.x - mate.x, opp.z - mate.z);
+        if (dMate < closestOppToMate) closestOppToMate = dMate;
+
+        const oppDx = opp.x - passer.x;
+        const oppDz = opp.z - passer.z;
+        const oppDist = Math.hypot(oppDx, oppDz);
+        if (oppDist > 1.2 && oppDist < dist - 1.2) {
+          const crossDist = Math.abs(oppDx * normZ - oppDz * normX);
+          if (crossDist < 1.7) {
+            coveragePenalty += 2.4;
+          }
+        }
+      });
+
+      // Reward open teammates with clean space!
+      const openTeammateBonus = closestOppToMate > 3.8 ? 2.5 : closestOppToMate > 2.4 ? 1.2 : -0.4;
+
+      const roleBonus =
+        type === 'through' &&
+        (mate.role === 'ST' || mate.role === 'CF' || mate.role === 'LW' || mate.role === 'RW')
+          ? 1.5
+          : 0.3;
+
+      const score = dot * 6.5 + forwardBonus + roleBonus + openTeammateBonus - distPenalty - coveragePenalty;
 
       if (score > bestScore) {
         bestScore = score;
@@ -1038,12 +1131,16 @@ export class FootballEngine3D {
     }
 
     const distToBall = Math.hypot(p.x - this.ballPos.x, p.z - this.ballPos.z);
-    if (this.ballOwner !== p && distToBall > 3.2) return;
+    if (this.ballOwner !== p && distToBall > 4.6) return;
+    if (this.ballOwner !== p && distToBall <= 4.6) {
+      // One-touch first-time pass
+      this.ballOwner = p;
+    }
 
     const mySide = p.teamSide;
     const attackDir = mySide === 'home' ? 1 : -1;
 
-    // Find best teammate in aimed direction (guaranteed to lock onto a teammate!)
+    // Find best teammate in aimed direction (with passing lane optimization!)
     const aimDir = this.getAimVectorFromPlayer(p, p.x + 18 * attackDir, p.z);
     const bestTeammate = this.findBestTeammateForPass(p, aimDir, type);
 
@@ -1059,6 +1156,9 @@ export class FootballEngine3D {
     if (mySide === 'home') this.stats.homePasses++;
     else this.stats.awayPasses++;
     SoundEngine.playPass();
+
+    const passingAttr = (p.data.attributes.passing || 85) / 100;
+    const passPaceBonus = 1.05 + (passingAttr - 0.70) * 0.45;
 
     if (bestTeammate) {
       const target = bestTeammate;
@@ -1092,29 +1192,37 @@ export class FootballEngine3D {
         }
       }
 
-      const leadX = (type === 'through' ? 4.8 : type === 'cross' ? 2.2 : 0.4) * attackDir;
+      const leadX =
+        (type === 'through'
+          ? 3.8 + passingAttr * 1.6
+          : type === 'cross'
+          ? 2.2
+          : 0.25) *
+          attackDir +
+        target.vx * 0.12;
+      const leadZ = target.vz * 0.12;
       const tx = THREE.MathUtils.clamp(target.x + leadX, -PITCH_WIDTH / 2 + 2, PITCH_WIDTH / 2 - 2);
-      const tz = THREE.MathUtils.clamp(target.z, -PITCH_DEPTH / 2 + 2, PITCH_DEPTH / 2 - 2);
+      const tz = THREE.MathUtils.clamp(target.z + leadZ, -PITCH_DEPTH / 2 + 2, PITCH_DEPTH / 2 - 2);
       const dx = tx - this.ballPos.x;
       const dz = tz - this.ballPos.z;
       const dist = Math.max(1, Math.hypot(dx, dz));
       const speed = wasThrowIn
-        ? Math.min(28, Math.max(20, 15 + dist * 0.48))
+        ? Math.min(30, Math.max(22, (18 + dist * 0.46) * passPaceBonus))
         : type === 'through'
-        ? Math.min(32, Math.max(24, 18 + dist * 0.52))
+        ? Math.min(36, Math.max(26, (21 + dist * 0.52) * passPaceBonus))
         : type === 'cross'
-        ? Math.min(30, Math.max(23, 17 + dist * 0.48))
-        : Math.min(31, Math.max(23, 17 + dist * 0.55));
+        ? Math.min(33, Math.max(24, (19 + dist * 0.48) * passPaceBonus))
+        : Math.min(34, Math.max(25, (20 + dist * 0.50) * passPaceBonus));
 
       this.ballVel.x = (dx / dist) * speed;
       this.ballVel.z = (dz / dist) * speed;
-      this.ballVel.y = wasThrowIn ? 3.4 : type === 'cross' ? 7.8 : 0.9;
+      this.ballVel.y = wasThrowIn ? 3.4 : type === 'cross' ? 7.6 : 0.6;
       this.ballSpinZ = type === 'cross' ? -2.5 : 0;
 
       // Lock pass target so ball homes accurately to the teammate and receiver steps to meet it!
       this.passTargetPlayer = target;
       this.passLeadX = leadX;
-      this.passAssistTimer = Math.min(2.1, Math.max(0.75, dist / 16));
+      this.passAssistTimer = Math.min(2.5, Math.max(0.9, dist / 14));
       p.facingAngle = Math.atan2(dx, dz);
 
       // Switch control to receiver if Auto Switch is enabled ('auto' or 'air_balls' on crosses)
@@ -1185,7 +1293,11 @@ export class FootballEngine3D {
     targetZ: number
   ) {
     const distToBall = Math.hypot(p.x - this.ballPos.x, p.z - this.ballPos.z);
-    if (this.ballOwner !== p && distToBall > 3.4) return;
+    if (this.ballOwner !== p && distToBall > 4.8) return;
+    if (this.ballOwner !== p && distToBall <= 4.8) {
+      // First-time shot / volley / rebound strike
+      this.ballOwner = p;
+    }
 
     if (this.activeSetPiece === 'throw_in') {
       this.executePass('through');
@@ -1246,8 +1358,8 @@ export class FootballEngine3D {
       SoundEngine.playKick(powerPct, false);
       this.setCommentary(
         powerPct > 0.75
-          ? `${p.data.name.toUpperCase()} FIRES A THUNDEROUS POWER SHOT!`
-          : `${p.data.name.toUpperCase()} SHOOTS!`
+          ? `${p.data.name.toUpperCase()} FIRES A THUNDEROUS POWER SHOT [S]!`
+          : `${p.data.name.toUpperCase()} SHOOTS TOWARD GOAL [S]!`
       );
     }
   }
@@ -1279,6 +1391,11 @@ export class FootballEngine3D {
   }
 
   public triggerMobileShoot(power = 78) {
+    const pct = power > 1 ? Math.min(1, power / 100) : power;
+    this.triggerShot('shoot', pct);
+  }
+
+  public triggerPlayCodeShoot(power = 85) {
     const pct = power > 1 ? Math.min(1, power / 100) : power;
     this.triggerShot('shoot', pct);
   }
@@ -2647,6 +2764,98 @@ export class FootballEngine3D {
         if (isSprinting) {
           controlled.stamina = Math.max(0, controlled.stamina - dt * 6.5);
         }
+      } else if (this.autoPlayActive && this.activeSetPiece === 'none' && !this.manualGKActive) {
+        // Auto Play AI controls the selected player!
+        const mySide = controlled.teamSide;
+        const attackDir = mySide === 'home' ? 1 : -1;
+        const goalX = attackDir * (PITCH_WIDTH / 2);
+        const distToGoal = Math.abs(goalX - controlled.x);
+        this.autoPlayTimer += dt;
+
+        if (this.ballOwner === controlled) {
+          // Controlled player has possession
+          // 1. In shooting range?
+          if (distToGoal < 24 && Math.abs(controlled.z) < 13 && controlled.kickTimer <= 0) {
+            if (this.autoPlayTimer > 0.45) {
+              this.autoPlayTimer = 0;
+              const targetZ = (Math.random() - 0.5) * (GOAL_WIDTH * 0.7);
+              this.performShotForPlayer(controlled, 'shoot', 0.84, targetZ);
+              this.setCommentary(`AUTO PLAY: ${controlled.data.name.toUpperCase()} FIRES AT GOAL!`);
+            }
+          } else {
+            // Check for nearby defender to pass or dribble
+            const nearbyDef = this.players
+              .filter((opp) => opp.teamSide !== mySide)
+              .sort(
+                (a, b) =>
+                  Math.hypot(a.x - controlled.x, a.z - controlled.z) -
+                  Math.hypot(b.x - controlled.x, b.z - controlled.z)
+              )[0];
+            const defDist = nearbyDef
+              ? Math.hypot(nearbyDef.x - controlled.x, nearbyDef.z - controlled.z)
+              : 999;
+
+            if (defDist < 3.8 && distToGoal > 16 && this.autoPlayTimer > 0.65) {
+              this.autoPlayTimer = 0;
+              const passType = Math.random() > 0.4 ? 'through' : 'short';
+              this.executePass(passType);
+              this.setCommentary(
+                `AUTO PLAY: ${controlled.data.name.toUpperCase()} DELIVERS A CRISP PASS!`
+              );
+            } else {
+              // Dribble dynamically toward opponent goal
+              const dirX = attackDir;
+              const dirZ = THREE.MathUtils.clamp((0 - controlled.z) * 0.1, -0.6, 0.6);
+              const len = Math.hypot(dirX, dirZ);
+              const autoSpd = 9.4 * paceFactor;
+              controlled.vx = THREE.MathUtils.lerp(controlled.vx, (dirX / len) * autoSpd, dt * 10);
+              controlled.vz = THREE.MathUtils.lerp(controlled.vz, (dirZ / len) * autoSpd, dt * 10);
+              controlled.facingAngle = Math.atan2(dirX, dirZ);
+            }
+          }
+        } else if (this.ballOwner && this.ballOwner.teamSide !== mySide) {
+          // Opponent has the ball: press and tackle!
+          const dx = this.ballPos.x - controlled.x;
+          const dz = this.ballPos.z - controlled.z;
+          const dist = Math.hypot(dx, dz);
+          if (dist > 0.5) {
+            const pressSpd = 9.6 * paceFactor;
+            controlled.vx = THREE.MathUtils.lerp(controlled.vx, (dx / dist) * pressSpd, dt * 12);
+            controlled.vz = THREE.MathUtils.lerp(controlled.vz, (dz / dist) * pressSpd, dt * 12);
+            controlled.facingAngle = Math.atan2(dx, dz);
+          }
+          if (dist < 2.2 && controlled.tackleTimer <= 0 && this.autoPlayTimer > 0.3) {
+            this.autoPlayTimer = 0;
+            this.executeTackle(controlled);
+          }
+        } else if (!this.ballOwner) {
+          // Loose ball: sprint directly to recover!
+          const dx = this.ballPos.x - controlled.x;
+          const dz = this.ballPos.z - controlled.z;
+          const dist = Math.hypot(dx, dz);
+          if (dist > 0.3) {
+            const retrieveSpd = 10.8 * paceFactor;
+            controlled.vx = THREE.MathUtils.lerp(controlled.vx, (dx / dist) * retrieveSpd, dt * 14);
+            controlled.vz = THREE.MathUtils.lerp(controlled.vz, (dz / dist) * retrieveSpd, dt * 14);
+            controlled.facingAngle = Math.atan2(dx, dz);
+          }
+        } else {
+          // Teammate has ball: advance into dangerous attacking space!
+          const targetX = Math.min(PITCH_WIDTH / 2 - 4, controlled.baseX + 20);
+          const targetZ = controlled.baseZ + (this.ballPos.z - controlled.baseZ) * 0.35;
+          const dx = targetX - controlled.x;
+          const dz = targetZ - controlled.z;
+          const dist = Math.hypot(dx, dz);
+          if (dist > 1.2) {
+            const runSpd = 8.8 * paceFactor;
+            controlled.vx = THREE.MathUtils.lerp(controlled.vx, (dx / dist) * runSpd, dt * 8);
+            controlled.vz = THREE.MathUtils.lerp(controlled.vz, (dz / dist) * runSpd, dt * 8);
+            controlled.facingAngle = Math.atan2(dx, dz);
+          } else {
+            controlled.vx *= Math.pow(0.1, dt);
+            controlled.vz *= Math.pow(0.1, dt);
+          }
+        }
       } else {
         controlled.vx *= Math.pow(0.08, dt);
         controlled.vz *= Math.pow(0.08, dt);
@@ -2921,10 +3130,10 @@ export class FootballEngine3D {
           }
         }
       } else if (this.passTargetPlayer === p && this.passAssistTimer > 0 && !this.ballOwner) {
-        // Intended pass receiver actively moves toward the incoming pass!
-        targetX = this.ballPos.x + this.ballVel.x * 0.18;
-        targetZ = this.ballPos.z + this.ballVel.z * 0.18;
-        speed = 9.4 * diffMult;
+        // Intended pass receiver actively steps to meet the incoming pass with high agility
+        targetX = this.ballPos.x;
+        targetZ = this.ballPos.z;
+        speed = Math.max(12.0, (p.data.attributes.pace / 100) * 13.5) * diffMult;
       } else if (
         (p.teamSide === 'away' &&
           (p === closestAwayAI || (isOnlineChallenge && p === secondClosestAwayAI && secondClosestAwayDist < 18))) ||
@@ -2955,11 +3164,56 @@ export class FootballEngine3D {
           this.setCommentary(`STRONG TACKLE BY ${p.data.name.toUpperCase()}!`);
         }
       } else if (p.teamSide === 'home' && this.ballOwner?.teamSide === 'home') {
-        // Make intelligent forward attacking runs
-        targetX = Math.min(PITCH_WIDTH / 2 - 6, p.baseX + 22);
+        // Spot-on Tactical Line-Up movement based on formation roles!
+        const isAttacker = p.role === 'ST' || p.role === 'CF' || p.role === 'LW' || p.role === 'RW';
+        const isMidfielder = p.role === 'CAM' || p.role === 'CM' || p.role === 'LM' || p.role === 'RM';
+        const isHoldingMid = p.role === 'CDM';
+        const isFullback = p.role === 'LB' || p.role === 'RB';
+        const isCenterBack = p.role === 'CB';
+
+        if (isAttacker) {
+          // Strikers & Wingers lead the attack and push into high dangerous areas
+          targetX = Math.min(PITCH_WIDTH / 2 - 5, p.baseX + 24);
+          if (p.role === 'LW' || p.role === 'RW') {
+            targetZ = p.baseZ * 0.90;
+          }
+        } else if (isMidfielder) {
+          // Central & Attacking Midfielders advance to create passing triangles
+          targetX = Math.min(PITCH_WIDTH / 2 - 12, p.baseX + 16);
+          targetZ = p.baseZ + (this.ballPos.z - p.baseZ) * 0.35;
+        } else if (isHoldingMid) {
+          // Defensive Midfielder holds position as pivot to clean up loose balls and provide back-pass
+          targetX = Math.min(10, p.baseX + 10);
+          targetZ = this.ballPos.z * 0.32;
+        } else if (isFullback) {
+          // Fullbacks provide wide overlapping passing lanes along touchline
+          targetX = Math.min(16, p.baseX + 12);
+          targetZ = p.baseZ * 0.96;
+        } else if (isCenterBack) {
+          // Center Backs maintain the defensive line (discipline: never rush ahead of midfield!)
+          targetX = Math.min(-6, p.baseX + 6);
+          targetZ = p.baseZ * 0.78;
+        } else {
+          targetX = p.baseX + 8;
+        }
       } else if (p.teamSide === 'away' && this.ballOwner?.teamSide === 'away') {
-        // Away teammates make dangerous forward runs toward Home Goal
-        targetX = Math.max(-PITCH_WIDTH / 2 + 6, p.baseX - (isOnlineChallenge ? 24 : 18));
+        // Away teammates make dangerous forward runs toward Home Goal preserving tactical shape
+        const isAttacker = p.role === 'ST' || p.role === 'CF' || p.role === 'LW' || p.role === 'RW';
+        const isMidfielder = p.role === 'CAM' || p.role === 'CM' || p.role === 'LM' || p.role === 'RM';
+        const isHoldingMid = p.role === 'CDM';
+        const isCenterBack = p.role === 'CB';
+
+        if (isAttacker) {
+          targetX = Math.max(-PITCH_WIDTH / 2 + 5, p.baseX - (isOnlineChallenge ? 25 : 20));
+        } else if (isMidfielder) {
+          targetX = Math.max(-PITCH_WIDTH / 2 + 12, p.baseX - 15);
+        } else if (isHoldingMid) {
+          targetX = Math.max(-10, p.baseX - 9);
+        } else if (isCenterBack) {
+          targetX = Math.max(6, p.baseX - 5);
+        } else {
+          targetX = p.baseX - 10;
+        }
       }
 
       const dx = targetX - p.x;
@@ -3123,12 +3377,12 @@ export class FootballEngine3D {
         const dx = targetX - this.ballPos.x;
         const dz = targetZ - this.ballPos.z;
         const distToTarget = Math.hypot(dx, dz);
-        if (distToTarget > 0.4) {
-          const curSpeed = Math.max(19, Math.hypot(this.ballVel.x, this.ballVel.z));
+        if (distToTarget > 0.25) {
+          const curSpeed = Math.max(24, Math.hypot(this.ballVel.x, this.ballVel.z));
           const desiredVx = (dx / distToTarget) * curSpeed;
           const desiredVz = (dz / distToTarget) * curSpeed;
-          this.ballVel.x = THREE.MathUtils.lerp(this.ballVel.x, desiredVx, dt * 11);
-          this.ballVel.z = THREE.MathUtils.lerp(this.ballVel.z, desiredVz, dt * 11);
+          this.ballVel.x = THREE.MathUtils.lerp(this.ballVel.x, desiredVx, dt * 28);
+          this.ballVel.z = THREE.MathUtils.lerp(this.ballVel.z, desiredVz, dt * 28);
         }
       }
 
@@ -3154,10 +3408,10 @@ export class FootballEngine3D {
         } else {
           this.ballVel.y = 0;
         }
-        // Grass friction (reduced while pass assist is guiding the ball to a teammate)
+        // Grass friction (smooth true roll while pass assist is guiding the ball to a teammate)
         const friction =
           this.passAssistTimer > 0
-            ? 0.78
+            ? 0.90
             : this.config.weather === 'Rain'
             ? 0.42
             : 0.28;
@@ -3172,12 +3426,18 @@ export class FootballEngine3D {
           if (p.role === 'GK' || p.kickTimer > 0.15) continue;
           const d = Math.hypot(p.x - this.ballPos.x, p.z - this.ballPos.z);
           const isIntendedReceiver = this.passTargetPlayer === p && this.passAssistTimer > 0;
-          const pickupRadius = isIntendedReceiver ? 1.65 : 1.15;
-          if (d < pickupRadius && this.ballPos.y < 1.65) {
+          const pickupRadius = isIntendedReceiver ? 2.85 : 1.25;
+          if (d < pickupRadius && this.ballPos.y < 2.3) {
             this.ballOwner = p;
+            if (p.teamSide === 'home' && this.passTargetPlayer === p) {
+              this.stats.homePassesCompleted++;
+            } else if (p.teamSide === 'away' && this.passTargetPlayer === p) {
+              this.stats.awayPassesCompleted++;
+            }
             this.passTargetPlayer = null;
             this.passAssistTimer = 0;
             this.lastTouchTeam = p.teamSide;
+            this.ballVel.set(p.vx * 0.35, 0, p.vz * 0.35);
             if (p.teamSide === 'home' && !this.manualGKActive && !this.isOnlineGuest()) {
               this.controlledIdx = i;
             } else if (p.teamSide === 'away' && this.isOnlineHost()) {
@@ -3693,6 +3953,7 @@ export class FootballEngine3D {
       isMatchOver: this.isMatchOver,
       cameraMode: this.config.cameraMode,
       manualGKActive: this.manualGKActive,
+      autoPlay: this.autoPlayActive,
       autoSwitchMode: this.autoSwitchMode,
       practiceDrill: this.practiceDrill,
       challengeScore: this.challengeScore,

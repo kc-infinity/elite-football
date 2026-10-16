@@ -153,6 +153,7 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
   const joystickCenterRef = useRef<{ x: number; y: number } | null>(null);
   const [muted, setMuted] = useState(SoundEngine.settings.muted);
   const [matchRecorded, setMatchRecorded] = useState(false);
+  const [showPostMatchStats, setShowPostMatchStats] = useState(true);
   const [replayKey, setReplayKey] = useState(0);
   const [opponentDisconnected, setOpponentDisconnected] = useState<string | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
@@ -180,6 +181,7 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
     isMatchOver: false,
     cameraMode: initialCamera,
     manualGKActive: mode === 'gk_challenge',
+    autoPlay: false,
     autoSwitchMode,
     practiceDrill: 'Free Play',
     challengeScore: 0,
@@ -195,6 +197,8 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
       awayShotsOnTarget: 0,
       homePasses: 0,
       awayPasses: 0,
+      homePassesCompleted: 0,
+      awayPassesCompleted: 0,
       homeTackles: 0,
       awayTackles: 0,
       homeSaves: 0,
@@ -405,14 +409,34 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
     setReplayKey((k) => k + 1);
   };
 
-  const passAccuracyHome = Math.min(
-    98,
-    82 + Math.round((hud.stats.homePasses / Math.max(1, hud.stats.homePasses + 3)) * 14)
-  );
-  const passAccuracyAway = Math.min(
-    96,
-    79 + Math.round((hud.stats.awayPasses / Math.max(1, hud.stats.awayPasses + 4)) * 14)
-  );
+  const passAccuracyHome =
+    hud.stats.homePasses > 0
+      ? Math.min(
+          99,
+          Math.max(
+            75,
+            Math.round(
+              ((hud.stats.homePassesCompleted ?? Math.round(hud.stats.homePasses * 0.88)) /
+                Math.max(1, hud.stats.homePasses)) *
+                100
+            )
+          )
+        )
+      : 92;
+  const passAccuracyAway =
+    hud.stats.awayPasses > 0
+      ? Math.min(
+          98,
+          Math.max(
+            70,
+            Math.round(
+              ((hud.stats.awayPassesCompleted ?? Math.round(hud.stats.awayPasses * 0.85)) /
+                Math.max(1, hud.stats.awayPasses)) *
+                100
+            )
+          )
+        )
+      : 88;
 
   return (
     <div className="relative w-full h-screen bg-[#070A0E] overflow-hidden select-none">
@@ -461,19 +485,33 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
         </div>
       )}
 
-      {/* TOP BROADCAST SCOREBUG & CONTROLS OVERLAY */}
+      {/* TOP BROADCAST SCOREBUG & CONTROLS OVERLAY (UPPER PLACE SCOREBOARD) */}
       {!isLoading && (
-        <div className="absolute top-4 left-4 right-4 z-20 flex flex-wrap items-start justify-between gap-4 pointer-events-none">
+        <div className="absolute top-4 left-4 right-4 z-50 flex flex-wrap items-start justify-between gap-4 pointer-events-none">
           {/* Scorebug */}
-          <div className="pointer-events-auto flex items-center bg-[#070A0E]/85 backdrop-blur-md border border-white/15 rounded-lg overflow-hidden shadow-2xl">
-            <div className="px-3 py-2 bg-[#10B981] text-[#070A0E] font-display font-bold text-xs tracking-wider flex items-center gap-1.5">
+          <div
+            className={`pointer-events-auto flex items-center bg-[#070A0E]/90 backdrop-blur-md border rounded-xl overflow-hidden shadow-2xl transition-all ${
+              hud.isMatchOver
+                ? 'border-[#F59E0B] shadow-[0_0_35px_rgba(245,158,11,0.45)] ring-1 ring-[#F59E0B]'
+                : 'border-white/15'
+            }`}
+          >
+            <div
+              className={`px-3 py-2 font-display font-bold text-xs tracking-wider flex items-center gap-1.5 ${
+                hud.isMatchOver
+                  ? 'bg-[#F59E0B] text-[#070A0E]'
+                  : 'bg-[#10B981] text-[#070A0E]'
+              }`}
+            >
               {onlineMatchInfo?.isOnline && <Wifi className="w-3.5 h-3.5" />}
-              {tournamentStageLabel ||
-                (onlineMatchInfo?.isOnline
-                  ? `ONLINE ${onlineMatchInfo.matchFormat === '1v1' ? '1V1' : '11V11 DREAM TEAM'} · ${onlineMatchInfo.roomCode}`
-                  : joinCodeLabel
-                  ? `${joinCodeLabel}`
-                  : mode.replace('_', ' ').toUpperCase())}
+              {hud.isMatchOver
+                ? 'FULL TIME · RESULT'
+                : tournamentStageLabel ||
+                  (onlineMatchInfo?.isOnline
+                    ? `ONLINE ${onlineMatchInfo.matchFormat === '1v1' ? '1V1' : '11V11 DREAM TEAM'} · ${onlineMatchInfo.roomCode}`
+                    : joinCodeLabel
+                    ? `${joinCodeLabel}`
+                    : mode.replace('_', ' ').toUpperCase())}
             </div>
             <div className="flex items-center gap-4 px-4 py-2">
               <div className="flex flex-col items-start">
@@ -500,7 +538,13 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
                   </span>
                 </div>
               </div>
-              <div className="px-3 py-0.5 bg-white/10 rounded font-mono font-bold text-base text-white tabular-nums">
+              <div
+                className={`px-3.5 py-0.5 rounded font-mono font-bold text-base tabular-nums ${
+                  hud.isMatchOver
+                    ? 'bg-[#F59E0B]/20 text-[#F59E0B] border border-[#F59E0B]/50'
+                    : 'bg-white/10 text-white'
+                }`}
+              >
                 {hud.homeScore} - {hud.awayScore}
               </div>
               <button
@@ -539,8 +583,20 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
                 </div>
               </button>
             </div>
-            <div className="px-3.5 py-2 border-l border-white/10 font-mono text-sm text-[#10B981] tabular-nums flex items-center gap-2.5">
-              <span>{mode === 'practice' ? 'TRAINING' : formatMatchTime(hud.matchClockSeconds)}</span>
+            <div
+              className={`px-3.5 py-2 border-l border-white/10 font-mono text-sm tabular-nums flex items-center gap-2.5 ${
+                hud.isMatchOver
+                  ? 'text-[#F59E0B] font-bold bg-[#F59E0B]/15'
+                  : 'text-[#10B981]'
+              }`}
+            >
+              <span>
+                {mode === 'practice'
+                  ? 'TRAINING'
+                  : hud.isMatchOver
+                  ? 'FT 90:00 (TIME ELAPSED)'
+                  : formatMatchTime(hud.matchClockSeconds)}
+              </span>
               {onlineMatchInfo?.isOnline && (
                 <span className="text-[10px] text-slate-400 border-l border-white/10 pl-2">
                   {latencyMs}ms
@@ -608,6 +664,28 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
             >
               <Users className="w-3.5 h-3.5" />
               Opponent XI (Tab)
+            </button>
+
+            {/* Auto Play Feature (Auto / Manual Toggle) */}
+            <button
+              type="button"
+              onClick={() => {
+                SoundEngine.playUIClick();
+                engineRef.current?.toggleAutoPlay();
+              }}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer shadow-md ${
+                hud.autoPlay
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-[#070A0E] border-white font-bold ring-2 ring-emerald-400/60 shadow-emerald-500/25'
+                  : 'bg-[#070A0E]/85 text-slate-300 border-white/20 hover:border-white/40'
+              }`}
+              title="Toggle Auto Play: AI controls active player; move joystick or press keys anytime to take manual control"
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  hud.autoPlay ? 'bg-[#070A0E] animate-ping' : 'bg-slate-500'
+                }`}
+              />
+              {hud.autoPlay ? 'AUTO PLAY: ON' : 'MANUAL PLAY'}
             </button>
 
             {/* Auto Player Switch Option Toggle */}
@@ -682,10 +760,26 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
               {muted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-[#10B981]" />}
             </button>
 
+            {/* Toggle Full Time Stats / Inspect Scoreboard & Pitch */}
+            {hud.isMatchOver && (
+              <button
+                type="button"
+                onClick={() => {
+                  SoundEngine.playUIClick();
+                  setShowPostMatchStats((v) => !v);
+                }}
+                className="px-3 py-1.5 text-xs font-display font-bold rounded-lg bg-[#38BDF8]/20 hover:bg-[#38BDF8]/30 text-[#38BDF8] border border-[#38BDF8]/60 transition-colors whitespace-nowrap flex items-center gap-1.5 shadow cursor-pointer"
+                title="Toggle Post-Match Statistics Modal / View 3D Stadium & Upper Scoreboard"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                {showPostMatchStats ? 'View Stadium & Scoreboard' : 'Show Match Stats'}
+              </button>
+            )}
+
             {/* Exit Match */}
             <button
               onClick={onExitToMenu}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-500/20 text-rose-200 border border-rose-500/40 hover:bg-rose-500/30 transition-colors whitespace-nowrap"
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-500/20 text-rose-200 border border-rose-500/40 hover:bg-rose-500/30 transition-colors whitespace-nowrap cursor-pointer"
             >
               Exit Match
             </button>
@@ -847,11 +941,16 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
               </div>
             </div>
 
-            {/* Shot Power Meter */}
+            {/* Shot Power Meter with Play Code: S Shoot */}
             <div>
-              <div className="flex justify-between text-[11px] text-slate-400 mb-1 font-mono">
-                <span>SHOT POWER (S / C)</span>
-                <span>{hud.shotPower}%</span>
+              <div className="flex justify-between text-[11px] text-slate-300 mb-1 font-mono">
+                <span className="flex items-center gap-1.5 font-bold">
+                  <span className="px-1.5 py-0.5 rounded bg-rose-500/25 border border-rose-500/60 text-rose-300 font-mono text-[10px]">
+                    PLAY CODE: S SHOOT
+                  </span>
+                  <span className="text-slate-400">HOLD / TAP</span>
+                </span>
+                <span className="font-bold text-[#F59E0B]">{hud.shotPower}%</span>
               </div>
               <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
                 <div
@@ -860,7 +959,7 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
                       ? 'bg-rose-500'
                       : hud.shotPower > 45
                       ? 'bg-[#F59E0B]'
-                      : 'bg-[#38BDF8]'
+                      : 'bg-[#10B981]'
                   }`}
                   style={{ width: `${hud.shotPower}%` }}
                 />
@@ -902,7 +1001,7 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
           </div>
 
           {/* Bottom-Right: Unobtrusive Control Bar + Instant Bicycle Kick [B] & Rainbow Flick Actions */}
-          <div className="pointer-events-auto bg-[#070A0E]/85 backdrop-blur-md border border-white/15 rounded-xl px-4 py-3 text-xs text-slate-300 font-mono space-y-1.5 shadow-2xl">
+          <div className="pointer-events-auto bg-[#070A0E]/85 backdrop-blur-md border border-white/15 rounded-xl px-4 py-3 text-xs text-slate-300 font-mono space-y-2 shadow-2xl">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[11px] text-slate-400 font-sans font-semibold">
                 ACTIVE CONTROLS ({controlScheme.toUpperCase()})
@@ -922,9 +1021,13 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
                 </button>
               </div>
             </div>
+            <div className="p-1 rounded bg-[#10B981]/15 border border-[#10B981]/40 flex items-center justify-between px-2">
+              <span className="text-[#10B981] font-bold">PLAY CODE: [S] SHOOT</span>
+              <span className="text-slate-300 text-[10px]">Hold S for power · Tap for quick shot</span>
+            </div>
             <div>
-              <span className="text-[#10B981] font-bold">P</span> Accurate Pass ·{' '}
-              <span className="text-[#10B981] font-bold">S</span> Shoot ·{' '}
+              <span className="text-[#10B981] font-bold">P</span> Pass ·{' '}
+              <span className="text-white font-bold">U</span> Through ·{' '}
               <span className="text-[#F59E0B] font-bold">B</span> Bicycle Kick ·{' '}
               <span className="text-[#38BDF8] font-bold">K</span> Skill
             </div>
@@ -958,109 +1061,176 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
         </div>
       )}
 
-      {/* MOBILE & TOUCH GAMEPAD OVERLAY (VIRTUAL JOYSTICK + ACTION PAD) */}
+      {/* MOBILE & TOUCH GAMEPAD OVERLAY (VIRTUAL JOYSTICK + ACTION PAD + AUTO PLAY TOGGLE) */}
       {!isLoading && !hud.isMatchOver && showTouchControls && (
-        <div className="fixed inset-x-4 bottom-36 sm:bottom-32 z-30 flex items-end justify-between pointer-events-none select-none">
+        <div className="fixed inset-x-3 sm:inset-x-6 bottom-32 sm:bottom-28 z-30 flex items-end justify-between pointer-events-none select-none">
           {/* Left: Virtual 360° Thumbstick */}
-          <div
-            onPointerDown={(e) => {
-              e.currentTarget.setPointerCapture(e.pointerId);
-              const rect = e.currentTarget.getBoundingClientRect();
-              joystickCenterRef.current = {
-                x: rect.left + rect.width / 2,
-                y: rect.top + rect.height / 2,
-              };
-            }}
-            onPointerMove={(e) => {
-              if (!joystickCenterRef.current) return;
-              const dx = e.clientX - joystickCenterRef.current.x;
-              const dy = e.clientY - joystickCenterRef.current.y;
-              const maxR = 44;
-              const dist = Math.hypot(dx, dy);
-              const clampedDist = Math.min(maxR, dist);
-              const angle = Math.atan2(dy, dx);
-              const kx = Math.cos(angle) * clampedDist;
-              const ky = Math.sin(angle) * clampedDist;
-              setTouchKnob({ x: kx, y: ky });
-              engineRef.current?.setTouchMovement(kx / maxR, ky / maxR, touchSprinting);
-            }}
-            onPointerUp={() => {
-              joystickCenterRef.current = null;
-              setTouchKnob({ x: 0, y: 0 });
-              engineRef.current?.setTouchMovement(0, 0, false);
-            }}
-            onPointerCancel={() => {
-              joystickCenterRef.current = null;
-              setTouchKnob({ x: 0, y: 0 });
-              engineRef.current?.setTouchMovement(0, 0, false);
-            }}
-            className="pointer-events-auto w-28 h-28 rounded-full bg-[#070A0E]/75 border-2 border-white/25 backdrop-blur-md flex items-center justify-center relative touch-none shadow-2xl"
-          >
-            <div className="text-[9px] font-mono text-white/40 absolute top-2">MOVE</div>
+          <div className="flex flex-col items-center">
+            {/* Auto Play indicator above joystick */}
+            {hud.autoPlay && (
+              <div className="mb-2 px-2.5 py-1 rounded-full bg-[#10B981]/95 text-[#070A0E] font-mono text-[9px] font-extrabold shadow-lg flex items-center gap-1.5 animate-pulse border border-white/40">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#070A0E]" />
+                AI DRIVING · TOUCH TO OVERRIDE
+              </div>
+            )}
             <div
-              className="w-12 h-12 rounded-full bg-[#10B981]/90 border-2 border-white shadow-lg transition-transform duration-75"
-              style={{
-                transform: `translate(${touchKnob.x}px, ${touchKnob.y}px)`,
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                const rect = e.currentTarget.getBoundingClientRect();
+                joystickCenterRef.current = {
+                  x: rect.left + rect.width / 2,
+                  y: rect.top + rect.height / 2,
+                };
               }}
-            />
+              onPointerMove={(e) => {
+                if (!joystickCenterRef.current) return;
+                const dx = e.clientX - joystickCenterRef.current.x;
+                const dy = e.clientY - joystickCenterRef.current.y;
+                const maxR = 48;
+                const dist = Math.hypot(dx, dy);
+                const clampedDist = Math.min(maxR, dist);
+                const angle = Math.atan2(dy, dx);
+                const kx = Math.cos(angle) * clampedDist;
+                const ky = Math.sin(angle) * clampedDist;
+                setTouchKnob({ x: kx, y: ky });
+                engineRef.current?.setTouchMovement(kx / maxR, ky / maxR, touchSprinting);
+              }}
+              onPointerUp={() => {
+                joystickCenterRef.current = null;
+                setTouchKnob({ x: 0, y: 0 });
+                engineRef.current?.setTouchMovement(0, 0, false);
+              }}
+              onPointerCancel={() => {
+                joystickCenterRef.current = null;
+                setTouchKnob({ x: 0, y: 0 });
+                engineRef.current?.setTouchMovement(0, 0, false);
+              }}
+              className="pointer-events-auto w-32 h-32 rounded-full bg-[#070A0E]/80 border-2 border-emerald-400/40 backdrop-blur-md flex items-center justify-center relative touch-none shadow-2xl ring-1 ring-white/10"
+            >
+              <div className="text-[9px] font-mono font-bold text-white/50 absolute top-2">
+                MOVE 360°
+              </div>
+              <div className="w-14 h-14 rounded-full border border-white/10 absolute pointer-events-none" />
+              <div
+                className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 border-2 border-white shadow-xl flex items-center justify-center transition-transform duration-75"
+                style={{
+                  transform: `translate(${touchKnob.x}px, ${touchKnob.y}px)`,
+                }}
+              >
+                <div className="w-4 h-4 rounded-full bg-white/70 shadow-sm" />
+              </div>
+            </div>
           </div>
 
-          {/* Right: Touch Action Pad (Pass, Through, Shoot, Bicycle [B], Sprint, Switch/Tackle) */}
-          <div className="pointer-events-auto grid grid-cols-3 gap-2">
+          {/* Right: Auto/Manual Switch + 6 eFootball Touch Buttons (Pass, Shoot, Through Pass, Sprint, Skill, Switch Player) */}
+          <div className="flex flex-col items-end gap-2">
+            {/* Quick Auto Play Toggle Pill */}
             <button
               type="button"
-              onPointerDown={() => engineRef.current?.triggerMobileThroughBall()}
-              className="w-16 h-12 rounded-xl bg-[#38BDF8]/85 active:scale-95 text-[#070A0E] font-display font-bold text-[11px] shadow-lg border border-white/30"
-            >
-              THROUGH
-            </button>
-            <button
-              type="button"
-              onPointerDown={() => engineRef.current?.triggerBicycleKick()}
-              className="w-16 h-12 rounded-xl bg-[#F59E0B] active:scale-95 text-[#070A0E] font-display font-bold text-[11px] shadow-lg border border-white/30"
-            >
-              BICYCLE [B]
-            </button>
-            <button
-              type="button"
-              onPointerDown={() => engineRef.current?.triggerMobileShoot(78)}
-              className="w-16 h-12 rounded-xl bg-rose-500 active:scale-95 text-white font-display font-bold text-[11px] shadow-lg border border-white/30"
-            >
-              SHOOT
-            </button>
-            <button
-              type="button"
-              onPointerDown={() => engineRef.current?.triggerMobileSwitchOrTackle()}
-              className="w-16 h-12 rounded-xl bg-[#111722]/90 active:scale-95 text-white font-display font-bold text-[10px] shadow-lg border border-white/25"
-            >
-              SWITCH/TKL
-            </button>
-            <button
-              type="button"
-              onPointerDown={() => {
-                const next = !touchSprinting;
-                setTouchSprinting(next);
-                engineRef.current?.setTouchMovement(
-                  touchKnob.x / 44,
-                  touchKnob.y / 44,
-                  next
-                );
+              onClick={() => {
+                SoundEngine.playUIClick();
+                engineRef.current?.toggleAutoPlay();
               }}
-              className={`w-16 h-12 rounded-xl font-display font-bold text-[11px] shadow-lg border ${
-                touchSprinting
-                  ? 'bg-[#10B981] text-[#070A0E] border-white'
-                  : 'bg-[#111722]/90 text-[#10B981] border-[#10B981]/50'
+              className={`pointer-events-auto px-3.5 py-1.5 rounded-full font-mono text-[10px] sm:text-xs font-bold border flex items-center gap-2 shadow-lg active:scale-95 transition-all cursor-pointer ${
+                hud.autoPlay
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-[#070A0E] border-white ring-2 ring-emerald-300/60 shadow-emerald-500/25'
+                  : 'bg-[#070A0E]/90 text-slate-300 border-white/25 hover:border-white/50'
               }`}
             >
-              SPRINT
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  hud.autoPlay ? 'bg-[#070A0E] animate-ping' : 'bg-slate-500'
+                }`}
+              />
+              {hud.autoPlay ? 'AUTO PLAY: ON' : 'MANUAL CONTROL'}
             </button>
-            <button
-              type="button"
-              onPointerDown={() => engineRef.current?.triggerMobilePass()}
-              className="w-16 h-12 rounded-xl bg-[#10B981] active:scale-95 text-[#070A0E] font-display font-bold text-[11px] shadow-lg border border-white/30"
-            >
-              PASS
-            </button>
+
+            {/* 6 Touch Buttons Grid */}
+            <div className="pointer-events-auto grid grid-cols-3 gap-2">
+              {/* 1. THROUGH PASS */}
+              <button
+                type="button"
+                onPointerDown={() => engineRef.current?.triggerMobileThroughBall()}
+                className="w-16 sm:w-20 h-12 sm:h-14 rounded-2xl bg-gradient-to-b from-sky-400 to-sky-600 active:scale-95 text-slate-950 font-display font-bold text-[10px] sm:text-xs shadow-xl border border-sky-300/60 flex flex-col items-center justify-center cursor-pointer"
+                title="Through Pass: Lead teammate into open space"
+              >
+                <span className="leading-tight">THROUGH</span>
+                <span className="text-[8px] font-mono text-slate-900/80">PASS</span>
+              </button>
+
+              {/* 2. SKILL */}
+              <button
+                type="button"
+                onPointerDown={() => engineRef.current?.triggerSkillMove()}
+                className="w-16 sm:w-20 h-12 sm:h-14 rounded-2xl bg-gradient-to-b from-purple-500 to-indigo-600 active:scale-95 text-white font-display font-bold text-[10px] sm:text-xs shadow-xl border border-purple-300/60 flex flex-col items-center justify-center cursor-pointer"
+                title="Skill Move: Roulette, Rainbow, Step-over, Heel-to-heel"
+              >
+                <span className="leading-tight">SKILL</span>
+                <span className="text-[8px] font-mono text-purple-200">MOVE</span>
+              </button>
+
+              {/* 3. SHOOT */}
+              <button
+                type="button"
+                onPointerDown={() => engineRef.current?.triggerPlayCodeShoot(84)}
+                className="w-16 sm:w-20 h-12 sm:h-14 rounded-2xl bg-gradient-to-b from-rose-500 to-red-600 active:scale-95 text-white font-display font-bold text-[10px] sm:text-xs shadow-xl border border-rose-300/60 flex flex-col items-center justify-center cursor-pointer"
+                title="Shoot on Target"
+              >
+                <span className="leading-tight">SHOOT</span>
+                <span className="text-[8px] font-mono text-rose-200">[S]</span>
+              </button>
+
+              {/* 4. SWITCH PLAYER */}
+              <button
+                type="button"
+                onPointerDown={() => engineRef.current?.triggerMobileSwitchOrTackle()}
+                className="w-16 sm:w-20 h-12 sm:h-14 rounded-2xl bg-[#111722]/95 active:scale-95 text-sky-400 font-display font-bold text-[10px] sm:text-xs shadow-xl border border-sky-500/40 flex flex-col items-center justify-center cursor-pointer"
+                title="Switch Player or Slide Tackle"
+              >
+                <span className="leading-tight">SWITCH</span>
+                <span className="text-[8px] font-mono text-slate-300">PLAYER</span>
+              </button>
+
+              {/* 5. SPRINT */}
+              <button
+                type="button"
+                onPointerDown={() => {
+                  const next = !touchSprinting;
+                  setTouchSprinting(next);
+                  engineRef.current?.setTouchMovement(
+                    touchKnob.x / 48,
+                    touchKnob.y / 48,
+                    next
+                  );
+                }}
+                className={`w-16 sm:w-20 h-12 sm:h-14 rounded-2xl font-display font-bold text-[10px] sm:text-xs shadow-xl border active:scale-95 flex flex-col items-center justify-center cursor-pointer transition-colors ${
+                  touchSprinting
+                    ? 'bg-gradient-to-b from-amber-400 to-amber-600 text-slate-950 border-white shadow-amber-500/30'
+                    : 'bg-[#111722]/95 text-amber-400 border-amber-500/40'
+                }`}
+                title="Toggle Sprint"
+              >
+                <span className="leading-tight">SPRINT</span>
+                <span
+                  className={`text-[8px] font-mono ${
+                    touchSprinting ? 'text-slate-950 font-bold' : 'text-amber-300/70'
+                  }`}
+                >
+                  {touchSprinting ? 'ON' : 'OFF'}
+                </span>
+              </button>
+
+              {/* 6. PASS */}
+              <button
+                type="button"
+                onPointerDown={() => engineRef.current?.triggerMobilePass()}
+                className="w-16 sm:w-20 h-12 sm:h-14 rounded-2xl bg-gradient-to-b from-emerald-400 to-emerald-600 active:scale-95 text-slate-950 font-display font-bold text-[10px] sm:text-xs shadow-xl border border-emerald-300/60 flex flex-col items-center justify-center cursor-pointer"
+                title="Ground Pass to Best Teammate"
+              >
+                <span className="leading-tight">PASS</span>
+                <span className="text-[8px] font-mono text-slate-900/80">[P]</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1117,8 +1287,10 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 text-xs font-mono text-slate-200 mb-6">
+              <div className="p-2.5 bg-[#10B981]/20 border-2 border-[#10B981] rounded-lg text-[#10B981] font-bold">
+                PLAY CODE: S = SHOOT (Hold Power / Tap to Strike)
+              </div>
               <div className="p-2.5 bg-white/5 rounded">P = Accurate Teammate Pass</div>
-              <div className="p-2.5 bg-white/5 rounded">S = Shoot (Hold Power)</div>
               <div className="p-2.5 bg-[#10B981]/15 border border-[#10B981]/40 rounded text-[#10B981] font-bold">
                 B = Bicycle Kick (Acrobatic Overhead Volley)
               </div>
@@ -1144,24 +1316,46 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
         </div>
       )}
 
-      {/* FULL-TIME MATCH RESULT OVERLAY */}
-      {!isLoading && hud.isMatchOver && (
-        <div className="absolute inset-0 z-40 bg-[#070A0E]/92 backdrop-blur-xl flex items-center justify-center p-6 overflow-y-auto">
-          <div className="bg-[#111722] border border-white/15 rounded-2xl max-w-2xl w-full p-8 shadow-2xl">
+      {/* FULL-TIME MATCH RESULT OVERLAY (POSITIONED BELOW UPPER PLACE SCOREBOARD) */}
+      {!isLoading && hud.isMatchOver && showPostMatchStats && (
+        <div className="absolute inset-0 z-40 bg-[#070A0E]/80 backdrop-blur-md flex flex-col items-center justify-start p-4 pt-24 sm:pt-28 pb-12 overflow-y-auto pointer-events-auto">
+          <div className="bg-[#111722]/95 border-2 border-[#F59E0B]/70 rounded-2xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl relative my-auto">
+            {/* Top Scoreboard Notice & Minimize Button */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-5">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] animate-pulse" />
+                <span className="text-xs font-mono font-bold text-[#F59E0B] tracking-wider uppercase">
+                  SCOREBOARD · MATCH TIME ELAPSED (90:00 FT)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  SoundEngine.playUIClick();
+                  setShowPostMatchStats(false);
+                }}
+                className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-[#38BDF8] hover:text-white font-mono text-xs rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer border border-white/15"
+                title="Minimize stats to see upper scoreboard and pitch"
+              >
+                <Eye className="w-3.5 h-3.5 text-[#38BDF8]" />
+                Hide Stats / View Upper Scoreboard
+              </button>
+            </div>
+
             <div className="text-center border-b border-white/10 pb-6 mb-6">
               <div className="text-xs font-mono text-[#10B981] tracking-widest mb-1">
                 FULL TIME · FINAL SCORE
               </div>
-              <div className="flex items-center justify-center gap-8 my-4">
+              <div className="flex items-center justify-center gap-6 sm:gap-8 my-4">
                 <div className="text-right">
-                  <div className="font-display text-2xl font-bold text-white">{homeTeam.name}</div>
+                  <div className="font-display text-xl sm:text-2xl font-bold text-white">{homeTeam.name}</div>
                   <div className="text-xs text-slate-400">{homeFormation}</div>
                 </div>
-                <div className="px-6 py-3 bg-[#070A0E] border border-white/15 rounded-xl font-mono text-4xl font-bold text-white tabular-nums">
+                <div className="px-5 sm:px-6 py-2.5 sm:py-3 bg-[#070A0E] border-2 border-[#F59E0B]/80 rounded-xl font-mono text-3xl sm:text-4xl font-bold text-[#F59E0B] tabular-nums shadow-inner">
                   {hud.homeScore} : {hud.awayScore}
                 </div>
                 <div className="text-left">
-                  <div className="font-display text-2xl font-bold text-white">{awayTeam.name}</div>
+                  <div className="font-display text-xl sm:text-2xl font-bold text-white">{awayTeam.name}</div>
                   <div className="text-xs text-slate-400">{awayTeam.defaultFormation}</div>
                 </div>
               </div>
@@ -1235,6 +1429,51 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
                 className="px-6 py-3 bg-[#38BDF8] hover:bg-[#0284C7] text-[#070A0E] font-display font-bold text-sm rounded-lg transition-colors cursor-pointer"
               >
                 RETURN TO HOME
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* COMPACT FLOATING BAR WHEN STATS MODAL IS MINIMIZED (LEAVES UPPER SCOREBOARD AND 3D STADIUM FULLY VISIBLE) */}
+      {!isLoading && hud.isMatchOver && !showPostMatchStats && (
+        <div className="absolute inset-x-4 bottom-6 z-40 flex items-center justify-center pointer-events-auto animate-in fade-in slide-in-from-bottom duration-200">
+          <div className="bg-[#111722]/95 backdrop-blur-xl border-2 border-[#F59E0B] rounded-2xl p-4 shadow-2xl flex flex-wrap items-center justify-between gap-4 max-w-2xl w-full">
+            <div className="flex items-center gap-3">
+              <span className="w-3 h-3 rounded-full bg-[#10B981] animate-pulse" />
+              <div>
+                <div className="text-[10px] font-mono text-[#F59E0B] font-bold uppercase tracking-wider">
+                  FULL TIME RESULT (TIME ELAPSED)
+                </div>
+                <div className="font-display font-bold text-base text-white">
+                  {homeTeam.shortName} <span className="text-[#10B981]">{hud.homeScore}</span> : <span className="text-[#38BDF8]">{hud.awayScore}</span> {awayTeam.shortName}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  SoundEngine.playUIClick();
+                  setShowPostMatchStats(true);
+                }}
+                className="px-3.5 py-2 bg-[#38BDF8] hover:bg-[#0284C7] text-[#070A0E] font-display font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                VIEW FULL STATS
+              </button>
+              <button
+                onClick={handlePlayAgain}
+                className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white font-display font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                PLAY AGAIN
+              </button>
+              <button
+                onClick={onExitToMenu}
+                className="px-3.5 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/40 font-display font-bold text-xs rounded-xl transition-colors cursor-pointer"
+              >
+                EXIT
               </button>
             </div>
           </div>

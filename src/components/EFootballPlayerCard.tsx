@@ -627,6 +627,12 @@ export const EFootballCardOpeningModal: React.FC<EFootballCardOpeningModalProps>
                 <div className="text-xs text-slate-300 mt-0.5">
                   {player.position} · {player.nationality} · {player.club} · Kit #{player.number}
                 </div>
+                <div className="mt-2.5 px-3 py-1.5 rounded-lg bg-[#10B981]/15 border border-[#10B981]/40 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse" />
+                  <span className="text-xs font-mono font-bold text-[#10B981]">
+                    PLACED IN MY SQUAD · {player.position} POSITION
+                  </span>
+                </div>
 
                 {/* All 10 Attributes with Progress Bars */}
                 <div className="mt-4 space-y-2 font-mono text-xs tabular-nums">

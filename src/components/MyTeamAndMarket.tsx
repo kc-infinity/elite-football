@@ -715,6 +715,32 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                 <div className="absolute top-1/2 left-0 -translate-y-1/2 w-24 h-56 border-2 border-l-0 border-white/30" />
                 <div className="absolute top-1/2 right-0 -translate-y-1/2 w-24 h-56 border-2 border-r-0 border-white/30" />
 
+                {/* Tactical Chemistry Link Lines */}
+                <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
+                  {FORMATIONS[userFormation].map((slotA, i) => {
+                    const ax = ((slotA.x + 0.96) / 0.95) * 82 + 7;
+                    const ay = ((slotA.z + 0.85) / 1.7) * 78 + 11;
+                    return FORMATIONS[userFormation].slice(i + 1).map((slotB, j) => {
+                      const bx = ((slotB.x + 0.96) / 0.95) * 82 + 7;
+                      const by = ((slotB.z + 0.85) / 1.7) * 78 + 11;
+                      const dist = Math.hypot(bx - ax, by - ay);
+                      if (dist > 34) return null;
+                      return (
+                        <line
+                          key={`link_${i}_${i + 1 + j}`}
+                          x1={`${ax}%`}
+                          y1={`${ay}%`}
+                          x2={`${bx}%`}
+                          y2={`${by}%`}
+                          stroke="rgba(16, 185, 129, 0.24)"
+                          strokeWidth="2"
+                          strokeDasharray="4 4"
+                        />
+                      );
+                    });
+                  })}
+                </svg>
+
                 {/* 11 Starting Players */}
                 {FORMATIONS[userFormation].map((slot, idx) => {
                   const player = userSquad[idx] || playersPool[idx] || PLAYERS_DB[idx];
@@ -723,6 +749,7 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                   const topPct = ((slot.z + 0.85) / 1.7) * 78 + 11;
                   const isSelected = selectedSwapIndex === idx;
                   const isCaptain = player.id === captainId;
+                  const fit = getPlayerSlotFitLevel(player.position, slot.role, slot.label);
 
                   return (
                     <div
@@ -749,6 +776,7 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                       <EFootballPitchPlayerCard
                         player={player}
                         slotLabel={slot.label}
+                        fitLevel={fit}
                         isSelected={isSelected}
                         isCaptain={isCaptain}
                       />

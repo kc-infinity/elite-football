@@ -149,6 +149,7 @@ export default function App() {
     return initialIds;
   });
   const [userSquad, setUserSquad] = useState<FootballPlayer[]>(() => {
+    const savedFormation = (localStorage.getItem('fe_formation') as FormationName) || '4-3-3';
     try {
       const savedRaw = localStorage.getItem('fe_squad_ids');
       if (savedRaw) {
@@ -157,13 +158,16 @@ export default function App() {
           const resolved = parsed
             .map((id: string) => PLAYERS_DB.find((p) => p.id === id))
             .filter((p): p is FootballPlayer => Boolean(p));
-          if (resolved.length >= 11) return resolved;
+          if (resolved.length >= 11) {
+            return buildOptimalSquadForFormation(resolved, resolved, savedFormation);
+          }
         }
       }
     } catch {
       // ignore parse errors
     }
-    return PLAYERS_DB.filter((p) => p.initialUnlocked);
+    const starterUnlocked = PLAYERS_DB.filter((p) => p.initialUnlocked);
+    return buildOptimalSquadForFormation(starterUnlocked, starterUnlocked, savedFormation);
   });
   const [captainId, setCaptainId] = useState<string>(() => {
     return (
@@ -637,27 +641,41 @@ export default function App() {
     newPlayer: FootballPlayer,
     formation: FormationName
   ): FootballPlayer[] => {
-    const copy = [...prevSquad];
+    // 1. Ensure base squad has at least 11 players
+    const starterUnlocked = PLAYERS_DB.filter((p) => p.initialUnlocked);
+    const base = prevSquad.length >= 11 ? prevSquad : [...prevSquad, ...starterUnlocked].slice(0, 11);
+    const copy = [...base];
+    const bestSlotIdx = findBestSlotIndexForPlayer(newPlayer, formation, copy.slice(0, 11));
     const existingIdx = copy.findIndex((p) => p.id === newPlayer.id);
-    const bestSlotIdx = findBestSlotIndexForPlayer(newPlayer, formation, copy);
 
-    if (existingIdx >= 0 && existingIdx < 11) {
+    // If player is already sitting in their exact optimal starting position, return
+    if (existingIdx === bestSlotIdx) {
       return copy;
     }
 
     const displaced = copy[bestSlotIdx];
     copy[bestSlotIdx] = newPlayer;
-    if (existingIdx >= 11) {
-      // Remove duplicate from reserves and place displaced player there
+
+    if (existingIdx >= 0 && existingIdx < 11) {
+      // Swapping within Starting XI (e.g. was playing out of position)
+      if (displaced && displaced.id !== newPlayer.id) {
+        copy[existingIdx] = displaced;
+      }
+    } else if (existingIdx >= 11) {
+      // Moving up from bench/reserves into Starting XI
       if (displaced && displaced.id !== newPlayer.id) {
         copy[existingIdx] = displaced;
       } else {
         copy.splice(existingIdx, 1);
       }
-    } else if (displaced && !copy.some((p) => p.id === displaced.id)) {
-      copy.push(displaced);
+    } else {
+      // Newly signed/unlocked player — push displaced starting player into reserves
+      if (displaced && displaced.id !== newPlayer.id) {
+        copy.splice(11, 0, displaced);
+      }
     }
-    return copy;
+
+    return copy.filter(Boolean);
   };
 
   const handleApplyUpgradeCard = (card: UpgradeCardItem, targetPlayerId: string) => {
@@ -1823,7 +1841,13 @@ export default function App() {
             captainId={captainId}
             preferredCelebration={preferredCelebration}
             onSelectTeam={setUserTeam}
-            onSelectFormation={setUserFormation}
+            onSelectFormation={(nextFormation) => {
+              setUserFormation(nextFormation);
+              const unlockedPool = allPlayers.filter((p) => unlockedPlayerIds.includes(p.id));
+              setUserSquad((prev) =>
+                buildOptimalSquadForFormation(unlockedPool, prev, nextFormation)
+              );
+            }}
             onUpdateSquadOrder={setUserSquad}
             onSelectCaptain={setCaptainId}
             onSelectCelebration={setPreferredCelebration}
