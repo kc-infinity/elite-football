@@ -45,6 +45,7 @@ import { FriendRoomService } from '../engine/FriendRoomService';
 import { OpponentSquadInfo, OpponentSquadPopup } from './OpponentSquadPopup';
 import { EFootballPitchPlayerCard, PlayerPhotoAvatar } from './PlayerPhotoAvatar';
 import { EFootballCardOpeningModal, EFootballPlayerCard } from './EFootballPlayerCard';
+import { ClassicPESBallOpeningModal } from './ClassicPESBallOpeningModal';
 import packShowcaseImg from '../assets/images/transfer_pack_showcase_1791305671660.jpg';
 
 interface SpinDrawTier {
@@ -186,6 +187,8 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
     'rating_desc' | 'price_asc' | 'shooting_power_desc' | 'passing_desc' | 'speed_desc'
   >('rating_desc');
   const [searchQuery, setSearchQuery] = useState('');
+  const [marketPage, setMarketPage] = useState<number>(1);
+  const [marketPageSize, setMarketPageSize] = useState<number>(48);
   const [marketFeedback, setMarketFeedback] = useState<{
     type: 'success' | 'error';
     message: string;
@@ -224,6 +227,15 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
   const [rouletteHighlightIndex, setRouletteHighlightIndex] = useState<number>(0);
   const [rouletteWinner, setRouletteWinner] = useState<FootballPlayer | null>(null);
   const [spinHistory, setSpinHistory] = useState<FootballPlayer[]>([]);
+  const [drawMode, setDrawMode] = useState<'classic_ball' | 'roulette'>('classic_ball');
+  const [pesBallModalState, setPesBallModalState] = useState<{
+    player: FootballPlayer;
+    sourceTitle: string;
+    sourceSubtitle: string;
+    canDrawAgain?: boolean;
+    drawAgainLabel?: string;
+    onDrawAgain?: () => void;
+  } | null>(null);
 
   React.useEffect(() => {
     setSection(initialSection);
@@ -281,6 +293,35 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
     const candidatePool = unownedPool.length > 0 ? unownedPool : pool;
     const chosen = candidatePool[Math.floor(Math.random() * candidatePool.length)] || pool[0];
     const targetIdx = Math.max(0, TOP_50_SPIN_PLAYERS.findIndex((p) => p.id === chosen.id));
+
+    if (drawMode === 'classic_ball') {
+      if (onSpinRoulette) {
+        onSpinRoulette(tier.costCoins, chosen);
+      } else {
+        onOpenPack(
+          {
+            id: tier.id,
+            name: tier.name,
+            price: tier.costCoins,
+            guaranteedRarity: tier.minRarity,
+            description: tier.subtitle,
+            accentColor: tier.accentColor,
+            oddsText: tier.badgeText,
+          },
+          chosen
+        );
+      }
+      setSpinHistory((prev) => [chosen, ...prev.slice(0, 7)]);
+      setPesBallModalState({
+        player: chosen,
+        sourceTitle: tier.name.toUpperCase(),
+        sourceSubtitle: `${tier.costCoins.toLocaleString()} Coins Special Agent Draw`,
+        canDrawAgain: coins - tier.costCoins >= tier.costCoins,
+        drawAgainLabel: `DRAW AGAIN (${tier.costCoins.toLocaleString()} COINS)`,
+        onDrawAgain: () => handleStartRouletteSpin(tier),
+      });
+      return;
+    }
 
     setIsSpinningRoulette(true);
     setRouletteWinner(null);
@@ -426,15 +467,27 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
 
     setRevealedPlayer(pulled);
     onOpenPack(pack, pulled);
-    setCardModalState({
-      player: pulled,
-      sourceTitle: `${pack.name.toUpperCase()} WALKOUT`,
-      sourceSubtitle: `${pack.oddsText} · Guaranteed ${pack.guaranteedRarity}+`,
-      skipAnimation: false,
-      canSpinAgain: coins - pack.price >= pack.price,
-      spinAgainLabel: `OPEN AGAIN (${pack.price.toLocaleString()})`,
-      onSpinAgain: () => handleTriggerPackOpen(pack),
-    });
+
+    if (drawMode === 'classic_ball') {
+      setPesBallModalState({
+        player: pulled,
+        sourceTitle: `${pack.name.toUpperCase()} BALL OPENING`,
+        sourceSubtitle: `${pack.oddsText} · Guaranteed ${pack.guaranteedRarity}+`,
+        canDrawAgain: coins - pack.price >= pack.price,
+        drawAgainLabel: `OPEN AGAIN (${pack.price.toLocaleString()})`,
+        onDrawAgain: () => handleTriggerPackOpen(pack),
+      });
+    } else {
+      setCardModalState({
+        player: pulled,
+        sourceTitle: `${pack.name.toUpperCase()} WALKOUT`,
+        sourceSubtitle: `${pack.oddsText} · Guaranteed ${pack.guaranteedRarity}+`,
+        skipAnimation: false,
+        canSpinAgain: coins - pack.price >= pack.price,
+        spinAgainLabel: `OPEN AGAIN (${pack.price.toLocaleString()})`,
+        onSpinAgain: () => handleTriggerPackOpen(pack),
+      });
+    }
   };
 
   const allNationalities = React.useMemo(() => {
@@ -493,6 +546,27 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
     searchQuery,
     sortBy,
   ]);
+
+  // Reset pagination to page 1 whenever any filter changes
+  React.useEffect(() => {
+    setMarketPage(1);
+  }, [
+    ownershipFilter,
+    rarityFilter,
+    posFilter,
+    minRatingFilter,
+    maxPriceFilter,
+    nationalityFilter,
+    searchQuery,
+    sortBy,
+  ]);
+
+  const totalMarketPages = Math.max(1, Math.ceil(filteredMarketPlayers.length / marketPageSize));
+  const currentSafePage = Math.min(marketPage, totalMarketPages);
+  const paginatedMarketPlayers = React.useMemo(() => {
+    const start = (currentSafePage - 1) * marketPageSize;
+    return filteredMarketPlayers.slice(start, start + marketPageSize);
+  }, [filteredMarketPlayers, currentSafePage, marketPageSize]);
 
   const avgTeamRating = Math.round(
     userSquad.slice(0, 11).reduce((acc, p) => acc + p.rating, 0) / 11
@@ -1706,120 +1780,249 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
               </button>
             </div>
           ) : (
-            /* Authentic eFootball Foil Player Cards Grid */
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-              {filteredMarketPlayers.map((player) => {
-                const isOwned = unlockedPlayerIds.includes(player.id);
-                const isInStartingXI = userSquad.slice(0, 11).some((s) => s.id === player.id);
-                const isLeadStar = userSquad[9]?.id === player.id;
-                const canAfford = coins >= player.price;
+            <div className="space-y-5">
+              {/* Top Pagination and Count Strip */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0A0F18] border border-white/10 rounded-xl px-4 py-3">
+                <div className="text-xs font-mono text-slate-300">
+                  Showing <span className="text-[#10B981] font-bold">{(currentSafePage - 1) * marketPageSize + 1}–{Math.min(currentSafePage * marketPageSize, filteredMarketPlayers.length)}</span> of <span className="text-[#F59E0B] font-bold">{filteredMarketPlayers.length.toLocaleString()}</span> Players
+                  {filteredMarketPlayers.length === 10000 && <span className="ml-2 text-slate-500">(10,000 Total Players Database)</span>}
+                </div>
 
-                return (
-                  <EFootballPlayerCard
-                    key={player.id}
-                    player={player}
-                    isOwned={isOwned}
-                    isLeadStar={isLeadStar}
-                    isInStartingXI={isInStartingXI}
-                    onInspect={(p) =>
-                      setCardModalState({
-                        player: p,
-                        sourceTitle: 'EFOOTBALL PLAYER CARD SHOWCASE',
-                        sourceSubtitle: `${p.club} · ${p.nationality}`,
-                        skipAnimation: true,
-                      })
-                    }
-                    footerSlot={
-                      isOwned ? (
-                        isInStartingXI ? (
-                          <button
-                            onClick={() => {
-                              const currentSlotIdx = userSquad
-                                .slice(0, 11)
-                                .findIndex((s) => s.id === player.id);
-                              setSelectedSwapIndex(currentSlotIdx >= 0 ? currentSlotIdx : 0);
-                              setSquadPositionFilter('slot_match');
-                              setSection('my_team');
-                            }}
-                            className="w-full py-2.5 bg-[#10B981]/20 hover:bg-[#10B981]/30 border border-[#10B981] rounded-xl text-center font-mono text-xs text-[#10B981] font-bold flex items-center justify-center gap-1.5 cursor-pointer"
-                          >
-                            <Check className="w-4 h-4" /> IN STARTING XI ({FORMATIONS[userFormation][userSquad.slice(0, 11).findIndex((s) => s.id === player.id)]?.label || player.position})
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              const bestIdx = findBestSlotIndexForPlayer(
-                                player,
-                                userFormation,
-                                userSquad
-                              );
-                              handleAssignUnlockedPlayerToSlot(player, bestIdx);
-                              setSection('my_team');
-                            }}
-                            className="w-full py-2.5 bg-white/10 hover:bg-[#10B981] text-white hover:text-[#070A0E] border border-white/15 rounded-xl font-display font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                          >
-                            <Check className="w-4 h-4" /> OWNED · PLACE AT {FORMATIONS[userFormation][findBestSlotIndexForPlayer(player, userFormation, userSquad)]?.label || player.position}
-                          </button>
-                        )
-                      ) : (
-                        <div className="space-y-2">
-                          <button
-                            onClick={() => handlePurchasePlayerWithReveal(player)}
-                            className={`w-full py-2.5 rounded-xl font-display font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer ${
-                              canAfford
-                                ? 'bg-[#10B981] hover:bg-[#059669] text-[#070A0E] shadow-md'
-                                : 'bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-300'
-                            }`}
-                          >
-                            <Coins className="w-3.5 h-3.5" />
-                            {canAfford
-                              ? `BUY (${player.price.toLocaleString()} COINS)`
-                              : `BUY (${player.price.toLocaleString()} COINS · NEED ${(player.price - coins).toLocaleString()} MORE)`}
-                          </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-mono text-slate-400">Per page:</span>
+                  <select
+                    value={marketPageSize}
+                    onChange={(e) => {
+                      setMarketPageSize(Number(e.target.value));
+                      setMarketPage(1);
+                    }}
+                    className="bg-[#111722] border border-white/20 rounded px-2 py-1 text-xs text-white font-mono cursor-pointer"
+                  >
+                    <option value={24}>24</option>
+                    <option value={48}>48</option>
+                    <option value={96}>96</option>
+                  </select>
 
-                          {onTriggerPaymentCheckout && (
+                  <div className="flex items-center gap-1 ml-2">
+                    <button
+                      type="button"
+                      disabled={currentSafePage <= 1}
+                      onClick={() => setMarketPage((p) => Math.max(1, p - 1))}
+                      className="px-2.5 py-1 rounded bg-[#111722] hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed border border-white/15 text-xs text-white font-mono font-bold cursor-pointer"
+                    >
+                      ‹ Prev
+                    </button>
+                    <span className="px-2 font-mono text-xs text-slate-300">
+                      {currentSafePage} / {totalMarketPages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={currentSafePage >= totalMarketPages}
+                      onClick={() => setMarketPage((p) => Math.min(totalMarketPages, p + 1))}
+                      className="px-2.5 py-1 rounded bg-[#111722] hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed border border-white/15 text-xs text-white font-mono font-bold cursor-pointer"
+                    >
+                      Next ›
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Authentic eFootball Foil Player Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                {paginatedMarketPlayers.map((player) => {
+                  const isOwned = unlockedPlayerIds.includes(player.id);
+                  const isInStartingXI = userSquad.slice(0, 11).some((s) => s.id === player.id);
+                  const isLeadStar = userSquad[9]?.id === player.id;
+                  const canAfford = coins >= player.price;
+
+                  return (
+                    <EFootballPlayerCard
+                      key={player.id}
+                      player={player}
+                      isOwned={isOwned}
+                      isLeadStar={isLeadStar}
+                      isInStartingXI={isInStartingXI}
+                      onInspect={(p) =>
+                        setCardModalState({
+                          player: p,
+                          sourceTitle: 'EFOOTBALL PLAYER CARD SHOWCASE',
+                          sourceSubtitle: `${p.club} · ${p.nationality}`,
+                          skipAnimation: true,
+                        })
+                      }
+                      footerSlot={
+                        isOwned ? (
+                          isInStartingXI ? (
                             <button
                               onClick={() => {
-                                SoundEngine.playUIClick();
-                                const usd =
-                                  player.rating >= 95
-                                    ? 6.99
-                                    : player.rating >= 92
-                                    ? 4.99
-                                    : player.rating >= 89
-                                    ? 2.99
-                                    : 1.99;
-                                onTriggerPaymentCheckout({
-                                  itemType: 'player',
-                                  itemId: player.id,
-                                  itemName: `${player.name} (${player.rating} OVR)`,
-                                  subtitle: `${player.nationality} · ${player.position} · ${player.club}`,
-                                  amountUsd: usd,
-                                  coinsAdded: 0,
-                                  playerToUnlock: player,
-                                });
+                                const currentSlotIdx = userSquad
+                                  .slice(0, 11)
+                                  .findIndex((s) => s.id === player.id);
+                                setSelectedSwapIndex(currentSlotIdx >= 0 ? currentSlotIdx : 0);
+                                setSquadPositionFilter('slot_match');
+                                setSection('my_team');
                               }}
-                              className="w-full py-2 rounded-xl bg-[#070A0E] hover:bg-[#192231] border border-[#38BDF8]/40 text-[#38BDF8] font-display font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                              className="w-full py-2.5 bg-[#10B981]/20 hover:bg-[#10B981]/30 border border-[#10B981] rounded-xl text-center font-mono text-xs text-[#10B981] font-bold flex items-center justify-center gap-1.5 cursor-pointer"
                             >
-                              <CreditCard className="w-3.5 h-3.5" />
-                              INSTANT SIGN ($
-                              {(player.rating >= 95
-                                ? 6.99
-                                : player.rating >= 92
-                                ? 4.99
-                                : player.rating >= 89
-                                ? 2.99
-                                : 1.99
-                              ).toFixed(2)}
-                              )
+                              <Check className="w-4 h-4" /> IN STARTING XI ({FORMATIONS[userFormation][userSquad.slice(0, 11).findIndex((s) => s.id === player.id)]?.label || player.position})
                             </button>
-                          )}
-                        </div>
-                      )
+                          ) : (
+                            <button
+                              onClick={() => {
+                                const bestIdx = findBestSlotIndexForPlayer(
+                                  player,
+                                  userFormation,
+                                  userSquad
+                                );
+                                handleAssignUnlockedPlayerToSlot(player, bestIdx);
+                                setSection('my_team');
+                              }}
+                              className="w-full py-2.5 bg-white/10 hover:bg-[#10B981] text-white hover:text-[#070A0E] border border-white/15 rounded-xl font-display font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <Check className="w-4 h-4" /> OWNED · PLACE AT {FORMATIONS[userFormation][findBestSlotIndexForPlayer(player, userFormation, userSquad)]?.label || player.position}
+                            </button>
+                          )
+                        ) : (
+                          <div className="space-y-2">
+                            <button
+                              onClick={() => handlePurchasePlayerWithReveal(player)}
+                              className={`w-full py-2.5 rounded-xl font-display font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer ${
+                                canAfford
+                                  ? 'bg-[#10B981] hover:bg-[#059669] text-[#070A0E] shadow-md'
+                                  : 'bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-300'
+                              }`}
+                            >
+                              <Coins className="w-3.5 h-3.5" />
+                              {canAfford
+                                ? `BUY (${player.price.toLocaleString()} COINS)`
+                                : `BUY (${player.price.toLocaleString()} COINS · NEED ${(player.price - coins).toLocaleString()} MORE)`}
+                            </button>
+
+                            {onTriggerPaymentCheckout && (
+                              <button
+                                onClick={() => {
+                                  SoundEngine.playUIClick();
+                                  const usd =
+                                    player.rating >= 95
+                                      ? 6.99
+                                      : player.rating >= 92
+                                      ? 4.99
+                                      : player.rating >= 89
+                                      ? 2.99
+                                      : 1.99;
+                                  onTriggerPaymentCheckout({
+                                    itemType: 'player',
+                                    itemId: player.id,
+                                    itemName: `${player.name} (${player.rating} OVR)`,
+                                    subtitle: `${player.nationality} · ${player.position} · ${player.club}`,
+                                    amountUsd: usd,
+                                    coinsAdded: 0,
+                                    playerToUnlock: player,
+                                  });
+                                }}
+                                className="w-full py-2 rounded-xl bg-[#070A0E] hover:bg-[#192231] border border-[#38BDF8]/40 text-[#38BDF8] font-display font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                              >
+                                <CreditCard className="w-3.5 h-3.5" />
+                                INSTANT SIGN ($
+                                {(player.rating >= 95
+                                  ? 6.99
+                                  : player.rating >= 92
+                                  ? 4.99
+                                  : player.rating >= 89
+                                  ? 2.99
+                                  : 1.99
+                                ).toFixed(2)}
+                                )
+                              </button>
+                            )}
+                          </div>
+                        )
+                      }
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Bottom Pagination Controls */}
+              {totalMarketPages > 1 && (
+                <div className="flex flex-wrap items-center justify-center gap-1.5 pt-6 pb-2">
+                  <button
+                    type="button"
+                    disabled={currentSafePage <= 1}
+                    onClick={() => {
+                      setMarketPage(1);
+                      window.scrollTo({ top: 350, behavior: 'smooth' });
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-[#070A0E] hover:bg-[#111722] border border-white/15 disabled:opacity-30 disabled:cursor-not-allowed font-mono text-xs text-slate-300 hover:text-white cursor-pointer"
+                  >
+                    « First
+                  </button>
+                  <button
+                    type="button"
+                    disabled={currentSafePage <= 1}
+                    onClick={() => {
+                      setMarketPage((p) => Math.max(1, p - 1));
+                      window.scrollTo({ top: 350, behavior: 'smooth' });
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-[#070A0E] hover:bg-[#111722] border border-white/15 disabled:opacity-30 disabled:cursor-not-allowed font-mono text-xs text-slate-300 hover:text-white cursor-pointer"
+                  >
+                    ‹ Prev
+                  </button>
+
+                  {Array.from({ length: Math.min(7, totalMarketPages) }).map((_, idx) => {
+                    let pageNum = currentSafePage;
+                    if (totalMarketPages <= 7) {
+                      pageNum = idx + 1;
+                    } else if (currentSafePage <= 4) {
+                      pageNum = idx + 1;
+                    } else if (currentSafePage >= totalMarketPages - 3) {
+                      pageNum = totalMarketPages - 6 + idx;
+                    } else {
+                      pageNum = currentSafePage - 3 + idx;
                     }
-                  />
-                );
-              })}
+                    return (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        onClick={() => {
+                          setMarketPage(pageNum);
+                          window.scrollTo({ top: 350, behavior: 'smooth' });
+                        }}
+                        className={`w-9 h-8 rounded-lg font-mono text-xs font-bold transition-all cursor-pointer ${
+                          currentSafePage === pageNum
+                            ? 'bg-[#10B981] text-[#070A0E] shadow-lg shadow-[#10B981]/30 font-black'
+                            : 'bg-[#070A0E] text-slate-400 hover:text-white border border-white/15'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    disabled={currentSafePage >= totalMarketPages}
+                    onClick={() => {
+                      setMarketPage((p) => Math.min(totalMarketPages, p + 1));
+                      window.scrollTo({ top: 350, behavior: 'smooth' });
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-[#070A0E] hover:bg-[#111722] border border-white/15 disabled:opacity-30 disabled:cursor-not-allowed font-mono text-xs text-slate-300 hover:text-white cursor-pointer"
+                  >
+                    Next ›
+                  </button>
+                  <button
+                    type="button"
+                    disabled={currentSafePage >= totalMarketPages}
+                    onClick={() => {
+                      setMarketPage(totalMarketPages);
+                      window.scrollTo({ top: 350, behavior: 'smooth' });
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-[#070A0E] hover:bg-[#111722] border border-white/15 disabled:opacity-30 disabled:cursor-not-allowed font-mono text-xs text-slate-300 hover:text-white cursor-pointer"
+                  >
+                    Last »
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -2170,6 +2373,38 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
               </div>
 
               <div className="flex flex-wrap items-center gap-3 shrink-0">
+                {/* Draw Mode Switcher */}
+                <div className="flex items-center gap-1 p-1 rounded-xl bg-[#070A0E] border border-white/15">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      SoundEngine.playUIClick();
+                      setDrawMode('classic_ball');
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-all cursor-pointer ${
+                      drawMode === 'classic_ball'
+                        ? 'bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Classic Ball Draw (PES)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      SoundEngine.playUIClick();
+                      setDrawMode('roulette');
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-all cursor-pointer ${
+                      drawMode === 'roulette'
+                        ? 'bg-[#38BDF8] text-slate-950 shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Roulette Wheel
+                  </button>
+                </div>
+
                 <div className="px-4 py-2.5 rounded-xl bg-[#070A0E] border border-white/15 font-mono text-xs text-slate-300">
                   Top 50 Owned:{' '}
                   <span className="text-[#10B981] font-bold">
@@ -2549,6 +2784,26 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
         }}
         onClose={() => {
           setCardModalState(null);
+          setOpeningPack(null);
+          setRevealedPlayer(null);
+        }}
+      />
+
+      {/* CLASSIC PES / EFOOTBALL BALL OPENING GACHA MODAL */}
+      <ClassicPESBallOpeningModal
+        isOpen={Boolean(pesBallModalState)}
+        player={pesBallModalState?.player || PLAYERS_DB[0]}
+        sourceTitle={pesBallModalState?.sourceTitle || 'SPECIAL AGENT BALL OPENING'}
+        sourceSubtitle={pesBallModalState?.sourceSubtitle || 'Classic PES Ball Draw'}
+        canDrawAgain={pesBallModalState?.canDrawAgain}
+        drawAgainLabel={pesBallModalState?.drawAgainLabel}
+        onDrawAgain={pesBallModalState?.onDrawAgain}
+        onClose={() => {
+          if (pesBallModalState?.player) {
+            const bestIdx = findBestSlotIndexForPlayer(pesBallModalState.player, userFormation, userSquad);
+            handleAssignUnlockedPlayerToSlot(pesBallModalState.player, bestIdx);
+          }
+          setPesBallModalState(null);
           setOpeningPack(null);
           setRevealedPlayer(null);
         }}

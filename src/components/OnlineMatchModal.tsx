@@ -15,16 +15,18 @@ import {
   Shield,
   Sparkles,
   Swords,
-  User,
+  UserCheck,
   Users,
   Wifi,
   X,
+  Zap,
 } from 'lucide-react';
 import { FootballPlayer, FormationName, PLAYERS_DB, TeamData, TEAMS_DB } from '../data/gameDatabase';
 import {
   FriendRoomPlayer,
   FriendRoomService,
   FriendRoomState,
+  IncomingMatchInvite,
   OpenRoomInfo,
 } from '../engine/FriendRoomService';
 import { SoundEngine } from '../engine/SoundEngine';
@@ -55,11 +57,23 @@ interface OnlineMatchModalProps {
 
 function generateCleanRoomCode(): string {
   const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const prefix = letters[Math.floor(Math.random() * letters.length)] +
+  const prefix =
+    letters[Math.floor(Math.random() * letters.length)] +
     letters[Math.floor(Math.random() * letters.length)];
   const num = Math.floor(1000 + Math.random() * 9000);
   return `PLAY-${prefix}${num}`;
 }
+
+const SUGGESTED_RIVALS = [
+  'ValenStrike_99',
+  'SambaKing_BR',
+  'TikiTakaMaestro',
+  'NeoTokyo_Ace',
+  'DerKaiser_FX',
+  'Albiceleste10',
+  'AzzurriWall_GK',
+  'AtlasLion_MAR',
+];
 
 export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
   isOpen,
@@ -71,8 +85,10 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
   userFormation,
   onLaunchMatch,
 }) => {
-  const [activeTab, setActiveTab] = useState<'create_join' | 'quick_match'>('create_join');
+  // Primary feature: Start match directly by username
+  const [activeTab, setActiveTab] = useState<'username_match' | 'create_join' | 'quick_match'>('username_match');
   const [usernameInput, setUsernameInput] = useState<string>(currentUsername || 'Player1');
+  const [targetUsernameInput, setTargetUsernameInput] = useState<string>('');
   const [isEditingUsername, setIsEditingUsername] = useState<boolean>(false);
 
   // Room parameters
@@ -85,9 +101,9 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
   const [isInRoom, setIsInRoom] = useState<boolean>(false);
   const [roomState, setRoomState] = useState<FriendRoomState | null>(null);
   const [isJoining, setIsJoining] = useState<boolean>(false);
-  const [isSearchingMatchmaking, setIsSearchingMatchmaking] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
-  const [autoStartCountdown, setAutoStartCountdown] = useState<number | null>(null);
+  const [activeChallengeTarget, setActiveChallengeTarget] = useState<string>('');
+  const [incomingInvite, setIncomingInvite] = useState<IncomingMatchInvite | null>(null);
 
   // Open Rooms list from server
   const [openRooms, setOpenRooms] = useState<OpenRoomInfo[]>([]);
@@ -99,7 +115,7 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
     }
   }, [currentUsername]);
 
-  // Subscribe to FriendRoomService open rooms & room events
+  // Subscribe to FriendRoomService open rooms, incoming invites & room events
   useEffect(() => {
     if (!isOpen) return;
 
@@ -120,6 +136,13 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
       setOpenRooms(rooms);
     });
 
+    const unsubInvites = FriendRoomService.subscribeInvites((invite) => {
+      if (invite && invite.fromUsername !== usernameInput) {
+        SoundEngine.playWhistle();
+        setIncomingInvite(invite);
+      }
+    });
+
     const unsubRoom = FriendRoomService.subscribe((state) => {
       setRoomState(state);
       if (state.roomCode && state.members.length > 0) {
@@ -128,16 +151,19 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
         if (state.members.length >= 2) {
           setStatusMessage('Opponent Connected! Match Starting Automatically...');
         } else {
-          setStatusMessage(`Waiting for opponent to join Room Code: ${state.roomCode}`);
+          setStatusMessage(
+            state.expectedOpponentUsername
+              ? `Waiting for @${state.expectedOpponentUsername} to connect... (Room: ${state.roomCode})`
+              : `Waiting for opponent to join Room Code: ${state.roomCode}`
+          );
         }
       }
     });
 
-    // Auto-Start handler: when server signals match started
+    // Auto-Start handler: when server or broadcast signals match started
     const unsubMatchStart = FriendRoomService.onMatchStart(
       (roomCode, role, hostPlayer, guestPlayer) => {
         SoundEngine.playWhistle();
-        setAutoStartCountdown(1);
 
         const myRole = role;
         const opponent = myRole === 'host' ? guestPlayer : hostPlayer;
@@ -147,7 +173,7 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
             roomCode,
             role: myRole,
             hostUsername: hostPlayer?.username || 'Host',
-            guestUsername: guestPlayer?.username || 'Opponent',
+            guestUsername: guestPlayer?.username || activeChallengeTarget || 'Opponent',
             matchFormat: (hostPlayer?.matchFormat as '11v11' | '1v1') || matchFormat,
             opponentClubId: opponent?.clubId,
             opponentStarPlayerId: opponent?.starPlayerId,
@@ -160,10 +186,11 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
 
     return () => {
       unsubRooms();
+      unsubInvites();
       unsubRoom();
       unsubMatchStart();
     };
-  }, [isOpen, usernameInput, userTeam, userSquad, userFormation, matchFormat, onLaunchMatch]);
+  }, [isOpen, usernameInput, userTeam, userSquad, userFormation, matchFormat, activeChallengeTarget, onLaunchMatch]);
 
   if (!isOpen) return null;
 
@@ -182,6 +209,75 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
     navigator.clipboard?.writeText(code);
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2200);
+  };
+
+  // 1. INITIATE ONLINE MATCH BY USERNAME
+  const handleStartMatchByUsername = (targetName: string) => {
+    const cleanTarget = targetName.trim();
+    if (!cleanTarget) return;
+
+    SoundEngine.playUIClick();
+    setIsJoining(true);
+    setActiveChallengeTarget(cleanTarget);
+    setStatusMessage(`Initiating match with @${cleanTarget}... Waiting for opponent...`);
+
+    const code = FriendRoomService.startMatchByUsername({
+      opponentUsername: cleanTarget,
+      username: effectiveUsername,
+      clubId: userTeam.id,
+      clubName: userTeam.name,
+      starPlayerId: starPlayer.id,
+      starPlayerName: starPlayer.name,
+      squadIds: userSquad.slice(0, 11).map((p) => p.id),
+      formation: userFormation,
+      matchFormat,
+    });
+
+    setIsInRoom(true);
+    setIsJoining(false);
+  };
+
+  // Accept incoming invite
+  const handleAcceptInvite = (invite: IncomingMatchInvite) => {
+    SoundEngine.playUIClick();
+    setIncomingInvite(null);
+    setIsJoining(true);
+    setActiveChallengeTarget(invite.fromUsername);
+    setStatusMessage(`Connecting to match with @${invite.fromUsername}...`);
+
+    FriendRoomService.joinRoom({
+      roomCode: invite.roomCode,
+      username: effectiveUsername,
+      clubId: userTeam.id,
+      clubName: userTeam.name,
+      starPlayerId: starPlayer.id,
+      starPlayerName: starPlayer.name,
+      squadIds: userSquad.slice(0, 11).map((p) => p.id),
+      formation: userFormation,
+      matchFormat: invite.matchFormat || matchFormat,
+      isReady: true,
+    });
+
+    setIsInRoom(true);
+    setIsJoining(false);
+  };
+
+  // Launch instant match if opponent is not currently online (AI / Simulated online match)
+  const handleForceLaunchMatchNow = () => {
+    SoundEngine.playWhistle();
+    const opponentName = activeChallengeTarget || 'Opponent_Online';
+    const cleanRoomCode = roomState?.roomCode || `USER-${effectiveUsername}-VS-${opponentName}`.toUpperCase();
+
+    onLaunchMatch({
+      roomCode: cleanRoomCode,
+      role: 'host',
+      hostUsername: effectiveUsername,
+      guestUsername: opponentName,
+      matchFormat,
+      opponentClubId: 'club_real_madrid',
+      opponentStarPlayerId: 'wc_mbappe_96',
+      opponentFormation: '4-3-3',
+    });
   };
 
   const handleCreateRoom = () => {
@@ -233,7 +329,6 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
 
   const handleQuickMatchmaking = () => {
     SoundEngine.playUIClick();
-    setIsSearchingMatchmaking(true);
     setStatusMessage('Searching for online opponent...');
 
     FriendRoomService.findMatchmakingOpponent({
@@ -256,9 +351,8 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
       FriendRoomService.leaveRoom(roomState.roomCode);
     }
     setIsInRoom(false);
-    setIsSearchingMatchmaking(false);
     setStatusMessage('');
-    setAutoStartCountdown(null);
+    setActiveChallengeTarget('');
   };
 
   const handleClose = () => {
@@ -269,10 +363,10 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-[#111722] border border-[#38BDF8]/40 rounded-2xl max-w-2xl w-full shadow-[0_0_50px_rgba(56,189,248,0.25)] overflow-hidden flex flex-col my-auto max-h-[92vh]">
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      <div className="bg-[#111722] border-2 border-[#38BDF8]/40 rounded-3xl max-w-2xl w-full shadow-[0_0_60px_rgba(56,189,248,0.25)] overflow-hidden flex flex-col my-auto max-h-[94vh]">
         {/* MODAL HEADER */}
-        <div className="px-6 py-4.5 bg-gradient-to-r from-[#192231] via-[#111722] to-[#192231] border-b border-white/10 flex items-center justify-between">
+        <div className="px-6 py-4 bg-gradient-to-r from-[#192231] via-[#111722] to-[#192231] border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[#38BDF8]/20 border border-[#38BDF8]/50 flex items-center justify-center text-[#38BDF8] shadow-md">
               <Globe className="w-5 h-5" />
@@ -280,14 +374,14 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#38BDF8] bg-[#38BDF8]/10 px-2 py-0.5 rounded border border-[#38BDF8]/30">
-                  REAL-TIME MULTIPLAYER · 60 FPS
+                  REAL-TIME ONLINE MATCHES · 60 FPS
                 </span>
                 <span className="flex items-center gap-1 text-[11px] font-mono text-[#10B981]">
                   <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse inline-block" />
                   Live Server
                 </span>
               </div>
-              <h2 className="font-display text-2xl font-bold text-white tracking-wide">
+              <h2 className="font-display text-xl sm:text-2xl font-bold text-white tracking-wide">
                 ONLINE MATCH LOBBY
               </h2>
             </div>
@@ -301,9 +395,44 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
           </button>
         </div>
 
+        {/* INCOMING CHALLENGE FLOATING NOTIFICATION BANNER */}
+        {incomingInvite && (
+          <div className="mx-6 mt-4 p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/25 via-emerald-500/20 to-blue-500/25 border-2 border-amber-400 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-2xl animate-bounce">
+            <div className="flex items-center gap-2.5 text-left">
+              <Zap className="w-5 h-5 text-amber-400 shrink-0 animate-pulse" />
+              <div>
+                <div className="text-xs font-mono font-bold text-amber-400 uppercase">
+                  ⚡ Incoming Match Challenge!
+                </div>
+                <div className="text-sm font-display font-bold text-white">
+                  @{incomingInvite.fromUsername} challenged you to a match!
+                </div>
+                <div className="text-[11px] text-slate-300">
+                  {incomingInvite.fromClubName} · Star: {incomingInvite.fromStarPlayer}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => handleAcceptInvite(incomingInvite)}
+                className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-display font-extrabold text-xs shadow-lg cursor-pointer"
+              >
+                ACCEPT & PLAY NOW!
+              </button>
+              <button
+                onClick={() => setIncomingInvite(null)}
+                className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 text-xs cursor-pointer"
+              >
+                Decline
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* MODAL BODY */}
-        <div className="p-6 space-y-6 overflow-y-auto flex-1">
-          {/* 1. USER PROFILE STRIP (Username + Club + Star Player) */}
+        <div className="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1">
+          {/* USER IDENTITY STRIP */}
           <div className="p-4 rounded-xl bg-[#070A0E] border border-white/10 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
               <PlayerPhotoAvatar
@@ -314,7 +443,7 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
               />
               <div>
                 <div className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
-                  Your Player Identity
+                  Your Online Username
                 </div>
                 {isEditingUsername ? (
                   <div className="flex items-center gap-2 mt-0.5">
@@ -350,7 +479,8 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
                   </div>
                 )}
                 <div className="text-xs text-slate-400 mt-0.5">
-                  <span className="text-white font-semibold">{userTeam.name}</span> ({userFormation}) · Star: <span className="text-[#F59E0B] font-semibold">{starPlayer.name}</span>
+                  <span className="text-white font-semibold">{userTeam.name}</span> ({userFormation}) · Star:{' '}
+                  <span className="text-[#F59E0B] font-semibold">{starPlayer.name}</span>
                 </div>
               </div>
             </div>
@@ -370,7 +500,7 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
                     : 'text-slate-300 hover:text-white'
                 }`}
               >
-                11 vs 11 Dream Team
+                11 vs 11 Match
               </button>
               <button
                 type="button"
@@ -385,44 +515,19 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
                     : 'text-slate-300 hover:text-white'
                 }`}
               >
-                1 vs 1 Superstar Duel
+                1 vs 1 Duel
               </button>
             </div>
           </div>
 
-          {/* 2. ACTIVE ROOM STATE (IF IN A ROOM) */}
+          {/* ACTIVE ROOM OR MATCH WAITING STATE */}
           {isInRoom ? (
             <div className="p-6 rounded-2xl bg-gradient-to-b from-[#192231] to-[#070A0E] border-2 border-[#38BDF8] text-center space-y-5 animate-in fade-in duration-200">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#38BDF8]/20 border border-[#38BDF8]/50 text-[#38BDF8] text-xs font-mono font-bold">
                 <Wifi className="w-3.5 h-3.5 animate-pulse" />
-                ROOM CODE ACTIVE
-              </div>
-
-              <div>
-                <div className="text-xs font-mono text-slate-400 uppercase tracking-widest mb-1">
-                  Share this Room Code with your opponent:
-                </div>
-                <div className="flex items-center justify-center gap-3">
-                  <span className="font-mono text-4xl sm:text-5xl font-extrabold text-[#F59E0B] tracking-wider select-all bg-[#070A0E] px-6 py-2 rounded-xl border border-white/15 shadow-inner">
-                    {roomState?.roomCode || generatedCode}
-                  </span>
-                  <button
-                    onClick={() => handleCopyCode(roomState?.roomCode || generatedCode)}
-                    className="p-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-white transition-all flex items-center justify-center cursor-pointer shadow"
-                    title="Copy Room Code"
-                  >
-                    {copiedCode ? (
-                      <Check className="w-6 h-6 text-[#10B981]" />
-                    ) : (
-                      <Copy className="w-6 h-6 text-[#38BDF8]" />
-                    )}
-                  </button>
-                </div>
-                {copiedCode && (
-                  <div className="text-xs font-mono text-[#10B981] mt-2 font-bold animate-bounce">
-                    ✓ Room code copied to clipboard! Send to your friend!
-                  </div>
-                )}
+                {activeChallengeTarget
+                  ? `DIRECT CHALLENGE: @${effectiveUsername} VS @${activeChallengeTarget}`
+                  : `ROOM CODE ACTIVE: ${roomState?.roomCode || generatedCode}`}
               </div>
 
               {/* Members in Room */}
@@ -434,11 +539,9 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
                   <div className="font-display font-bold text-white text-sm truncate">
                     @{effectiveUsername}
                   </div>
-                  <div className="text-xs text-slate-400 truncate">
-                    {userTeam.name}
-                  </div>
+                  <div className="text-xs text-slate-400 truncate">{userTeam.name}</div>
                   <div className="text-[10px] text-[#10B981] font-mono font-bold mt-1">
-                    ✓ READY IN ROOM
+                    ✓ READY IN MATCH
                   </div>
                 </div>
 
@@ -448,11 +551,13 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
                   </div>
                   {roomState && roomState.members.length >= 2 ? (
                     (() => {
-                      const opp = roomState.members.find((m) => m.clientId !== FriendRoomService.getClientId()) || roomState.members[1];
+                      const opp =
+                        roomState.members.find((m) => m.clientId !== FriendRoomService.getClientId()) ||
+                        roomState.members[1];
                       return (
                         <>
                           <div className="font-display font-bold text-[#38BDF8] text-sm truncate">
-                            @{opp?.username || 'Opponent'}
+                            @{opp?.username || activeChallengeTarget || 'Opponent'}
                           </div>
                           <div className="text-xs text-slate-300 truncate">
                             {opp?.clubName || 'Opponent Club'}
@@ -465,11 +570,11 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
                     })()
                   ) : (
                     <>
-                      <div className="font-display font-bold text-slate-500 text-sm italic">
-                        Waiting to join...
+                      <div className="font-display font-bold text-amber-400 text-sm truncate">
+                        @{activeChallengeTarget || 'Waiting for Rival...'}
                       </div>
-                      <div className="text-xs text-slate-500">
-                        Entering room code
+                      <div className="text-xs text-slate-400">
+                        {activeChallengeTarget ? 'Invitation sent' : 'Waiting to connect'}
                       </div>
                       <div className="flex items-center gap-1.5 text-[10px] text-[#F59E0B] font-mono font-bold mt-1">
                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -481,41 +586,65 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
               </div>
 
               {/* Status Message */}
-              <div className="p-3 rounded-xl bg-[#070A0E]/80 border border-white/10 text-xs text-slate-300">
-                <span className="text-[#38BDF8] font-bold">Status:</span> {statusMessage || 'Waiting for opponent to connect with this Room Code.'}
+              <div className="p-3.5 rounded-xl bg-[#070A0E]/80 border border-white/10 text-xs text-slate-300">
+                <span className="text-[#38BDF8] font-bold">Status:</span>{' '}
+                {statusMessage || 'Waiting for opponent to connect...'}
                 <div className="text-[11px] text-slate-400 mt-1">
-                  ⚡ Match starts automatically as soon as both players connect.
+                  ⚡ Match starts automatically as soon as the opponent enters your username or accepts!
                 </div>
               </div>
 
-              {/* Cancel / Leave Button */}
-              <div className="pt-2 flex justify-center">
+              {/* Fast Action Buttons: Launch Now or Cancel */}
+              <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  onClick={handleForceLaunchMatchNow}
+                  className="px-6 py-3 bg-gradient-to-r from-emerald-400 to-[#10B981] hover:brightness-110 text-slate-950 font-display font-extrabold text-xs rounded-xl transition-all shadow-lg flex items-center gap-2 cursor-pointer"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  START MATCH IMMEDIATELY (VS @{activeChallengeTarget || 'OPPONENT'})
+                </button>
+
                 <button
                   onClick={handleLeaveCurrentRoom}
-                  className="px-5 py-2.5 bg-rose-500/15 hover:bg-rose-500 text-rose-300 hover:text-white border border-rose-500/40 rounded-xl text-xs font-display font-bold transition-all cursor-pointer"
+                  className="px-4 py-3 bg-rose-500/15 hover:bg-rose-500 text-rose-300 hover:text-white border border-rose-500/40 rounded-xl text-xs font-display font-bold transition-all cursor-pointer"
                 >
-                  Cancel & Leave Room
+                  Cancel Match
                 </button>
               </div>
             </div>
           ) : (
-            /* 3. TABS: ROOM CODE OR QUICK MATCHMAKING */
-            <div className="space-y-6">
+            /* TABBED INTERFACE */
+            <div className="space-y-5">
               {/* Tab Selector */}
-              <div className="flex items-center gap-3 border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2 border-b border-white/10 pb-3">
+                <button
+                  onClick={() => {
+                    SoundEngine.playUIClick();
+                    setActiveTab('username_match');
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-display font-bold text-xs transition-colors cursor-pointer ${
+                    activeTab === 'username_match'
+                      ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-lg'
+                      : 'text-slate-300 hover:text-white bg-white/5'
+                  }`}
+                >
+                  <UserCheck className="w-4 h-4" />
+                  MATCH BY USERNAME
+                </button>
+
                 <button
                   onClick={() => {
                     SoundEngine.playUIClick();
                     setActiveTab('create_join');
                   }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl font-display font-bold text-xs transition-colors cursor-pointer ${
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-display font-bold text-xs transition-colors cursor-pointer ${
                     activeTab === 'create_join'
                       ? 'bg-[#38BDF8] text-[#070A0E] shadow'
                       : 'text-slate-300 hover:text-white bg-white/5'
                   }`}
                 >
                   <Users className="w-4 h-4" />
-                  Username + Room Code
+                  Room Code
                 </button>
 
                 <button
@@ -523,31 +652,114 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
                     SoundEngine.playUIClick();
                     setActiveTab('quick_match');
                   }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl font-display font-bold text-xs transition-colors cursor-pointer ${
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-display font-bold text-xs transition-colors cursor-pointer ${
                     activeTab === 'quick_match'
                       ? 'bg-[#10B981] text-[#070A0E] shadow'
                       : 'text-slate-300 hover:text-white bg-white/5'
                   }`}
                 >
                   <Swords className="w-4 h-4" />
-                  Quick Matchmaking
+                  Quick Match
                 </button>
               </div>
 
+              {/* ======================================================= */}
+              {/* TAB 1: INITIATE MATCH BY OPPONENT USERNAME */}
+              {/* ======================================================= */}
+              {activeTab === 'username_match' && (
+                <div className="p-6 rounded-2xl bg-[#070A0E] border-2 border-amber-500/50 space-y-5">
+                  <div>
+                    <div className="text-[10px] font-mono text-amber-400 font-extrabold uppercase tracking-wider flex items-center gap-1.5 mb-1">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      DIRECT 1-ON-1 ONLINE MATCH INITIATION
+                    </div>
+                    <h3 className="font-display text-xl sm:text-2xl font-extrabold text-white">
+                      Enter Opponent's Username to Play
+                    </h3>
+                    <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                      Simply type the other player's username below and tap{' '}
+                      <span className="text-amber-400 font-semibold">Start Online Match</span>. Both players will be paired directly into the live match!
+                    </p>
+                  </div>
+
+                  {/* Username Input Field */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-mono font-bold text-slate-300">
+                      OPPONENT USERNAME
+                    </label>
+                    <div className="relative flex items-center">
+                      <div className="absolute left-3.5 text-amber-400">
+                        <Search className="w-5 h-5" />
+                      </div>
+                      <input
+                        type="text"
+                        value={targetUsernameInput}
+                        onChange={(e) => setTargetUsernameInput(e.target.value)}
+                        placeholder="Enter rival's username (e.g. ValenStrike_99)..."
+                        className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-[#111722] border-2 border-white/20 text-white font-mono text-sm sm:text-base font-bold placeholder:text-slate-600 focus:outline-none focus:border-amber-400 transition-colors shadow-inner"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleStartMatchByUsername(targetUsernameInput);
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Big Primary Start Button */}
+                  <button
+                    disabled={!targetUsernameInput.trim() || isJoining}
+                    onClick={() => handleStartMatchByUsername(targetUsernameInput)}
+                    className={`w-full py-4 rounded-xl font-display font-extrabold text-sm sm:text-base transition-all flex items-center justify-center gap-2.5 shadow-2xl cursor-pointer ${
+                      targetUsernameInput.trim()
+                        ? 'bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:brightness-115 text-slate-950 scale-100 hover:scale-[1.01]'
+                        : 'bg-white/10 text-slate-500 cursor-not-allowed'
+                    }`}
+                  >
+                    <Swords className="w-5 h-5 fill-current" />
+                    {targetUsernameInput.trim()
+                      ? `START ONLINE MATCH WITH @${targetUsernameInput.trim()}`
+                      : 'ENTER USERNAME ABOVE TO START'}
+                  </button>
+
+                  {/* Suggested Active Online Rival Badges */}
+                  <div className="pt-2 border-t border-white/10">
+                    <div className="text-[11px] font-mono text-slate-400 mb-2">
+                      QUICK CHALLENGE POPULAR RIVALS & LEADERBOARD STARS:
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {SUGGESTED_RIVALS.map((rival) => (
+                        <button
+                          key={rival}
+                          onClick={() => {
+                            SoundEngine.playUIClick();
+                            setTargetUsernameInput(rival);
+                            handleStartMatchByUsername(rival);
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-[#111722] hover:bg-amber-400/20 border border-white/15 hover:border-amber-400 text-xs font-mono text-slate-300 hover:text-amber-300 transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          <Zap className="w-3 h-3 text-amber-400" />
+                          @{rival}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ======================================================= */}
+              {/* TAB 2: ROOM CODE (CREATE OR JOIN WITH CODE) */}
+              {/* ======================================================= */}
               {activeTab === 'create_join' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* OPTION A: CREATE A NEW ROOM */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {/* CREATE ROOM */}
                   <div className="p-5 rounded-2xl bg-[#070A0E] border border-white/10 space-y-4 flex flex-col justify-between">
                     <div>
                       <div className="text-[10px] font-mono text-[#F59E0B] font-bold uppercase tracking-wider flex items-center gap-1.5 mb-1">
                         <Sparkles className="w-3.5 h-3.5 text-[#F59E0B]" />
                         HOST NEW MATCH
                       </div>
-                      <h3 className="font-display text-lg font-bold text-white">
-                        Create Room Code
-                      </h3>
+                      <h3 className="font-display text-lg font-bold text-white">Create Room Code</h3>
                       <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                        Generate a unique Room Code to share with your friend. When they enter your code, the game kicks off instantly.
+                        Generate a 6-character room code to give to your friend.
                       </p>
                     </div>
 
@@ -561,7 +773,6 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
                           setGeneratedCode(generateCleanRoomCode());
                         }}
                         className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
-                        title="Generate New Code"
                       >
                         <RefreshCw className="w-4 h-4" />
                       </button>
@@ -573,29 +784,24 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
                       className="w-full py-3.5 bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E] font-display font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer"
                     >
                       <Play className="w-4 h-4 fill-current" />
-                      CREATE ROOM & WAIT ({generatedCode})
+                      CREATE ROOM ({generatedCode})
                     </button>
                   </div>
 
-                  {/* OPTION B: JOIN EXISTING ROOM */}
+                  {/* JOIN ROOM */}
                   <div className="p-5 rounded-2xl bg-[#070A0E] border border-white/10 space-y-4 flex flex-col justify-between">
                     <div>
                       <div className="text-[10px] font-mono text-[#38BDF8] font-bold uppercase tracking-wider flex items-center gap-1.5 mb-1">
                         <Users className="w-3.5 h-3.5 text-[#38BDF8]" />
-                        JOIN A FRIEND
+                        JOIN WITH CODE
                       </div>
-                      <h3 className="font-display text-lg font-bold text-white">
-                        Enter Friend's Code
-                      </h3>
+                      <h3 className="font-display text-lg font-bold text-white">Enter Friend's Code</h3>
                       <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                        Have a code from another player? Paste or type it here to connect immediately and start the match.
+                        Paste or type a room code to connect immediately.
                       </p>
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-mono text-slate-400 mb-1.5">
-                        ROOM CODE (e.g. PLAY-8924)
-                      </label>
                       <input
                         type="text"
                         value={roomCodeInput}
@@ -618,12 +824,15 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
                       }`}
                     >
                       <Play className="w-4 h-4 fill-current" />
-                      JOIN ROOM & START MATCH
+                      JOIN ROOM & START
                     </button>
                   </div>
                 </div>
               )}
 
+              {/* ======================================================= */}
+              {/* TAB 3: QUICK MATCHMAKING */}
+              {/* ======================================================= */}
               {activeTab === 'quick_match' && (
                 <div className="p-6 rounded-2xl bg-[#070A0E] border border-[#10B981]/40 text-center space-y-5">
                   <div className="w-16 h-16 rounded-full bg-[#10B981]/20 border-2 border-[#10B981] flex items-center justify-center text-[#10B981] mx-auto shadow-[0_0_30px_rgba(16,185,129,0.3)]">
@@ -634,7 +843,7 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
                       Instant Online Matchmaking
                     </h3>
                     <p className="text-xs sm:text-sm text-slate-300 max-w-md mx-auto mt-1 leading-relaxed">
-                      Click below to automatically search and pair with any other player who is online and waiting for an opponent.
+                      Click below to automatically search and pair with any other online player.
                     </p>
                   </div>
 
@@ -643,33 +852,31 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
                     className="px-8 py-4 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-sm rounded-xl transition-all shadow-xl inline-flex items-center gap-2 cursor-pointer"
                   >
                     <Play className="w-4 h-4 fill-current" />
-                    FIND OPPONENT NOW ({matchFormat === '11v11' ? '11v11 DREAM TEAM' : '1v1 DUEL'})
+                    FIND OPPONENT NOW ({matchFormat === '11v11' ? '11v11 MATCH' : '1v1 DUEL'})
                   </button>
                 </div>
               )}
 
-              {/* 4. OPEN ROOMS WAITING FOR OPPONENTS */}
-              <div className="space-y-3 pt-2">
+              {/* OPEN ROOMS LIST */}
+              <div className="space-y-2 pt-2">
                 <div className="flex items-center justify-between">
                   <div className="text-xs font-display font-bold text-white flex items-center gap-2">
                     <Wifi className="w-3.5 h-3.5 text-[#10B981]" />
-                    OPEN ROOMS LOOKING FOR OPPONENTS ({openRooms.length})
+                    OPEN ROOMS SEARCHING FOR PLAYERS ({openRooms.length})
                   </div>
-                  <span className="text-[10px] font-mono text-slate-400">
-                    Auto-refreshed live
-                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">Live Server List</span>
                 </div>
 
                 {openRooms.length === 0 ? (
-                  <div className="p-4 rounded-xl bg-[#070A0E] border border-white/5 text-center text-xs text-slate-500">
-                    No open rooms waiting right now. Create a room above and invite a friend!
+                  <div className="p-3.5 rounded-xl bg-[#070A0E] border border-white/5 text-center text-xs text-slate-500">
+                    No open rooms waiting right now. Enter a username above to start a match!
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-40 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-36 overflow-y-auto pr-1">
                     {openRooms.map((r) => (
                       <div
                         key={r.roomCode}
-                        className="p-3 rounded-xl bg-[#070A0E] border border-white/10 hover:border-[#38BDF8]/50 flex items-center justify-between gap-3 transition-colors"
+                        className="p-3 rounded-xl bg-[#070A0E] border border-white/10 hover:border-[#38BDF8]/50 flex items-center justify-between gap-2.5 transition-colors"
                       >
                         <div>
                           <div className="font-mono text-xs font-bold text-[#F59E0B]">
@@ -702,7 +909,7 @@ export const OnlineMatchModal: React.FC<OnlineMatchModalProps> = ({
         <div className="px-6 py-4 bg-[#070A0E] border-t border-white/10 flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center gap-2">
             <Shield className="w-3.5 h-3.5 text-[#10B981]" />
-            <span>Fast WebSocket peer sync with smooth ball physics & input prediction.</span>
+            <span>Fast WebSocket peer sync with input prediction & zero lag.</span>
           </div>
           <button
             onClick={handleClose}

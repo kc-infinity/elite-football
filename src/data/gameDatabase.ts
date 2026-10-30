@@ -1,4 +1,4 @@
-import { PLAYERS_1000_DB } from './players1000Database';
+import { PLAYERS_10000_DB } from './players10000Database';
 export type PlayerRarity = 'Common' | 'Rare' | 'Elite' | 'World Class' | 'Legendary' | 'Special Edition';
 export type PositionCode = 'ST' | 'CF' | 'LW' | 'RW' | 'LM' | 'RM' | 'CAM' | 'CM' | 'CDM' | 'LB' | 'CB' | 'RB' | 'GK';
 
@@ -49,6 +49,7 @@ export interface FootballPlayer {
   bootColor: string;
   celebration: CelebrationType;
   initialUnlocked?: boolean;
+  photoUrl?: string;
 }
 
 export type FormationName =
@@ -540,8 +541,8 @@ export const STADIUMS: StadiumInfo[] = [
 // Includes starter active World Cup squad (`initialUnlocked: true`) +
 // Unlockable / Purchasable superstars (Messi, Mbappé, Ronaldo, Neymar, etc.)
 // ============================================================================
-// 1,000 WORLD-CLASS FOOTBALL PLAYERS (EXACTLY 100 PLAYERS PER POSITION: GK, CB, LB, RB, CDM, CM, CAM, LW, RW, ST)
-export const PLAYERS_DB: FootballPlayer[] = PLAYERS_1000_DB;
+// 10,000 WORLD-CLASS FOOTBALL PLAYERS (EXACTLY 1,000 PLAYERS PER POSITION: GK, CB, LB, RB, CDM, CM, CAM, LW, RW, ST)
+export const PLAYERS_DB: FootballPlayer[] = PLAYERS_10000_DB;
 
 export interface UpgradeCardItem {
   id: string;
@@ -702,51 +703,51 @@ export const PLAYER_PACKS: PackDefinition[] = [
     accentColor: '#94A3B8',
     oddsText: '60% Rare · 30% Elite · 10% World Class+',
     positionFilter: 'ALL',
-    badgeText: '1,000 PLAYERS',
+    badgeText: '10,000 PLAYERS',
   },
   {
     id: 'pack_gk',
-    name: 'Goalkeepers 100-Star Vault',
+    name: 'Goalkeepers 1,000-Star Vault',
     price: 35000,
     guaranteedRarity: 'Elite',
-    description: 'Guaranteed 1 of 100 World-Class Goalkeepers (Courtois, Alisson, Neuer, Ter Stegen, Donnarumma, Buffon, Yashin).',
+    description: 'Guaranteed 1 of 1,000 World-Class Goalkeepers (Courtois, Alisson, Neuer, Ter Stegen, Donnarumma, Buffon, Yashin).',
     accentColor: '#38BDF8',
-    oddsText: '100% Guaranteed GK · 100 Goalkeepers Available',
+    oddsText: '100% Guaranteed GK · 1,000 Goalkeepers Available',
     positionFilter: ['GK'],
-    badgeText: '100 GOALKEEPERS',
+    badgeText: '1,000 GOALKEEPERS',
   },
   {
     id: 'pack_defenders',
     name: 'Defenders Titan Pack',
     price: 45000,
     guaranteedRarity: 'Elite',
-    description: 'Guaranteed Defender from 300 Center Backs, Left Backs, and Right Backs (Van Dijk, Saliba, Theo, Hakimi, Maldini, Carlos).',
+    description: 'Guaranteed Defender from 3,000 Center Backs, Left Backs, and Right Backs (Van Dijk, Saliba, Theo, Hakimi, Maldini, Carlos).',
     accentColor: '#10B981',
-    oddsText: '100% Guaranteed DEF (CB, LB, RB) · 300 Defenders Available',
+    oddsText: '100% Guaranteed DEF (CB, LB, RB) · 3,000 Defenders Available',
     positionFilter: ['CB', 'LB', 'RB'],
-    badgeText: '300 DEFENDERS',
+    badgeText: '3,000 DEFENDERS',
   },
   {
     id: 'pack_midfielders',
     name: 'Midfield Maestros Pack',
     price: 55000,
     guaranteedRarity: 'Elite',
-    description: 'Guaranteed Midfielder from 300 CDMs, CMs, and CAMs (De Bruyne, Rodri, Bellingham, Musiala, Modrić, Zidane, Iniesta).',
+    description: 'Guaranteed Midfielder from 3,000 CDMs, CMs, and CAMs (De Bruyne, Rodri, Bellingham, Musiala, Modrić, Zidane, Iniesta).',
     accentColor: '#A855F7',
-    oddsText: '100% Guaranteed MID (CDM, CM, CAM) · 300 Midfielders Available',
+    oddsText: '100% Guaranteed MID (CDM, CM, CAM) · 3,000 Midfielders Available',
     positionFilter: ['CDM', 'CM', 'CAM'],
-    badgeText: '300 MIDFIELDERS',
+    badgeText: '3,000 MIDFIELDERS',
   },
   {
     id: 'pack_attackers',
     name: 'Attackers & Strikers Fire Pack',
     price: 75000,
     guaranteedRarity: 'World Class',
-    description: 'Guaranteed Attacker from 300 Strikers, Left Wingers, and Right Wingers (Haaland, Mbappé, Messi, Ronaldo, Salah, Vini Jr.).',
+    description: 'Guaranteed Attacker from 3,000 Strikers, Left Wingers, and Right Wingers (Haaland, Mbappé, Messi, Ronaldo, Salah, Vini Jr.).',
     accentColor: '#EF4444',
-    oddsText: '100% Guaranteed FWD (ST, LW, RW) · 300 Attackers Available',
+    oddsText: '100% Guaranteed FWD (ST, LW, RW) · 3,000 Attackers Available',
     positionFilter: ['ST', 'LW', 'RW'],
-    badgeText: '300 ATTACKERS',
+    badgeText: '3,000 ATTACKERS',
   },
   {
     id: 'pack_premium',
@@ -764,7 +765,7 @@ export const PLAYER_PACKS: PackDefinition[] = [
     name: 'Elite Continental Pack',
     price: 60000,
     guaranteedRarity: 'Elite',
-    description: 'Top-flight continental pack featuring high odds of 90+ OVR World Cup superstars across all 1,000 players.',
+    description: 'Top-flight continental pack featuring high odds of 90+ OVR World Cup superstars across all 10,000 players.',
     accentColor: '#A855F7',
     oddsText: '40% Elite · 45% World Class · 15% Legendary',
     positionFilter: 'ALL',

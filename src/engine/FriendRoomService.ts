@@ -1022,6 +1022,38 @@ class FriendRoomServiceManager {
     });
   }
 
+  public startMatchByUsername(params: {
+    opponentUsername: string;
+    username: string;
+    clubId: string;
+    clubName: string;
+    starPlayerId?: string;
+    starPlayerName: string;
+    squadIds?: string[];
+    formation?: string;
+    matchFormat?: '11v11' | '1v1';
+  }): string {
+    const oppClean = params.opponentUsername.trim();
+    const myClean = params.username.trim() || 'Player';
+    const pair = [myClean.toLowerCase(), oppClean.toLowerCase()].sort();
+    const directCode = `VS-${pair[0].replace(/[^a-z0-9]/g, '')}-${pair[1].replace(/[^a-z0-9]/g, '')}`.toUpperCase().slice(0, 24);
+
+    this.joinRoom({
+      ...params,
+      roomCode: directCode,
+      expectedOpponentUsername: oppClean,
+      enteredOpponentUsername: oppClean,
+    });
+
+    // Send direct challenge broadcast
+    this.sendInviteByUsername(oppClean, {
+      matchFormat: params.matchFormat || '11v11',
+      customMessage: `@${myClean} challenged you to an Online Match!`,
+    });
+
+    return directCode;
+  }
+
   public leaveRoom(roomCode?: string) {
     const code = normalizeClientRoomCode(roomCode || this.currentRoomCode);
     const msg = {

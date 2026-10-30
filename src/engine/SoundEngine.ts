@@ -426,6 +426,78 @@ class SoundEngineService {
       osc.stop(now + 0.8);
     });
   }
+
+  public playBallOpeningTick(pitchMultiplier = 1.0) {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const vol = this.settings.masterVolume * this.settings.uiVolume * 0.18;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    const baseFreq = 880 * pitchMultiplier;
+    osc.frequency.setValueAtTime(baseFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.4, now + 0.04);
+
+    gain.gain.setValueAtTime(vol, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.05);
+  }
+
+  public playBallCrackExplosion(isBlackBall = true) {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const vol = this.settings.masterVolume * this.settings.sfxVolume * 0.35;
+
+    // Sub rumble
+    const sub = ctx.createOscillator();
+    const subG = ctx.createGain();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(isBlackBall ? 90 : 130, now);
+    sub.frequency.exponentialRampToValueAtTime(28, now + 0.6);
+    subG.gain.setValueAtTime(vol * 1.6, now);
+    subG.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+    sub.connect(subG);
+    subG.connect(ctx.destination);
+    sub.start(now);
+    sub.stop(now + 0.7);
+
+    // Electric zap / lightning crackle
+    const zap = ctx.createOscillator();
+    const zapG = ctx.createGain();
+    zap.type = 'sawtooth';
+    zap.frequency.setValueAtTime(1400, now);
+    zap.frequency.exponentialRampToValueAtTime(180, now + 0.25);
+    zapG.gain.setValueAtTime(vol * 0.8, now);
+    zapG.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+    zap.connect(zapG);
+    zapG.connect(ctx.destination);
+    zap.start(now);
+    zap.stop(now + 0.3);
+
+    // Shimmering fanfare chord
+    const chord = isBlackBall
+      ? [440, 554.37, 659.25, 880, 1108.73, 1318.51] // A Major celebratory
+      : [523.25, 659.25, 783.99, 1046.5]; // C Major
+    chord.forEach((freq, idx) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(freq, now + 0.05 + idx * 0.03);
+      g.gain.setValueAtTime(vol * 0.6, now + 0.05 + idx * 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.start(now + 0.05 + idx * 0.03);
+      o.stop(now + 0.9);
+    });
+  }
 }
 
 export const SoundEngine = new SoundEngineService();
