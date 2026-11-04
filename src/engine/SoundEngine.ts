@@ -495,7 +495,139 @@ class SoundEngineService {
       o.connect(g);
       g.connect(ctx.destination);
       o.start(now + 0.05 + idx * 0.03);
-      o.stop(now + 0.9);
+    });
+  }
+
+  public playGunshot(type: 'pistol' | 'rifle' | 'shotgun' | 'sniper' | 'plasma' = 'pistol') {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const vol = this.settings.masterVolume * this.settings.sfxVolume * 0.45;
+
+    if (type === 'plasma') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(110, now + 0.18);
+      gain.gain.setValueAtTime(vol * 0.8, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.22);
+      return;
+    }
+
+    if (type === 'sniper') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.exponentialRampToValueAtTime(35, now + 0.4);
+      gain.gain.setValueAtTime(vol * 1.5, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.5);
+    }
+
+    // Noise burst for realistic muzzle blast
+    const bufferSize = Math.floor(ctx.sampleRate * (type === 'shotgun' ? 0.22 : 0.12));
+    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = Math.random() * 2 - 1;
+    }
+    const whiteNoise = ctx.createBufferSource();
+    whiteNoise.buffer = noiseBuffer;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = type === 'shotgun' ? 'lowpass' : 'bandpass';
+    filter.frequency.setValueAtTime(type === 'shotgun' ? 900 : type === 'rifle' ? 1400 : 1800, now);
+    filter.Q.value = 1.2;
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(vol * (type === 'shotgun' ? 1.4 : 1.0), now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + (type === 'shotgun' ? 0.2 : 0.1));
+
+    whiteNoise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+
+    whiteNoise.start(now);
+  }
+
+  public playReload() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const vol = this.settings.masterVolume * this.settings.sfxVolume * 0.3;
+
+    // Click 1 (mag drop)
+    const osc1 = ctx.createOscillator();
+    const g1 = ctx.createGain();
+    osc1.type = 'triangle';
+    osc1.frequency.setValueAtTime(450, now);
+    osc1.frequency.exponentialRampToValueAtTime(120, now + 0.08);
+    g1.gain.setValueAtTime(vol, now);
+    g1.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+    osc1.connect(g1);
+    g1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.1);
+
+    // Click 2 (mag slide in)
+    const osc2 = ctx.createOscillator();
+    const g2 = ctx.createGain();
+    osc2.type = 'square';
+    osc2.frequency.setValueAtTime(800, now + 0.25);
+    osc2.frequency.exponentialRampToValueAtTime(300, now + 0.32);
+    g2.gain.setValueAtTime(vol * 0.9, now + 0.25);
+    g2.gain.exponentialRampToValueAtTime(0.001, now + 0.33);
+    osc2.connect(g2);
+    g2.connect(ctx.destination);
+    osc2.start(now + 0.25);
+    osc2.stop(now + 0.35);
+  }
+
+  public playHitConfirm() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const vol = this.settings.masterVolume * this.settings.sfxVolume * 0.35;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1200, now);
+    osc.frequency.setValueAtTime(1600, now + 0.04);
+    gain.gain.setValueAtTime(vol, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.09);
+  }
+
+  public playEliminationRoar() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const vol = this.settings.masterVolume * this.settings.sfxVolume * 0.45;
+
+    [440, 554, 659, 880].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.05);
+      gain.gain.setValueAtTime(vol * 0.6, now + idx * 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + idx * 0.05);
+      osc.stop(now + 0.4);
     });
   }
 }

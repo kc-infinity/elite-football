@@ -24,6 +24,7 @@ import {
   Wifi,
   Globe,
   Zap,
+  Crosshair,
 } from 'lucide-react';
 import {
   buildOptimalSquadForFormation,
@@ -72,6 +73,9 @@ import {
 } from './components/AuthAndCheckoutModal';
 import { OnlineMatchModal, OnlineMatchLaunchPayload } from './components/OnlineMatchModal';
 import { useAppIcon } from './data/appIconStore';
+import { WEAPONS_ARMORY, SHOOTER_ARENAS, WeaponItem } from './data/weaponsDatabase';
+import { ArmoryAndShooterHub } from './components/ArmoryAndShooterHub';
+import { ShooterMatchViewport3D } from './components/ShooterMatchViewport3D';
 import heroStadiumImg from './assets/images/hero_stadium_backdrop_1791305638088.jpg';
 
 type ActiveScreen =
@@ -86,6 +90,8 @@ type ActiveScreen =
   | 'upgrades'
   | 'packs'
   | 'spin_roulette'
+  | 'armory_hub'
+  | 'shooter_match'
   | 'profile'
   | 'leaderboard'
   | 'settings';
@@ -213,6 +219,39 @@ export default function App() {
       // ignore parse errors
     }
     return {};
+  });
+
+  // Persistent Shooter Weapons & Upgrades State
+  const [unlockedWeaponIds, setUnlockedWeaponIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('fe_unlocked_weapons_v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return ['wpn_tactical_sidearm'];
+  });
+  const [selectedWeaponId, setSelectedWeaponId] = useState<string>(() => {
+    return localStorage.getItem('fe_selected_weapon_v1') || 'wpn_tactical_sidearm';
+  });
+  const [weaponUpgradeLevels, setWeaponUpgradeLevels] = useState<Record<string, number>>(() => {
+    try {
+      const raw = localStorage.getItem('fe_weapon_upgrade_levels_v1');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch {}
+    return { wpn_tactical_sidearm: 1 };
+  });
+  const [selectedShooterArenaId, setSelectedShooterArenaId] = useState<string>('arena_stadium_hangar');
+  const [selectedOperativeId, setSelectedOperativeId] = useState<string>(() => {
+    return (
+      localStorage.getItem('fe_selected_operative_v1') ||
+      PLAYERS_DB.find((p) => p.initialUnlocked)?.id ||
+      PLAYERS_DB[0].id
+    );
   });
 
   const applyBoostToPlayer = (
@@ -549,6 +588,10 @@ export default function App() {
       localStorage.setItem('fe_username', profile.username);
       localStorage.setItem('fe_auto_switch_mode', autoSwitchMode);
       localStorage.setItem('fe_player_upgrades_v1', JSON.stringify(playerUpgrades));
+      localStorage.setItem('fe_unlocked_weapons_v1', JSON.stringify(unlockedWeaponIds));
+      localStorage.setItem('fe_selected_weapon_v1', selectedWeaponId);
+      localStorage.setItem('fe_weapon_upgrade_levels_v1', JSON.stringify(weaponUpgradeLevels));
+      localStorage.setItem('fe_selected_operative_v1', selectedOperativeId);
     } catch {
       // ignore storage quota errors
     }
@@ -828,6 +871,36 @@ export default function App() {
     );
   }
 
+  // Fullscreen 3D Mobile Shooter Battle Viewport
+  if (screen === 'shooter_match') {
+    const selectedWeapon =
+      WEAPONS_ARMORY.find((w) => w.id === selectedWeaponId) || WEAPONS_ARMORY[0];
+    const selectedOperative =
+      allPlayers.find((p) => p.id === selectedOperativeId) || userSquad[0] || allPlayers[0];
+    const opponentCandidates = allPlayers.filter((p) => p.id !== selectedOperative.id);
+
+    return (
+      <ShooterMatchViewport3D
+        player={selectedOperative}
+        weapon={selectedWeapon}
+        weaponLevel={weaponUpgradeLevels[selectedWeapon.id] || 1}
+        arenaId={selectedShooterArenaId}
+        opponentPlayers={opponentCandidates}
+        onFinishMatch={(rewardCoins, killsCount, combatScore) => {
+          setCoins((c) => c + rewardCoins);
+          setProfile((prev) => ({
+            ...prev,
+            matchesPlayed: prev.matchesPlayed + 1,
+            wins: prev.wins + 1,
+            goals: prev.goals + killsCount, // accumulate kills in profile stats
+          }));
+          setScreen('armory_hub');
+        }}
+        onExitToHub={() => setScreen('armory_hub')}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#070A0E] text-[#F1F5F9] flex flex-col">
       {/* STRICT 3-ZONE TOP BAR CONTRACT */}
@@ -889,6 +962,15 @@ export default function App() {
             Dream Team (11v11)
           </button>
           <button
+            onClick={() => navigateTo('armory_hub')}
+            className={`hover:text-white transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+              screen === 'armory_hub' ? 'text-red-500 font-bold' : 'text-red-400 font-semibold'
+            }`}
+          >
+            <Crosshair className="w-4 h-4 animate-pulse text-red-500" />
+            3D Shooting & Weapons
+          </button>
+          <button
             onClick={() => navigateTo('world_cup')}
             className={`hover:text-white transition-colors whitespace-nowrap cursor-pointer ${
               screen === 'world_cup' || screen === 'tournaments'
@@ -947,6 +1029,15 @@ export default function App() {
         >
           <Globe className="w-3.5 h-3.5" />
           Online Match
+        </button>
+        <button
+          onClick={() => navigateTo('armory_hub')}
+          className={`px-3 py-1.5 rounded-lg whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+            screen === 'armory_hub' ? 'bg-red-500 text-white font-bold' : 'bg-red-950/40 text-red-400 border border-red-500/40'
+          }`}
+        >
+          <Crosshair className="w-3.5 h-3.5" />
+          3D Shooting & Guns
         </button>
         <button
           onClick={() => navigateTo('play_setup')}
@@ -1057,6 +1148,17 @@ export default function App() {
 
                   {/* Primary Hero CTA Grid (Neatly arranged layout) */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                    <button
+                      onClick={() => {
+                        SoundEngine.playGunshot('rifle');
+                        navigateTo('armory_hub');
+                      }}
+                      className="col-span-2 sm:col-span-4 py-4 px-6 bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-display font-black text-sm sm:text-base rounded-2xl transition-all flex items-center justify-center gap-3 shadow-xl shadow-red-600/30 whitespace-nowrap cursor-pointer border border-red-400/30 hover:scale-[1.01] active:scale-[0.99]"
+                    >
+                      <Crosshair className="w-5 h-5 animate-pulse text-amber-300" />
+                      PLAY 3D SHOOTING BATTLE (MOBILE TOUCH & WEAPONS)
+                    </button>
+
                     <button
                       onClick={() => navigateTo('play_setup')}
                       className="col-span-1 sm:col-span-2 py-3.5 px-5 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg whitespace-nowrap cursor-pointer"
@@ -1871,6 +1973,42 @@ export default function App() {
               setShowOnlineMatchModal(true);
             }}
             onTriggerPaymentCheckout={(item) => setCheckoutItem(item)}
+          />
+        )}
+
+        {/* SCREEN 7C: 3D SHOOTING & WEAPONS ARMORY HUB */}
+        {screen === 'armory_hub' && (
+          <ArmoryAndShooterHub
+            coins={coins}
+            unlockedPlayerIds={unlockedPlayerIds}
+            userSquad={userSquad}
+            allPlayers={allPlayers}
+            unlockedWeaponIds={unlockedWeaponIds}
+            selectedWeaponId={selectedWeaponId}
+            selectedArenaId={selectedShooterArenaId}
+            selectedOperativeId={selectedOperativeId}
+            weaponUpgradeLevels={weaponUpgradeLevels}
+            onUnlockWeapon={(weaponToUnlock) => {
+              if (coins < weaponToUnlock.price) return;
+              setCoins((c) => c - weaponToUnlock.price);
+              setUnlockedWeaponIds((prev) =>
+                prev.includes(weaponToUnlock.id) ? prev : [...prev, weaponToUnlock.id]
+              );
+              setSelectedWeaponId(weaponToUnlock.id);
+            }}
+            onSelectWeapon={(wpnId) => setSelectedWeaponId(wpnId)}
+            onUpgradeWeapon={(wpnId, cost) => {
+              if (coins < cost) return;
+              setCoins((c) => c - cost);
+              setWeaponUpgradeLevels((prev) => ({
+                ...prev,
+                [wpnId]: (prev[wpnId] || 1) + 1,
+              }));
+            }}
+            onSelectArena={(arenaId) => setSelectedShooterArenaId(arenaId)}
+            onSelectOperative={(playerId) => setSelectedOperativeId(playerId)}
+            onLaunchShooterMatch={() => setScreen('shooter_match')}
+            onGoToMarket={() => setScreen('transfer_market')}
           />
         )}
 

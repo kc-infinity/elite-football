@@ -1,6 +1,6 @@
 {
   "name": "FOOTBALL ELITE: WORLD OF CHAMPIONS",
-  "description": "AAA-inspired 3D browser football game featuring 11v11 matches, World Cup tournaments, skill moves, curved shots, transfer market, player packs, and online join-code lobbies.",
+  "description": "AAA-inspired 3D browser football and 3D mobile shooting battle game featuring responsive touch controls, authentic player portraits, weapons armory, tactical upgrades, transfer market, and coin rewards.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
