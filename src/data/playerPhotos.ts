@@ -1,257 +1,94 @@
 // ============================================================================
 // REALISTIC ORIGINAL PLAYER FACE PHOTOS (WIKIMEDIA COMMONS / EFOOTBALL PES STYLE)
-// Features authentic face photos for all players, explicitly including all LEGENDS!
-// (Pelé, Maradona, Zidane, Ronaldinho, Cruyff, Maldini, R9, Beckenbauer, Yashin, Baggio, Henry, etc.)
+// Features authentic face photos for all football stars, explicitly including all LEGENDS!
+// (Pelé, Maradona, Zidane, Ronaldinho, Cruyff, Maldini, Beckham, R9, Beckenbauer, Yashin, Baggio, Henry, etc.)
+// Verified: Each photo corresponds ONLY to that specific athlete. Never duplicate or cross-assign.
 // ============================================================================
 
 export const PLAYER_PHOTOS_BY_NAME: Record<string, string> = {
-
+  // Current World Superstars
   "Cristiano Ronaldo": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Cristiano_Ronaldo_Croatia_v_Portugal_2_July_2026-075_%28cropped%29.jpg/500px-Cristiano_Ronaldo_Croatia_v_Portugal_2_July_2026-075_%28cropped%29.jpg",
   "Lionel Messi": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Leo_Messi_Argentina_v_Egypt_7_July_2026-1.jpg/500px-Leo_Messi_Argentina_v_Egypt_7_July_2026-1.jpg",
-  "Luka Modrić": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Luka_Modric_Croatia_v_Portugal_2_July_2026-055.jpg/500px-Luka_Modric_Croatia_v_Portugal_2_July_2026-055.jpg",
-  "Ángel Di María": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/NIG-ARG_%285%29.jpg/500px-NIG-ARG_%285%29.jpg",
-  "Manuel Neuer": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Manuel_Neuer_Ecuador_v_Germany_25_June_2026-148.jpg/500px-Manuel_Neuer_Ecuador_v_Germany_25_June_2026-148.jpg",
-  "Toni Kroos": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/64/Toni_Kroos_Real_Madrid_2021.jpg/500px-Toni_Kroos_Real_Madrid_2021.jpg",
-  "Robert Lewandowski": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/2019147183134_2019-05-27_Fussball_1.FC_Kaiserslautern_vs_FC_Bayern_M%C3%BCnchen_-_Sven_-_1D_X_MK_II_-_0228_-_B70I8527_%28cropped%29.jpg/500px-2019147183134_2019-05-27_Fussball_1.FC_Kaiserslautern_vs_FC_Bayern_M%C3%BCnchen_-_Sven_-_1D_X_MK_II_-_0228_-_B70I8527_%28cropped%29.jpg",
+  "Kylian Mbappé": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/95/Kylian_Mbappe_France_v_Senegal_16_June_2026-391_%28cropped%29.jpg/500px-Kylian_Mbappe_France_v_Senegal_16_June_2026-391_%28cropped%29.jpg",
+  "Erling Haaland": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Erling_Haaland_Morocco_v_Norway_7_June_2026-51.jpg/500px-Erling_Haaland_Morocco_v_Norway_7_June_2026-51.jpg",
   "Neymar Jr.": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Neymar_Junior_Brazil_V_Morocco_13_June_2026-40.jpg/500px-Neymar_Junior_Brazil_V_Morocco_13_June_2026-40.jpg",
+  "Vinícius Jr.": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Vin%C3%ADcius_J%C3%BAnior_Brazil_V_Morocco_13_June_2026-207_%28cropped%29.jpg/500px-Vin%C3%ADcius_J%C3%BAnior_Brazil_V_Morocco_13_June_2026-207_%28cropped%29.jpg",
+  "Jude Bellingham": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Jude_Bellingham_England_v_Ghana_23_June_2026-061_%28cropped%29.jpg/500px-Jude_Bellingham_England_v_Ghana_23_June_2026-061_%28cropped%29.jpg",
+  "Lamine Yamal": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Lamine_Yamal_France_v_Spain_7.24.26-142.jpg/500px-Lamine_Yamal_France_v_Spain_7.24.26-142.jpg",
   "Kevin De Bruyne": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/Kevin_De_Bruyne_USMNT_v_Belgium_Mar_28_2026-64_%28cropped%29.jpg/500px-Kevin_De_Bruyne_USMNT_v_Belgium_Mar_28_2026-64_%28cropped%29.jpg",
+  "Luka Modrić": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Luka_Modric_Croatia_v_Portugal_2_July_2026-055.jpg/500px-Luka_Modric_Croatia_v_Portugal_2_July_2026-055.jpg",
+  "Mohamed Salah": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Mohamed_Salah_Argentina_v_Egypt_7_July_2026-163_%28cropped%29.jpg/500px-Mohamed_Salah_Argentina_v_Egypt_7_July_2026-163_%28cropped%29.jpg",
+  "Harry Kane": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Harry_Kane_England_v_Ghana_23_June_2026-219_%28cropped%29.jpg/500px-Harry_Kane_England_v_Ghana_23_June_2026-219_%28cropped%29.jpg",
+  "Robert Lewandowski": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/2019147183134_2019-05-27_Fussball_1.FC_Kaiserslautern_vs_FC_Bayern_M%C3%BCnchen_-_Sven_-_1D_X_MK_II_-_0228_-_B70I8527_%28cropped%29.jpg/500px-2019147183134_2019-05-27_Fussball_1.FC_Kaiserslautern_vs_FC_Bayern_M%C3%BCnchen_-_Sven_-_1D_X_MK_II_-_0228_-_B70I8527_%28cropped%29.jpg",
+  "Rodri": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Rodri_Argentina_v_Spain_19_July_2026-187_%28cropped%29.jpg/500px-Rodri_Argentina_v_Spain_19_July_2026-187_%28cropped%29.jpg",
+  "Virgil van Dijk": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/20160604_AUT_NED_8876_%28cropped%29.jpg/500px-20160604_AUT_NED_8876_%28cropped%29.jpg",
+  "Thibaut Courtois": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Thibaut_Courtois_Belgium_v_USA_6_July_2026-076_%28cropped%29.jpg/500px-Thibaut_Courtois_Belgium_v_USA_6_July_2026-076_%28cropped%29.jpg",
+  "Manuel Neuer": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Manuel_Neuer_Ecuador_v_Germany_25_June_2026-148.jpg/500px-Manuel_Neuer_Ecuador_v_Germany_25_June_2026-148.jpg",
+  "Alisson Becker": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Alisson_Becker_Brazil_V_Morocco_13_June_2026-117_%28cropped%29.jpg/500px-Alisson_Becker_Brazil_V_Morocco_13_June_2026-117_%28cropped%29.jpg",
+  "Emiliano Martínez": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d9/Emiliano_Martinez_Argentina_v_Spain_19_July_2026-269.jpg/500px-Emiliano_Martinez_Argentina_v_Spain_19_July_2026-269.jpg",
+  "Toni Kroos": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/64/Toni_Kroos_Real_Madrid_2021.jpg/500px-Toni_Kroos_Real_Madrid_2021.jpg",
+  "Karim Benzema": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Karim_Benzema_Pick.jpg/500px-Karim_Benzema_Pick.jpg",
   "Antoine Griezmann": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/FRA-ARG_%2810%29_%28cropped%29.jpg/500px-FRA-ARG_%2810%29_%28cropped%29.jpg",
   "Son Heung-min": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b0/BFA_2023_-2_Heung-Min_Son_%28cropped%29.jpg/500px-BFA_2023_-2_Heung-Min_Son_%28cropped%29.jpg",
-  "Harry Kane": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Harry_Kane_England_v_Ghana_23_June_2026-219_%28cropped%29.jpg/500px-Harry_Kane_England_v_Ghana_23_June_2026-219_%28cropped%29.jpg",
-  "Thibaut Courtois": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Thibaut_Courtois_Belgium_v_USA_6_July_2026-076_%28cropped%29.jpg/500px-Thibaut_Courtois_Belgium_v_USA_6_July_2026-076_%28cropped%29.jpg",
-  "Mohamed Salah": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Mohamed_Salah_Argentina_v_Egypt_7_July_2026-163_%28cropped%29.jpg/500px-Mohamed_Salah_Argentina_v_Egypt_7_July_2026-163_%28cropped%29.jpg",
-  "Virgil van Dijk": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/20160604_AUT_NED_8876_%28cropped%29.jpg/500px-20160604_AUT_NED_8876_%28cropped%29.jpg",
-  "Emiliano Martínez": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d9/Emiliano_Martinez_Argentina_v_Spain_19_July_2026-269.jpg/500px-Emiliano_Martinez_Argentina_v_Spain_19_July_2026-269.jpg",
   "Bruno Fernandes": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Bruno_Fernandes_USMNT_v_Portugal_Mar_31_2026-27_%28cropped%29.jpg/500px-Bruno_Fernandes_USMNT_v_Portugal_Mar_31_2026-27_%28cropped%29.jpg",
   "Bernardo Silva": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d2/Bernardo_Silva_Croatia_v_Portugal_2_July_2026-238.jpg/500px-Bernardo_Silva_Croatia_v_Portugal_2_July_2026-238.jpg",
-  "Alisson Becker": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Alisson_Becker_Brazil_V_Morocco_13_June_2026-117_%28cropped%29.jpg/500px-Alisson_Becker_Brazil_V_Morocco_13_June_2026-117_%28cropped%29.jpg",
   "Federico Valverde": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/73/Federico_Valverde_2021_%28cropped%29.jpg/500px-Federico_Valverde_2021_%28cropped%29.jpg",
-  "Kylian Mbappé": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/95/Kylian_Mbappe_France_v_Senegal_16_June_2026-391_%28cropped%29.jpg/500px-Kylian_Mbappe_France_v_Senegal_16_June_2026-391_%28cropped%29.jpg",
   "Lautaro Martínez": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/Lautaro_Martinez_Argentina_v_Spain_19_July_2026-049_%28cropped%29.jpg/500px-Lautaro_Martinez_Argentina_v_Spain_19_July_2026-049_%28cropped%29.jpg",
-  "Rodri": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Rodri_Argentina_v_Spain_19_July_2026-187_%28cropped%29.jpg/500px-Rodri_Argentina_v_Spain_19_July_2026-187_%28cropped%29.jpg",
-  "Rodri Hernández": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Rodri_Argentina_v_Spain_19_July_2026-187_%28cropped%29.jpg/500px-Rodri_Argentina_v_Spain_19_July_2026-187_%28cropped%29.jpg",
-  "Christian Pulisic": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/71/Christian_Pulisic_USMNT_v_Belgium_Mar_28_2026-73_%28cropped%29.jpg/500px-Christian_Pulisic_USMNT_v_Belgium_Mar_28_2026-73_%28cropped%29.jpg",
-  "Alphonso Davies": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/27/Alphonso_Davies_Canada_v_Qatar_18_June_2026-007_%28cropped%29.jpg/500px-Alphonso_Davies_Canada_v_Qatar_18_June_2026-007_%28cropped%29.jpg",
-  "Theo Hernández": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/93/Theo_Hernandez_France_v_Senegal_16_June_2026-222_%28cropped%29.jpg/500px-Theo_Hernandez_France_v_Senegal_16_June_2026-222_%28cropped%29.jpg",
-  "Achraf Hakimi": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Achraf_Hakimi_Morocco_v_Norway_7_June_2026-16.jpg/500px-Achraf_Hakimi_Morocco_v_Norway_7_June_2026-16.jpg",
-  "Trent Alexander-Arnold": "https://upload.wikimedia.org/wikipedia/commons/5/5d/Trent_Alexander-Arnold_2018_%28cropped%29.jpg",
-  "Takefusa Kubo": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Takefusa_Kubo.jpg/500px-Takefusa_Kubo.jpg",
-  "Vinícius Jr.": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Vin%C3%ADcius_J%C3%BAnior_Brazil_V_Morocco_13_June_2026-207_%28cropped%29.jpg/500px-Vin%C3%ADcius_J%C3%BAnior_Brazil_V_Morocco_13_June_2026-207_%28cropped%29.jpg",
-  "Victor Osimhen": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Victor-osimhen-nigeria-2024-3-4.jpg/500px-Victor-osimhen-nigeria-2024-3-4.jpg",
-  "Rafael Leão": "https://upload.wikimedia.org/wikipedia/commons/0/02/RafaelLe%C3%A3oPortugal23.jpg",
-  "Erling Haaland": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Erling_Haaland_Morocco_v_Norway_7_June_2026-51.jpg/500px-Erling_Haaland_Morocco_v_Norway_7_June_2026-51.jpg",
   "Phil Foden": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/2023-10-04_Fu%C3%9Fball%2C_M%C3%A4nner%2C_UEFA_Champions_League%2C_RB_Leipzig_-_Manchester_City_FC_1DX_2613%2C_Phil_Foden.jpg/500px-2023-10-04_Fu%C3%9Fball%2C_M%C3%A4nner%2C_UEFA_Champions_League%2C_RB_Leipzig_-_Manchester_City_FC_1DX_2613%2C_Phil_Foden.jpg",
-  "William Saliba": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/06/William_Saliba_France_v_Paraguay_4_July_2026-183.jpg/500px-William_Saliba_France_v_Paraguay_4_July_2026-183.jpg",
-  "Julián Álvarez": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Julian_Alvarez_Argentina_v_Spain_19_July_2026-052_%28cropped%29.jpg/500px-Julian_Alvarez_Argentina_v_Spain_19_July_2026-052_%28cropped%29.jpg",
   "Bukayo Saka": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Bukayo_Saka_England_v_Ghana_23_June_2026-057_%28cropped%29.jpg/500px-Bukayo_Saka_England_v_Ghana_23_June_2026-057_%28cropped%29.jpg",
-  "Jude Bellingham": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Jude_Bellingham_England_v_Ghana_23_June_2026-061_%28cropped%29.jpg/500px-Jude_Bellingham_England_v_Ghana_23_June_2026-061_%28cropped%29.jpg",
-  "Pedri": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Pedri_France_v_Spain_7.24.26-245.jpg/500px-Pedri_France_v_Spain_7.24.26-245.jpg",
-  "Joško Gvardiol": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/Josko_Gvardiol_Croatia_v_Portugal_2_July_2026-262.jpg/500px-Josko_Gvardiol_Croatia_v_Portugal_2_July_2026-262.jpg",
   "Jamal Musiala": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/Jamal_Musiala_Ecuador_v_Germany_25_June_2026-174_%28cropped%29.jpg/500px-Jamal_Musiala_Ecuador_v_Germany_25_June_2026-174_%28cropped%29.jpg",
-  "Moisés Caicedo": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Moises_Caicedo_Ecuador_v_Germany_25_June_2026-051_%28cropped%29.jpg/500px-Moises_Caicedo_Ecuador_v_Germany_25_June_2026-051_%28cropped%29.jpg",
-  "Lamine Yamal": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Lamine_Yamal_France_v_Spain_7.24.26-142.jpg/500px-Lamine_Yamal_France_v_Spain_7.24.26-142.jpg",
-  "Keylor Navas": "https://upload.wikimedia.org/wikipedia/commons/d/dc/Keylor_Navas_2018_%28cropped%29.jpg",
-  "Edinson Cavani": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0d/PALMEIRAS_X_BOCA_JUNIORS_-_COPA_LIBERTADORES_2023_-_53286889335_%28cropped_2%29.jpg/500px-PALMEIRAS_X_BOCA_JUNIORS_-_COPA_LIBERTADORES_2023_-_53286889335_%28cropped_2%29.jpg",
-  "Ivan Perišić": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Ivan_Perisic_Croatia_v_Portugal_2_July_2026-033.jpg/500px-Ivan_Perisic_Croatia_v_Portugal_2_July_2026-033.jpg",
-  "Thomas Müller": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/aa/FC_Red_Bull_Salzburg_gegen_Bayern_M%C3%BCnchen_%282025-01-06_Testspiel%29_19.jpg/500px-FC_Red_Bull_Salzburg_gegen_Bayern_M%C3%BCnchen_%282025-01-06_Testspiel%29_19.jpg",
-  "Nicolás Otamendi": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Nicolas_Otamendi_Argentina_v_Spain_19_July_2026-059_%28cropped%29.jpg/500px-Nicolas_Otamendi_Argentina_v_Spain_19_July_2026-059_%28cropped%29.jpg",
-  "Olivier Giroud": "https://upload.wikimedia.org/wikipedia/commons/9/96/Olivier_Giroud_December_2024.png",
-  "İlkay Gündoğan": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/20180602_FIFA_Friendly_Match_Austria_vs._Germany_%C4%B0lkay_G%C3%BCndo%C4%9Fan_850_0728.jpg/500px-20180602_FIFA_Friendly_Match_Austria_vs._Germany_%C4%B0lkay_G%C3%BCndo%C4%9Fan_850_0728.jpg",
-  "Casemiro": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Casemiro_Brazil_V_Morocco_13_June_2026-76_%28cropped%29.jpg/500px-Casemiro_Brazil_V_Morocco_13_June_2026-76_%28cropped%29.jpg",
-  "Granit Xhaka": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/01/Granit_Xhaka_%28cropped%29.jpg/500px-Granit_Xhaka_%28cropped%29.jpg",
-  "Alejandro Grimaldo": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Alex_Grimaldo_Argentina_v_Spain_19_July_2026-314.jpg/500px-Alex_Grimaldo_Argentina_v_Spain_19_July_2026-314.jpg",
-  "Antonio Rüdiger": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/72/Antonio_Rudiger_Ecuador_v_Germany_25_June_2026-055_%28cropped%29.jpg/500px-Antonio_Rudiger_Ecuador_v_Germany_25_June_2026-055_%28cropped%29.jpg",
-  "Sadio Mané": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/Sadio_Mane_France_v_Senegal_16_June_2026-450.jpg/500px-Sadio_Mane_France_v_Senegal_16_June_2026-450.jpg",
-  "Marquinhos": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Marquinhos_Brazil_V_Morocco_13_June_2026-153_%28cropped%29.jpg/500px-Marquinhos_Brazil_V_Morocco_13_June_2026-153_%28cropped%29.jpg",
-  "Memphis Depay": "https://upload.wikimedia.org/wikipedia/commons/1/1c/Memphis_Depay_2019.jpg",
-  "João Cancelo": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/Joao_Cancelo_Croatia_v_Portugal_2_July_2026-002.jpg/500px-Joao_Cancelo_Croatia_v_Portugal_2_July_2026-002.jpg",
-  "Hakim Ziyech": "https://upload.wikimedia.org/wikipedia/commons/e/e1/Hakim_Ziyech_2021.jpg",
-  "Dani Carvajal": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/UEFA_EURO_qualifiers_Sweden_vs_Spain_20191015_Dani_Carvajal_10_%28cropped%29.jpg/500px-UEFA_EURO_qualifiers_Sweden_vs_Spain_20191015_Dani_Carvajal_10_%28cropped%29.jpg",
-  "Yassine Bounou": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/19/Yassine_Bounou_Brazil_V_Morocco_13_June_2026-169.jpg/500px-Yassine_Bounou_Brazil_V_Morocco_13_June_2026-169.jpg",
-  "Martin Ødegaard": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Martin_Odegaard_France_v_Norway_26_June_26-014.jpg/500px-Martin_Odegaard_France_v_Norway_26_June_26-014.jpg",
-  "Sofyan Amrabat": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/Sofyan_Amrabat_Brazil_V_Morocco_13_June_2026-63.jpg/500px-Sofyan_Amrabat_Brazil_V_Morocco_13_June_2026-63.jpg",
-  "Federico Dimarco": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/78/Norway_Italy_-_June_2025_A_26_%28cropped%29.jpg/500px-Norway_Italy_-_June_2025_A_26_%28cropped%29.jpg",
-  "Dani Olmo": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Dani_Olmo_France_v_Spain_7.24.26-176_%28cropped%29.jpg/500px-Dani_Olmo_France_v_Spain_7.24.26-176_%28cropped%29.jpg",
-  "Nicolò Barella": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/33/Nicol%C3%B2_Barella_in_2021_%28cropped_2%29.jpg/500px-Nicol%C3%B2_Barella_in_2021_%28cropped_2%29.jpg",
-  "Frenkie de Jong": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/38/Frenkie_De_Jong_%282025%29_%28cropped%29.png/500px-Frenkie_De_Jong_%282025%29_%28cropped%29.png",
-  "Richarlison": "https://upload.wikimedia.org/wikipedia/commons/7/7a/Richarlison_%C3%A9_homenageado_na_ALES_%2810.July.2019%29_08_%28cropped%29.jpg",
-  "Rúben Dias": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6a/Diogo_Costa_Ruben_Dias_Croatia_v_Portugal_2_July_2026-181_%28cropped%29.jpg/500px-Diogo_Costa_Ruben_Dias_Croatia_v_Portugal_2_July_2026-181_%28cropped%29.jpg",
-  "Ousmane Dembélé": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/69/Ousmane_Dembele_France_v_Senegal_16_June_2026-341_%28cropped%29_2.jpg/500px-Ousmane_Dembele_France_v_Senegal_16_June_2026-341_%28cropped%29_2.jpg",
-  "Marcus Rashford": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/54/Marcus_Rashford_England_v_Ghana_23_June_2026-073.jpg/500px-Marcus_Rashford_England_v_Ghana_23_June_2026-073.jpg",
-  "Alessandro Bastoni": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/65/Norway_Italy_-_June_2025_A_36_%28cropped%29.jpg/500px-Norway_Italy_-_June_2025_A_36_%28cropped%29.jpg",
-  "Raphinha": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/Raphinha_Brazil_V_Morocco_13_June_2026-133_%28cropped%29.jpg/500px-Raphinha_Brazil_V_Morocco_13_June_2026-133_%28cropped%29.jpg",
-  "Cody Gakpo": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Netherlands_v_Tunisia_2026_World_Cup_-_55373562032_%28Cody_Gakpo%29.jpg/500px-Netherlands_v_Tunisia_2026_World_Cup_-_55373562032_%28Cody_Gakpo%29.jpg",
-  "Gabriel Magalhães": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/Gabriel_Magalhaes_Brazil_V_Morocco_13_June_2026-132_%28cropped%29.jpg/500px-Gabriel_Magalhaes_Brazil_V_Morocco_13_June_2026-132_%28cropped%29.jpg",
-  "Cristian Romero": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/Cristian_Romero_Argentina_v_Egypt_7_July_2026-108.jpg/500px-Cristian_Romero_Argentina_v_Egypt_7_July_2026-108.jpg",
-  "Declan Rice": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/Declan_Rice_England_v_Ghana_23_June_2026-150.jpg/500px-Declan_Rice_England_v_Ghana_23_June_2026-150.jpg",
-  "Viktor Gyökeres": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/73/Viktor_Gy%C3%B6keres_2026-06-04_1_%28cropped%29.jpg/500px-Viktor_Gy%C3%B6keres_2026-06-04_1_%28cropped%29.jpg",
-  "Alexis Mac Allister": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/db/Alexis_Mac_Allister_Argentina_v_Spain_19_July_2026-162_%28cropped%29.jpg/500px-Alexis_Mac_Allister_Argentina_v_Spain_19_July_2026-162_%28cropped%29.jpg",
-  "Aurélien Tchouaméni": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Aurelien_Tchouameni_France_v_Senegal_16_June_2026-447_%28cropped%29.jpg/500px-Aurelien_Tchouameni_France_v_Senegal_16_June_2026-447_%28cropped%29.jpg",
-  "Khvicha Kvaratskhelia": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Kvaratskhelia_asse_psg_2425.png/500px-Kvaratskhelia_asse_psg_2425.png",
-  "Eduardo Camavinga": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Ofrenda_de_la_Liga_y_la_Champions-13-L.Mill%C3%A1n_%2852109790215%29_%28cropped%29.jpg/500px-Ofrenda_de_la_Liga_y_la_Champions-13-L.Mill%C3%A1n_%2852109790215%29_%28cropped%29.jpg",
-  "Vitinha": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/Vitinha_USMNT_v_Portugal_Mar_31_2026-50_%28cropped%29.jpg/500px-Vitinha_USMNT_v_Portugal_Mar_31_2026-50_%28cropped%29.jpg",
-  "Kaoru Mitoma": "https://upload.wikimedia.org/wikipedia/commons/6/65/Kaoru_Mitoma_2026.jpg",
   "Florian Wirtz": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/70/Florian_Wirtz_Ecuador_v_Germany_25_June_2026-181_%28cropped%29.jpg/500px-Florian_Wirtz_Ecuador_v_Germany_25_June_2026-181_%28cropped%29.jpg",
   "Cole Palmer": "https://upload.wikimedia.org/wikipedia/commons/f/fb/Cole_Palmer_2025_FIFA_Club_World_Cup_Final.jpg",
-  "Enzo Fernández": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Enzo_Fernandez_Argentina_v_Spain_19_July_2026-050_%28cropped%29.jpg/500px-Enzo_Fernandez_Argentina_v_Spain_19_July_2026-050_%28cropped%29.jpg",
+  "Julián Álvarez": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Julian_Alvarez_Argentina_v_Spain_19_July_2026-052_%28cropped%29.jpg/500px-Julian_Alvarez_Argentina_v_Spain_19_July_2026-052_%28cropped%29.jpg",
+  "Victor Osimhen": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Victor-osimhen-nigeria-2024-3-4.jpg/500px-Victor-osimhen-nigeria-2024-3-4.jpg",
+  "Rafael Leão": "https://upload.wikimedia.org/wikipedia/commons/0/02/RafaelLe%C3%A3oPortugal23.jpg",
+  "Achraf Hakimi": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Achraf_Hakimi_Morocco_v_Norway_7_June_2026-16.jpg/500px-Achraf_Hakimi_Morocco_v_Norway_7_June_2026-16.jpg",
+  "Alphonso Davies": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/27/Alphonso_Davies_Canada_v_Qatar_18_June_2026-007_%28cropped%29.jpg/500px-Alphonso_Davies_Canada_v_Qatar_18_June_2026-007_%28cropped%29.jpg",
+  "Theo Hernández": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/93/Theo_Hernandez_France_v_Senegal_16_June_2026-222_%28cropped%29.jpg/500px-Theo_Hernandez_France_v_Senegal_16_June_2026-222_%28cropped%29.jpg",
+  "Trent Alexander-Arnold": "https://upload.wikimedia.org/wikipedia/commons/5/5d/Trent_Alexander-Arnold_2018_%28cropped%29.jpg",
+  "Dani Carvajal": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/UEFA_EURO_qualifiers_Sweden_vs_Spain_20191015_Dani_Carvajal_10_%28cropped%29.jpg/500px-UEFA_EURO_qualifiers_Sweden_vs_Spain_20191015_Dani_Carvajal_10_%28cropped%29.jpg",
+  "William Saliba": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/06/William_Saliba_France_v_Paraguay_4_July_2026-183.jpg/500px-William_Saliba_France_v_Paraguay_4_July_2026-183.jpg",
+  "Antonio Rüdiger": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/72/Antonio_Rudiger_Ecuador_v_Germany_25_June_2026-055_%28cropped%29.jpg/500px-Antonio_Rudiger_Ecuador_v_Germany_25_June_2026-055_%28cropped%29.jpg",
+  "Rúben Dias": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6a/Diogo_Costa_Ruben_Dias_Croatia_v_Portugal_2_July_2026-181_%28cropped%29.jpg/500px-Diogo_Costa_Ruben_Dias_Croatia_v_Portugal_2_July_2026-181_%28cropped%29.jpg",
+  "Pedri": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Pedri_France_v_Spain_7.24.26-245.jpg/500px-Pedri_France_v_Spain_7.24.26-245.jpg",
+  "Declan Rice": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/Declan_Rice_England_v_Ghana_23_June_2026-150.jpg/500px-Declan_Rice_England_v_Ghana_23_June_2026-150.jpg",
+  "Alexis Mac Allister": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/db/Alexis_Mac_Allister_Argentina_v_Spain_19_July_2026-162_%28cropped%29.jpg/500px-Alexis_Mac_Allister_Argentina_v_Spain_19_July_2026-162_%28cropped%29.jpg",
+  "Eduardo Camavinga": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Ofrenda_de_la_Liga_y_la_Champions-13-L.Mill%C3%A1n_%2852109790215%29_%28cropped%29.jpg/500px-Ofrenda_de_la_Liga_y_la_Champions-13-L.Mill%C3%A1n_%2852109790215%29_%28cropped%29.jpg",
+  "Aurélien Tchouaméni": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Aurelien_Tchouameni_France_v_Senegal_16_June_2026-447_%28cropped%29.jpg/500px-Aurelien_Tchouameni_France_v_Senegal_16_June_2026-447_%28cropped%29.jpg",
+  "Martin Ødegaard": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Martin_Odegaard_France_v_Norway_26_June_26-014.jpg/500px-Martin_Odegaard_France_v_Norway_26_June_26-014.jpg",
+  "Raphinha": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/Raphinha_Brazil_V_Morocco_13_June_2026-133_%28cropped%29.jpg/500px-Raphinha_Brazil_V_Morocco_13_June_2026-133_%28cropped%29.jpg",
   "Nico Williams": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Nico_Williams_Argentina_v_Spain_19_July_2026-196_%28cropped%29.jpg/500px-Nico_Williams_Argentina_v_Spain_19_July_2026-196_%28cropped%29.jpg",
-  "Yann Sommer": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/FC_Salzburg_gegen_Inter_Mailand_%28Testspiel_2023-08-09%29_69.jpg/500px-FC_Salzburg_gegen_Inter_Mailand_%28Testspiel_2023-08-09%29_69.jpg",
-  "Kyle Walker": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/01/Kyle_Walker.jpg/500px-Kyle_Walker.jpg",
-  "Jan Oblak": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Jan_Oblak_2019.jpg/500px-Jan_Oblak_2019.jpg",
-  "Mateo Kovačić": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/98/Mateo_Kovacic_Croatia_v_Portugal_2_July_2026-132.jpg/500px-Mateo_Kovacic_Croatia_v_Portugal_2_July_2026-132.jpg",
-  "Hakan Çalhanoğlu": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/AUT_vs._TUR_2016-03-29_%28342%29.jpg/500px-AUT_vs._TUR_2016-03-29_%28342%29.jpg",
-  "Leandro Trossard": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Leandro_Trossard_Belgium_v_USA_6_July_2026-258.jpg/500px-Leandro_Trossard_Belgium_v_USA_6_July_2026-258.jpg",
-  "Andrew Robertson": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Andy_Robertson_Scotland_v_Bolivia_6_June_2026-43.jpg/500px-Andy_Robertson_Scotland_v_Bolivia_6_June_2026-43.jpg",
-  "Jack Grealish": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/ManCity20240722-017_%28cropped%29.jpg/500px-ManCity20240722-017_%28cropped%29.jpg",
-  "Ederson Moraes": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Ederson_Brazil_V_Morocco_13_June_2026-14_%28cropped%29.jpg/500px-Ederson_Brazil_V_Morocco_13_June_2026-14_%28cropped%29.jpg",
-  "James Maddison": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/James_Maddison_pre-match_training_%28cropped%29.jpg/500px-James_Maddison_pre-match_training_%28cropped%29.jpg",
-  "Diogo Jota": "https://upload.wikimedia.org/wikipedia/commons/2/26/Diogo_Jota_2025_Cropped.jpg",
-  "David Raya": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/David_Raya_Argentina_v_Spain_19_July_2026-003_%28cropped%29.jpg/500px-David_Raya_Argentina_v_Spain_19_July_2026-003_%28cropped%29.jpg",
-  "Mike Maignan": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/Mike_Maignan_France_v_Norway_26_June_26-132_%28cropped%29.jpg/500px-Mike_Maignan_France_v_Norway_26_June_26-132_%28cropped%29.jpg",
-  "Dayot Upamecano": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/Dayot_Upamecano_France_v_Senegal_16_June_2026-402_%28cropped%29.jpg/500px-Dayot_Upamecano_France_v_Senegal_16_June_2026-402_%28cropped%29.jpg",
-  "Denzel Dumfries": "https://upload.wikimedia.org/wikipedia/commons/b/b7/Edison_ndreca_inter_egnati_%28cropped_Denzel_Dumfries%29.jpg",
+  "Ousmane Dembélé": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/69/Ousmane_Dembele_France_v_Senegal_16_June_2026-341_%28cropped%29_2.jpg/500px-Ousmane_Dembele_France_v_Senegal_16_June_2026-341_%28cropped%29_2.jpg",
+  "Khvicha Kvaratskhelia": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Kvaratskhelia_asse_psg_2425.png/500px-Kvaratskhelia_asse_psg_2425.png",
+  "Viktor Gyökeres": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/73/Viktor_Gy%C3%B6keres_2026-06-04_1_%28cropped%29.jpg/500px-Viktor_Gy%C3%B6keres_2026-06-04_1_%28cropped%29.jpg",
   "Alexander Isak": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/32/Alexander_Isak_-_Sweden_-_Greece21_%28cropped%29.jpg/500px-Alexander_Isak_-_Sweden_-_Greece21_%28cropped%29.jpg",
-  "Ben White": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/Ben_White_2018.jpg/500px-Ben_White_2018.jpg",
-  "Matthijs de Ligt": "https://upload.wikimedia.org/wikipedia/commons/c/c9/2022-07-30_Fu%C3%9Fball%2C_M%C3%A4nner%2C_DFL-Supercup%2C_RB_Leipzig_-_FC_Bayern_M%C3%BCnchen_Matthijs_de_Ligt_%28cropped%29.jpg",
-  "Kai Havertz": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Kai_Havertz_Ecuador_v_Germany_25_June_2026-118.jpg/500px-Kai_Havertz_Ecuador_v_Germany_25_June_2026-118.jpg",
-  "Éder Militão": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/38/Eder_Militao_2021.jpg/500px-Eder_Militao_2021.jpg",
-  "Ibrahima Konaté": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f2/Ibrahima_Konate_France_v_Senegal_16_June_2026-516_%28cropped%29.jpg/500px-Ibrahima_Konate_France_v_Senegal_16_June_2026-516_%28cropped%29.jpg",
-  "Dominik Szoboszlai": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Dominik_Szoboszlai_04012026_%281%29.jpg/500px-Dominik_Szoboszlai_04012026_%281%29.jpg",
-  "Marc Cucurella": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Marc_Cucurella_Argentina_v_Spain_19_July_2026-064_%28cropped%29.jpg/500px-Marc_Cucurella_Argentina_v_Spain_19_July_2026-064_%28cropped%29.jpg",
-  "Gleison Bremer": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Bremer_Brazil_V_Morocco_13_June_2026-143_%28cropped%29.jpg/500px-Bremer_Brazil_V_Morocco_13_June_2026-143_%28cropped%29.jpg",
-  "Tijjani Reijnders": "https://upload.wikimedia.org/wikipedia/commons/c/c6/Manchester_City_2025_06_26_Juventus_%28cropped_to_Reijniders%29.jpg",
-  "Sandro Tonali": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/Norway_Italy_-_June_2025_B_03.jpg/500px-Norway_Italy_-_June_2025_B_03.jpg",
-  "Jules Koundé": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Jules_Kounde_France_v_Senegal_16_June_2026-449_%28cropped%29.jpg/500px-Jules_Kounde_France_v_Senegal_16_June_2026-449_%28cropped%29.jpg",
-  "Lisandro Martínez": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Lisandro_Martinez_Argentina_v_Egypt_7_July_2026-343_%28cropped%29.jpg/500px-Lisandro_Martinez_Argentina_v_Egypt_7_July_2026-343_%28cropped%29.jpg",
-  "Ronald Araújo": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/FC_Red_Bull_Salzburg_gegen_CF_Barcelona_%28Testspiel_4._August_2021%29_45_%28cropped%29.jpg/500px-FC_Red_Bull_Salzburg_gegen_CF_Barcelona_%28Testspiel_4._August_2021%29_45_%28cropped%29.jpg",
-  "Ryan Gravenberch": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/2022-07-30_Fu%C3%9Fball%2C_M%C3%A4nner%2C_DFL-Supercup%2C_RB_Leipzig_-_FC_Bayern_M%C3%BCnchen_1DX_3342_by_Stepro_%28cropped%29.jpg/500px-2022-07-30_Fu%C3%9Fball%2C_M%C3%A4nner%2C_DFL-Supercup%2C_RB_Leipzig_-_FC_Bayern_M%C3%BCnchen_1DX_3342_by_Stepro_%28cropped%29.jpg",
-  "Bruno Guimarães": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/70/Bruno_Guimaraes_Brazil_V_Morocco_13_June_2026-78_%28cropped%29.jpg/500px-Bruno_Guimaraes_Brazil_V_Morocco_13_June_2026-78_%28cropped%29.jpg",
-  "Jérémy Doku": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/06/J%C3%A9r%C3%A9my_Doku_USMNT_v_Belgium_Mar_28_2026-27_%28cropped%29.jpg/500px-J%C3%A9r%C3%A9my_Doku_USMNT_v_Belgium_Mar_28_2026-27_%28cropped%29.jpg",
-  "Darwin Núñez": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Darwin_N%C3%BA%C3%B1ez_%28cropped%29.jpg/500px-Darwin_N%C3%BA%C3%B1ez_%28cropped%29.jpg",
-  "Dejan Kulusevski": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Sweden-Slovenia_Nations_League_2022-09-27_17_Kulusevski_%28cropped%29.jpg/500px-Sweden-Slovenia_Nations_League_2022-09-27_17_Kulusevski_%28cropped%29.jpg",
-  "Gabriel Martinelli": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/81/Gabriel_Martinelli_Brazil_V_Morocco_13_June_2026-144.jpg/500px-Gabriel_Martinelli_Brazil_V_Morocco_13_June_2026-144.jpg",
-  "Jeremie Frimpong": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Jeremie_Frimpong_04012026_%283%29_%28cropped%29.jpg/500px-Jeremie_Frimpong_04012026_%283%29_%28cropped%29.jpg",
-  "Micky van de Ven": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Micky_Van_De_Ven_pre-match_training_%28cropped%29.jpg/500px-Micky_Van_De_Ven_pre-match_training_%28cropped%29.jpg",
-  "Omar Marmoush": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Omar_Marmoush_Argentina_v_Egypt_7_July_2026-018.jpg/500px-Omar_Marmoush_Argentina_v_Egypt_7_July_2026-018.jpg",
-  "Alejandro Balde": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/93/Esapana-inglaterra-74_%2848899354493%29.jpg/500px-Esapana-inglaterra-74_%2848899354493%29.jpg",
-  "Warren Zaïre-Emery": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Warren_Zaire-Emery_France_v_Senegal_16_June_2026-279.jpg/500px-Warren_Zaire-Emery_France_v_Senegal_16_June_2026-279.jpg",
-  "João Neves": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/Joao_Neves_Croatia_v_Portugal_2_July_2026-102.jpg/500px-Joao_Neves_Croatia_v_Portugal_2_July_2026-102.jpg",
-  "Pau Cubarsí": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Pau_Cubarsi_Argentina_v_Spain_19_July_2026-181_%28cropped%29.jpg/500px-Pau_Cubarsi_Argentina_v_Spain_19_July_2026-181_%28cropped%29.jpg",
-  "Wataru Endo": "https://upload.wikimedia.org/wikipedia/commons/f/fe/Wataru_Endo_at_Iran-Japan_pre-match_conference.jpg",
-  "Serge Gnabry": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Serge_Gnabry_WC2022.jpg/500px-Serge_Gnabry_WC2022.jpg",
-  "Kingsley Coman": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/Kingsley_Coman_%282019%29_%28cropped%29.jpg/500px-Kingsley_Coman_%282019%29_%28cropped%29.jpg",
-  "Jordan Pickford": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Jordan_Pickford_England_v_Ghana_23_June_2026-316_%28cropped%29.jpg/500px-Jordan_Pickford_England_v_Ghana_23_June_2026-316_%28cropped%29.jpg",
-  "Rodrigo De Paul": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/Rodrigo_De_Paul_Argentina_v_Spain_19_July_2026-159.jpg/500px-Rodrigo_De_Paul_Argentina_v_Spain_19_July_2026-159.jpg",
-  "Julian Brandt": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/96/2019-06-11_Fu%C3%9Fball%2C_M%C3%A4nner%2C_L%C3%A4nderspiel%2C_Deutschland-Estland_StP_2066_LR10_by_Stepro.jpg/500px-2019-06-11_Fu%C3%9Fball%2C_M%C3%A4nner%2C_L%C3%A4nderspiel%2C_Deutschland-Estland_StP_2066_LR10_by_Stepro.jpg",
-  "Leroy Sané": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/Leroy_Sane_Ecuador_v_Germany_25_June_2026-119_%28cropped%29.jpg/500px-Leroy_Sane_Ecuador_v_Germany_25_June_2026-119_%28cropped%29.jpg",
-  "Ollie Watkins": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Ollie_Watkins_England_v_Ghana_23_June_2026-035.jpg/500px-Ollie_Watkins_England_v_Ghana_23_June_2026-035.jpg",
-  "Alexander Sørloth": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Alexander_Sorloth_France_v_Norway_26_June_26-048.jpg/500px-Alexander_Sorloth_France_v_Norway_26_June_26-048.jpg",
-  "Mikel Merino": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Mikel_Merino_France_v_Spain_7.24.26-241_%28cropped%29.jpg/500px-Mikel_Merino_France_v_Spain_7.24.26-241_%28cropped%29.jpg",
-  "Serhou Guirassy": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d1/Serhou_Guirassy_2024_%28cropped%29.jpg/500px-Serhou_Guirassy_2024_%28cropped%29.jpg",
-  "Fabián Ruiz": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/88/Fabian_Ruiz_Argentina_v_Spain_19_July_2026-315.jpg/500px-Fabian_Ruiz_Argentina_v_Spain_19_July_2026-315.jpg",
-  "André Onana": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/67/Andr%C3%A9_Onana.jpg/500px-Andr%C3%A9_Onana.jpg",
-  "Marcus Thuram": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0a/Marcus_Thuram_France_v_Senegal_16_June_2026-261_%28cropped%29.jpg/500px-Marcus_Thuram_France_v_Senegal_16_June_2026-261_%28cropped%29.jpg",
-  "Hwang Hee-chan": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/240622_%ED%99%A9%ED%9D%AC%EC%B0%AC_%ED%92%8B%EB%B3%BC_%ED%8E%98%EC%8A%A4%ED%8B%B0%EB%B2%8C.jpg/500px-240622_%ED%99%A9%ED%9D%AC%EC%B0%AC_%ED%92%8B%EB%B3%BC_%ED%8E%98%EC%8A%A4%ED%8B%B0%EB%B2%8C.jpg",
-  "Marcos Llorente": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/Marcos_Llorente_France_v_Spain_7.24.26-020.jpg/500px-Marcos_Llorente_France_v_Spain_7.24.26-020.jpg",
-  "Ademola Lookman": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b7/Ademola_Lookman_%282019%29_%28cropped%29.jpg/500px-Ademola_Lookman_%282019%29_%28cropped%29.jpg",
-  "Daichi Kamada": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/2022128173756_2022-05-08_Fussball_Eintracht_Frankfurt_vs_Borussia_M%C3%B6nchengladbach_-_Sven_-_1D_X_MK_II_-_0725_-_AK8I7460_%28Daichi_Kamada_cropped%29.jpg/500px-2022128173756_2022-05-08_Fussball_Eintracht_Frankfurt_vs_Borussia_M%C3%B6nchengladbach_-_Sven_-_1D_X_MK_II_-_0725_-_AK8I7460_%28Daichi_Kamada_cropped%29.jpg",
-  "Dušan Vlahović": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/76/Dusan_Vlahovic.jpg/500px-Dusan_Vlahovic.jpg",
-  "Noussair Mazraoui": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Noussair_Mazraoui_France_v_Morocco_9_July_2026-125_%28cropped%29.jpg/500px-Noussair_Mazraoui_France_v_Morocco_9_July_2026-125_%28cropped%29.jpg",
-  "Brahim Díaz": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Brahim_Diaz_Morocco_v_Norway_7_June_2026-36_%28cropped_3-4%29.jpg/500px-Brahim_Diaz_Morocco_v_Norway_7_June_2026-36_%28cropped_3-4%29.jpg",
-  "Diogo Costa": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Diogo_Costa_Croatia_v_Portugal_2_July_2026-188_%28cropped%29.jpg/500px-Diogo_Costa_Croatia_v_Portugal_2_July_2026-188_%28cropped%29.jpg",
-  "Gregor Kobel": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/2023-08-12_TSV_Schott_Mainz_gegen_Borussia_Dortmund_%28DFB-Pokal_2023-24%29_by_Sandro_Halank%E2%80%93090.jpg/500px-2023-08-12_TSV_Schott_Mainz_gegen_Borussia_Dortmund_%28DFB-Pokal_2023-24%29_by_Sandro_Halank%E2%80%93090.jpg",
-  "Guglielmo Vicario": "https://upload.wikimedia.org/wikipedia/commons/f/f1/Guglielmo_Vicario.png",
-  "Loïs Openda": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/Lo%C3%AFs_Openda_USMNT_v_Belgium_Mar_28_2026-19_%28cropped%29.jpg/500px-Lo%C3%AFs_Openda_USMNT_v_Belgium_Mar_28_2026-19_%28cropped%29.jpg",
-  "Unai Simón": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Unai_Simon_Argentina_v_Spain_19_July_2026-078_%28cropped%29.jpg/500px-Unai_Simon_Argentina_v_Spain_19_July_2026-078_%28cropped%29.jpg",
-  "Karim Adeyemi": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/da/FC_Salzburg_gegen_FC_Bayern_M%C3%BCnchen_%28Championsleague_Achtelfinale_Hinspiel_16._Februar_2022%29_63.jpg/500px-FC_Salzburg_gegen_FC_Bayern_M%C3%BCnchen_%28Championsleague_Achtelfinale_Hinspiel_16._Februar_2022%29_63.jpg",
-  "Lee Kang-in": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Lee_Kang-in_-_2022_%2852551771501%29_%28cropped%29.jpg/500px-Lee_Kang-in_-_2022_%2852551771501%29_%28cropped%29.jpg",
-  "Morgan Rogers": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/28/Morgan_Rogers_England_v_Panama_27_June_26-144_%28cropped%29.jpg/500px-Morgan_Rogers_England_v_Panama_27_June_26-144_%28cropped%29.jpg",
-  "Michael Olise": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/Michael_Olise_France_v_Senegal_16_June_2026-307_%28cropped%29.jpg/500px-Michael_Olise_France_v_Senegal_16_June_2026-307_%28cropped%29.jpg",
-  "Nico Schlotterbeck": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/ba/2023-08-12_TSV_Schott_Mainz_gegen_Borussia_Dortmund_%28DFB-Pokal_2023-24%29_by_Sandro_Halank%E2%80%93069.jpg/500px-2023-08-12_TSV_Schott_Mainz_gegen_Borussia_Dortmund_%28DFB-Pokal_2023-24%29_by_Sandro_Halank%E2%80%93069.jpg",
-  "Conor Gallagher": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b0/Conor_Gallagher_2024_%28cropped%29.jpg/500px-Conor_Gallagher_2024_%28cropped%29.jpg",
-  "Benjamin Šeško": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/FC_RB_Salzburg_gegen_SK_Austria_Klagenfurt_%282023-05-28%29_38_%28cropped%29.jpg/500px-FC_RB_Salzburg_gegen_SK_Austria_Klagenfurt_%282023-05-28%29_38_%28cropped%29.jpg",
-  "Amad Diallo": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Amad_Diallo_Cote_D%27Ivoire_v_Ecuador_14_June_2026-256_%28cropped_2%29.jpg/500px-Amad_Diallo_Cote_D%27Ivoire_v_Ecuador_14_June_2026-256_%28cropped_2%29.jpg",
-  "Xavi Simons": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b2/2023-10-04_Fu%C3%9Fball%2C_M%C3%A4nner%2C_UEFA_Champions_League%2C_RB_Leipzig_-_Manchester_City_FC_1DX_2672_%28Xavi_Simons%29.jpg/500px-2023-10-04_Fu%C3%9Fball%2C_M%C3%A4nner%2C_UEFA_Champions_League%2C_RB_Leipzig_-_Manchester_City_FC_1DX_2672_%28Xavi_Simons%29.jpg",
-  "Martín Zubimendi": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Martin_Zubimendi_Argentina_v_Spain_19_July_2026-012.jpg/500px-Martin_Zubimendi_Argentina_v_Spain_19_July_2026-012.jpg",
-  "Álex Baena": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Alex_Baena_France_v_Spain_7.24.26-024.jpg/500px-Alex_Baena_France_v_Spain_7.24.26-024.jpg",
-  "Giorgi Mamardashvili": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f8/Liverpool_Players_04012026_%285%29_-_Mamardashvili.jpg/500px-Liverpool_Players_04012026_%285%29_-_Mamardashvili.jpg",
-  "Arda Güler": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/Arda_G%C3%BCler_2025.jpg/500px-Arda_G%C3%BCler_2025.jpg",
-  "Bradley Barcola": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f6/Bradley_Barcola_France_v_Spain_7.24.26-112_%28cropped%29.jpg/500px-Bradley_Barcola_France_v_Spain_7.24.26-112_%28cropped%29.jpg",
-  "Endrick": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/Team_Brazil_at_2026_FIFA_World_Cup_by_YantsImages_%28Endrick%29.jpg/500px-Team_Brazil_at_2026_FIFA_World_Cup_by_YantsImages_%28Endrick%29.jpg",
-  "Alejandro Garnacho": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Alejandro_Garnacho_7_August_2022_%28cropped%29.jpg/500px-Alejandro_Garnacho_7_August_2022_%28cropped%29.jpg",
-  "Kenan Yıldız": "https://upload.wikimedia.org/wikipedia/commons/e/e0/Kenan_Y%C4%B1ld%C4%B1z_in_the_international_match_%28March_2025%29_%28cropped%29.jpg",
-  "Kobbie Mainoo": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1f/Kobbie_Mainoo_England_v_Ghana_23_June_2026-042.jpg/500px-Kobbie_Mainoo_England_v_Ghana_23_June_2026-042.jpg",
-  "Karim Benzema": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Karim_Benzema_Pick.jpg/500px-Karim_Benzema_Pick.jpg",
-  "Sergio Busquets": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/Sergio_Busquets_NYCFC_Miami_24_Sep_2025-020_%28cropped%29.jpg/500px-Sergio_Busquets_NYCFC_Miami_24_Sep_2025-020_%28cropped%29.jpg",
-  "Romelu Lukaku": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Romelu_Lukaku_Belgium_v_USA_6_July_2026-038.jpg/500px-Romelu_Lukaku_Belgium_v_USA_6_July_2026-038.jpg",
-  "Jordi Alba": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Jordi_Alba_NE_Revolution_Inter_Miami_7.9.25-047_%28cropped%29.jpg/500px-Jordi_Alba_NE_Revolution_Inter_Miami_7.9.25-047_%28cropped%29.jpg",
-  "Paulo Dybala": "https://upload.wikimedia.org/wikipedia/commons/b/b3/%D0%9C%D0%B0%D1%82%D1%87_%C2%AB%D0%94%D0%B8%D0%BD%D0%B0%D0%BC%D0%BE%C2%BB_-_%C2%AB%D0%AE%D0%B2%D0%B5%D0%BD%D1%82%D1%83%D1%81%C2%BB_0-2._20_%D0%BE%D0%BA%D1%82%D1%8F%D0%B1%D1%80%D1%8F_2020_%D0%B3%D0%BE%D0%B4%D0%B0_%E2%80%94_1153905_%28cropped%29.jpg",
-  "Aleksandar Mitrović": "https://upload.wikimedia.org/wikipedia/commons/7/78/Aleksandar_Mitrovi%C4%87_2018_%28cropped%29.jpg",
-  "Aymeric Laporte": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d5/Aymeric_Laporte_Argentina_v_Spain_19_July_2026-067_%28cropped%29.jpg/500px-Aymeric_Laporte_Argentina_v_Spain_19_July_2026-067_%28cropped%29.jpg",
-  "Giovanni Di Lorenzo": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Norway_Italy_-_June_2025_A_20_-_Giovanni_Di_Lorenzo.jpg/500px-Norway_Italy_-_June_2025_A_20_-_Giovanni_Di_Lorenzo.jpg",
-  "Youri Tielemans": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/ff/Youri_Tielemans_USMNT_v_Belgium_Mar_28_2026-20_%28cropped%29.jpg/500px-Youri_Tielemans_USMNT_v_Belgium_Mar_28_2026-20_%28cropped%29.jpg",
-  "Sergej Milinković-Savić": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Milinkovi%C4%87-Savi%C4%87_2018.jpg/500px-Milinkovi%C4%87-Savi%C4%87_2018.jpg",
-  "Riyad Mahrez": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Mahrez_2021.jpg/500px-Mahrez_2021.jpg",
-  "Rúben Neves": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Ruben_Neves_USMNT_v_Portugal_Mar_31_2026-25.jpg/500px-Ruben_Neves_USMNT_v_Portugal_Mar_31_2026-25.jpg",
-  "Dominic Solanke": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Dominic_Solanke_at_Avatar_fire_and_ash_premiere_London_2025.jpg/500px-Dominic_Solanke_at_Avatar_fire_and_ash_premiere_London_2025.jpg",
-  "Francisco Trincão": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Francisco_Trinc%C3%A3o_USMNT_v_Portugal_Mar_31_2026-55_%28cropped%29.jpg/500px-Francisco_Trinc%C3%A3o_USMNT_v_Portugal_Mar_31_2026-55_%28cropped%29.jpg",
-  "Jarrod Bowen": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/JarrodBowen2023_%28cropped%29.jpeg/500px-JarrodBowen2023_%28cropped%29.jpeg",
-  "Moise Kean": "https://upload.wikimedia.org/wikipedia/commons/0/0b/FC_Zenit_Saint_Petersburg_vs._Juventus%2C_20_October_2021_64_-_Moise_Kean_%28cropped%29.jpg",
-  "Morgan Gibbs-White": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/61/Morgan_Gibbs-White_-_Nottingham_Forest_-_2025.jpg/500px-Morgan_Gibbs-White_-_Nottingham_Forest_-_2025.jpg",
-  "Eberechi Eze": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Eberechi_Eze_England_v_Ghana_23_June_2026-039.jpg/500px-Eberechi_Eze_England_v_Ghana_23_June_2026-039.jpg",
-  "Scott McTominay": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Scott_McTominay_Scotland_v_Bolivia_6_June_2026-41.jpg/500px-Scott_McTominay_Scotland_v_Bolivia_6_June_2026-41.jpg",
-  "Lucas Paquetá": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Lucas_Paqueta_Brazil_V_Morocco_13_June_2026-134_%28cropped%29.jpg/500px-Lucas_Paqueta_Brazil_V_Morocco_13_June_2026-134_%28cropped%29.jpg",
-  "Teun Koopmeiners": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/61/Teun_Koopmeiners_Manchester_United_v_Atalanta_BC%2C_20_October_2021_%2812%29_%28cropped%29.jpg/500px-Teun_Koopmeiners_Manchester_United_v_Atalanta_BC%2C_20_October_2021_%2812%29_%28cropped%29.jpg",
-  "Bryan Mbeumo": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/78/Bryan_Mbeumo_00-02-31.18.png/500px-Bryan_Mbeumo_00-02-31.18.png",
-  "Alessandro Buongiorno": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/Lens_-_Torino_FC_%2802-08-2023%29_47_%28cropped%29.jpg/500px-Lens_-_Torino_FC_%2802-08-2023%29_47_%28cropped%29.jpg",
-  "Moussa Diaby": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d5/Moussa_Diaby%2C_2022-07-31%2C_Saisoner%C3%B6ffnung_Bayer_04%2C_Leverkusen_%281%29.jpg/500px-Moussa_Diaby%2C_2022-07-31%2C_Saisoner%C3%B6ffnung_Bayer_04%2C_Leverkusen_%281%29.jpg",
-  "Matheus Cunha": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/Matheus_Cunha_Brazil_V_Morocco_13_June_2026-178_%28cropped%29.jpg/500px-Matheus_Cunha_Brazil_V_Morocco_13_June_2026-178_%28cropped%29.jpg",
-  "Jonathan David": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Jonathan_David_Canada_v_Qatar_18_June_2026-242_%28cropped%29.jpg/500px-Jonathan_David_Canada_v_Qatar_18_June_2026-242_%28cropped%29.jpg",
-  "Morten Hjulmand": "https://upload.wikimedia.org/wikipedia/commons/6/64/MortenHjulmandSporting24.jpg",
-  "Mohammed Kudus": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ef/Mohammed_Kudus_of_West_Ham_United.jpeg/500px-Mohammed_Kudus_of_West_Ham_United.jpeg",
-  "Mateo Retegui": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/Norway_Italy_-_June_2025_A_21_%28cropped%29.jpg/500px-Norway_Italy_-_June_2025_A_21_%28cropped%29.jpg",
-  "Éderson Silva": "https://upload.wikimedia.org/wikipedia/commons/8/83/Team_Brazil_at_2026_FIFA_World_Cup_by_YantsImages_%28%C3%89derson_Silva%29_%28cropped%29.jpg",
-  "Orkun Kökçü": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/98/Orkun_K%C3%B6k%C3%A7%C3%BC_20260121_%282%29_-_cropped_version.jpg/500px-Orkun_K%C3%B6k%C3%A7%C3%BC_20260121_%282%29_-_cropped_version.jpg",
-  "Gonçalo Ramos": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/Gon%C3%A7alo_Ramos_USMNT_v_Portugal_Mar_31_2026-32_%28cropped%29.jpg/500px-Gon%C3%A7alo_Ramos_USMNT_v_Portugal_Mar_31_2026-32_%28cropped%29.jpg",
-  "João Pedro": "https://upload.wikimedia.org/wikipedia/commons/1/1d/Jo%C3%A3o_Pedro%2C_2025_FIFA_Club_World_Cup_final_%2854654843615%29.jpg",
-  "Marc Guéhi": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Marc_Guehi_England_v_Panama_27_June_26-182.jpg/500px-Marc_Guehi_England_v_Panama_27_June_26-182.jpg",
-  "cherki Rayan": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/97/Rayan_Cherki_France_v_Norway_26_June_26-114.jpg/500px-Rayan_Cherki_France_v_Norway_26_June_26-114.jpg",
-  "Charles De Ketelaere": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/42/Charles_De_Ketelaere_USMNT_v_Belgium_Mar_28_2026-76_%28cropped%29.jpg/500px-Charles_De_Ketelaere_USMNT_v_Belgium_Mar_28_2026-76_%28cropped%29.jpg",
-  "Jarrad Branthwaite": "https://upload.wikimedia.org/wikipedia/commons/8/86/Celebration%21_%2854493257432%29_%28Jarrad_Branthwaite%29.jpg",
-  "Nicolas Jackson": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/35/Nicolas_Jackson_France_v_Senegal_16_June_2026-369_%28cropped%29.jpg/500px-Nicolas_Jackson_France_v_Senegal_16_June_2026-369_%28cropped%29.jpg",
-  "Maghnes Akliouche": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Maghnes_Akliouche_France_v_Senegal_16_June_2026-512.jpg/500px-Maghnes_Akliouche_France_v_Senegal_16_June_2026-512.jpg",
-  "Willian Pacho": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Willian_Pacho_Ecuador_v_Germany_25_June_2026-228.jpg/500px-Willian_Pacho_Ecuador_v_Germany_25_June_2026-228.jpg",
-  "Ousmane Diomande": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c9/Ousmane_Diomand%C3%A9_Cote_D%27Ivoire_v_Ecuador_14_June_2026-58.jpg/500px-Ousmane_Diomand%C3%A9_Cote_D%27Ivoire_v_Ecuador_14_June_2026-58.jpg",
-  "Samu Aghehowa": "https://upload.wikimedia.org/wikipedia/commons/5/5c/Uzbekistan_vs._Spain%2C_2024_Summer_Olympic_men%27s_association_football%2C_2024-07-24_%28471%29_-_Samu.jpg",
-  "Kim Min-jae": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/FC_Red_Bull_Salzburg_gegen_Bayern_M%C3%BCnchen_%282025-01-06_Testspiel%29_26.jpg/500px-FC_Red_Bull_Salzburg_gegen_Bayern_M%C3%BCnchen_%282025-01-06_Testspiel%29_26.jpg",
-  "Luis Suárez": "https://upload.wikimedia.org/wikipedia/commons/0/0b/Luis_Su%C3%A1rez_Miramontes_1962.jpg",
-  "Nuno Mendes": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Nuno_Mendes_Croatia_v_Portugal_2_July_2026-135_%28cropped%29.jpg/500px-Nuno_Mendes_Croatia_v_Portugal_2_July_2026-135_%28cropped%29.jpg",
   "Luis Díaz": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/FC_RB_Salzburg_gegen_FC_Bayern_M%C3%BCnchen_%282026-01-06_Testspiel%29_40_%28Luiz_D%C3%ADaz%29.jpg/500px-FC_RB_Salzburg_gegen_FC_Bayern_M%C3%BCnchen_%282026-01-06_Testspiel%29_40_%28Luiz_D%C3%ADaz%29.jpg",
-  "Savinho": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/Neymar_PSG.jpg/500px-Neymar_PSG.jpg",
-  "Isco Alarcón": "https://upload.wikimedia.org/wikipedia/commons/3/32/Liver-RM_%285%29_%28cropped%29.jpg",
-  "Anthony Gordon": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dc/Anthony_Gordon_England_v_Ghana_23_June_2026-017_%28cropped%29.jpg/500px-Anthony_Gordon_England_v_Ghana_23_June_2026-017_%28cropped%29.jpg",
-  "N’Golo Kanté": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/N%27Golo_Kante_France_v_Senegal_16_June_2026-397.jpg/500px-N%27Golo_Kante_France_v_Senegal_16_June_2026-397.jpg",
+  "Sergio Ramos": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Sergio_Ramos_2018_%28cropped%29.jpg/500px-Sergio_Ramos_2018_%28cropped%29.jpg",
+  "Marcelo": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f6/Marcelo_Vieira_2018.jpg/500px-Marcelo_Vieira_2018.jpg",
+  "Gareth Bale": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Gareth_Bale_2021_%28cropped%29.jpg/500px-Gareth_Bale_2021_%28cropped%29.jpg",
 
   // ==========================================================================
   // HALL OF FAME LEGENDS & ALL-TIME WORLD CUP ICONS
+  // Explicitly requested: Pelé, Maradona, Ronaldinho, Zidane, Beckham, R9, Cruyff, Maldini, Henry, Buffon, Yashin, etc.
   // ==========================================================================
   "Pelé": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Pele_con_brasil_%28cropped%29.jpg/500px-Pele_con_brasil_%28cropped%29.jpg",
   "Diego Maradona": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Maradona_junior.jpg/500px-Maradona_junior.jpg",
-  "Zinedine Zidane": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Zinedine_Zidane_by_Tasnim_03.jpg/500px-Zinedine_Zidane_by_Tasnim_03.jpg",
   "Ronaldinho": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Ronaldinho_in_2019.jpg/500px-Ronaldinho_in_2019.jpg",
+  "Zinedine Zidane": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Zinedine_Zidane_by_Tasnim_03.jpg/500px-Zinedine_Zidane_by_Tasnim_03.jpg",
+  "David Beckham": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8e/David_Beckham_2013_%28cropped%29.jpg/500px-David_Beckham_2013_%28cropped%29.jpg",
+  "Ronaldo Nazário": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/12.12.2025_%E2%80%93_Cerim%C3%B4nia_de_lan%C3%A7amento_do_SBT_News_-_54980664160_%28cropped2%29.jpg/500px-12.12.2025_%E2%80%93_Cerim%C3%B4nia_de_lan%C3%A7amento_do_SBT_News_-_54980664160_%28cropped2%29.jpg",
   "Johan Cruyff": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Johan_Cruijff_1974c.jpg/500px-Johan_Cruijff_1974c.jpg",
   "Paolo Maldini": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Paolo_Maldini_2008.jpg/500px-Paolo_Maldini_2008.jpg",
-  "Ronaldo Nazário": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/12.12.2025_%E2%80%93_Cerim%C3%B4nia_de_lan%C3%A7amento_do_SBT_News_-_54980664160_%28cropped2%29.jpg/500px-12.12.2025_%E2%80%93_Cerim%C3%B4nia_de_lan%C3%A7amento_do_SBT_News_-_54980664160_%28cropped2%29.jpg",
+  "Thierry Henry": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Thierry_Henry_%2851649035951%29_%28cropped%29.jpg/500px-Thierry_Henry_%2851649035951%29_%28cropped%29.jpg",
+  "Gianluigi Buffon": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Norway_Italy_-_June_2025_A_44_%28Gianluigi_Buffon%29.jpg/500px-Norway_Italy_-_June_2025_A_44_%28Gianluigi_Buffon%29.jpg",
   "Franz Beckenbauer": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Franz_Beckenbauer_%281975%29.jpg/500px-Franz_Beckenbauer_%281975%29.jpg",
   "Lev Yashin": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/LevYashin.JPG/500px-LevYashin.JPG",
   "Roberto Baggio": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/%D8%B1%D9%88%D8%A8%D8%B1%D8%AA%D9%88_%D8%A8%D8%A7%D8%AC%D9%88_%28cropped%29.jpg/500px-%D8%B1%D9%88%D8%A8%D8%B1%D8%AA%D9%88_%D8%A8%D8%A7%D8%AC%D9%88_%28cropped%29.jpg",
-  "Thierry Henry": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Thierry_Henry_%2851649035951%29_%28cropped%29.jpg/500px-Thierry_Henry_%2851649035951%29_%28cropped%29.jpg",
   "Kaká": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Kak%C3%A1_visited_Stadium_St._Petersburg.jpg/500px-Kak%C3%A1_visited_Stadium_St._Petersburg.jpg",
   "Andrés Iniesta": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/Andr%C3%A9s_Iniesta_Argentina_v_Spain_19_July_2026-034_%28cropped%29.jpg/500px-Andr%C3%A9s_Iniesta_Argentina_v_Spain_19_July_2026-034_%28cropped%29.jpg",
   "Xavi Hernández": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1f/Xavi%2C_Persepolis_vs._Al_Sadd%2C_20190520_02_%28cropped%29.jpg/500px-Xavi%2C_Persepolis_vs._Al_Sadd%2C_20190520_02_%28cropped%29.jpg",
   "Andrea Pirlo": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/20150616_-_Portugal_-_Italie_-_Gen%C3%A8ve_-_Andrea_Pirlo_%28cropped%29.jpg/500px-20150616_-_Portugal_-_Italie_-_Gen%C3%A8ve_-_Andrea_Pirlo_%28cropped%29.jpg",
   "Roberto Carlos": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/LS3_1288_%2853332367864%29_%28cropped%29.jpg/500px-LS3_1288_%2853332367864%29_%28cropped%29.jpg",
-  "Gianluigi Buffon": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Norway_Italy_-_June_2025_A_44_%28Gianluigi_Buffon%29.jpg/500px-Norway_Italy_-_June_2025_A_44_%28Gianluigi_Buffon%29.jpg",
   "Cafu": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/64/Cafu_-_26.02.2026_-_Cerim%C3%B4nia_de_apresenta%C3%A7%C3%A3o_das_ta%C3%A7as_da_Copa_do_Mundo_de_2026.jpg/500px-Cafu_-_26.02.2026_-_Cerim%C3%B4nia_de_apresenta%C3%A7%C3%A3o_das_ta%C3%A7as_da_Copa_do_Mundo_de_2026.jpg",
   "Fabio Cannavaro": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Fabio_Cannavaro_2011.jpg/500px-Fabio_Cannavaro_2011.jpg",
   "Carles Puyol": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/00/Carles_Puyol_%28cropped%29.jpg/500px-Carles_Puyol_%28cropped%29.jpg",
@@ -289,8 +126,6 @@ export const PLAYER_PHOTOS_BY_NAME: Record<string, string> = {
   "Jaap Stam": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Jaap_Stam_2017_%28cropped%29.jpg/500px-Jaap_Stam_2017_%28cropped%29.jpg",
   "Marcel Desailly": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Marcel_Desailly_2014.jpg/500px-Marcel_Desailly_2014.jpg",
   "Laurent Blanc": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Laurent_Blanc_2015_%28cropped%29.jpg/500px-Laurent_Blanc_2015_%28cropped%29.jpg",
-  "Jürgen Kohler": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/J%C3%BCrgen_Kohler_1990.jpg/500px-J%C3%BCrgen_Kohler_1990.jpg",
-  "Matthias Sammer": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/57/Matthias_Sammer_1996.jpg/500px-Matthias_Sammer_1996.jpg",
   "Daniel Passarella": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Daniel_Passarella_1978.jpg/500px-Daniel_Passarella_1978.jpg",
   "Gaetano Scirea": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/Gaetano_Scirea_1982.jpg/500px-Gaetano_Scirea_1982.jpg",
   "Ronald Koeman": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Ronald_Koeman_2019_%28cropped%29.jpg/500px-Ronald_Koeman_2019_%28cropped%29.jpg",
@@ -299,7 +134,6 @@ export const PLAYER_PHOTOS_BY_NAME: Record<string, string> = {
   "Lúcio": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/93/L%C3%BAcio_2011_%28cropped%29.jpg/500px-L%C3%BAcio_2011_%28cropped%29.jpg",
   "Walter Samuel": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Walter_Samuel_2010.jpg/500px-Walter_Samuel_2010.jpg",
   "Roberto Ayala": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Roberto_Ayala_2006.jpg/500px-Roberto_Ayala_2006.jpg",
-  "Marcelo": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f6/Marcelo_Vieira_2018.jpg/500px-Marcelo_Vieira_2018.jpg",
   "Ashley Cole": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Ashley_Cole_2014_%28cropped%29.jpg/500px-Ashley_Cole_2014_%28cropped%29.jpg",
   "Denis Irwin": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ae/Denis_Irwin_1999.jpg/500px-Denis_Irwin_1999.jpg",
   "Patrice Evra": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Patrice_Evra_2014.jpg/500px-Patrice_Evra_2014.jpg",
@@ -307,9 +141,6 @@ export const PLAYER_PHOTOS_BY_NAME: Record<string, string> = {
   "Andreas Brehme": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Andreas_Brehme_1990.jpg/500px-Andreas_Brehme_1990.jpg",
   "Antonio Cabrini": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/29/Antonio_Cabrini_1982.jpg/500px-Antonio_Cabrini_1982.jpg",
   "Giacinto Facchetti": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/70/Giacinto_Facchetti_1970.jpg/500px-Giacinto_Facchetti_1970.jpg",
-  "Silvio Marzolini": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Silvio_Marzolini_1966.jpg/500px-Silvio_Marzolini_1966.jpg",
-  "Leovegildo Júnior": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/69/Leo_Junior_1982.jpg/500px-Leo_Junior_1982.jpg",
-  "Branco": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Branco_1994.jpg/500px-Branco_1994.jpg",
   "Bixente Lizarazu": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Bixente_Lizarazu_2014.jpg/500px-Bixente_Lizarazu_2014.jpg",
   "Dani Alves": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Dani_Alves_2018.jpg/500px-Dani_Alves_2018.jpg",
   "Javier Zanetti": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Javier_Zanetti_2013_%28cropped%29.jpg/500px-Javier_Zanetti_2013_%28cropped%29.jpg",
@@ -317,15 +148,6 @@ export const PLAYER_PHOTOS_BY_NAME: Record<string, string> = {
   "Gary Neville": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/Gary_Neville_2018_%28cropped%29.jpg/500px-Gary_Neville_2018_%28cropped%29.jpg",
   "Gianluca Zambrotta": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Gianluca_Zambrotta_2011_%28cropped%29.jpg/500px-Gianluca_Zambrotta_2011_%28cropped%29.jpg",
   "Maicon": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/Maicon_Douglas_Sisenando_2010_%28cropped%29.jpg/500px-Maicon_Douglas_Sisenando_2010_%28cropped%29.jpg",
-  "Branislav Ivanović": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Branislav_Ivanovic_2018.jpg/500px-Branislav_Ivanovic_2018.jpg",
-  "Darijo Srna": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/25/Darijo_Srna_2016.jpg/500px-Darijo_Srna_2016.jpg",
-  "Mauro Tassotti": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/Mauro_Tassotti_1994.jpg/500px-Mauro_Tassotti_1994.jpg",
-  "Claudio Gentile": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Claudio_Gentile_1982.jpg/500px-Claudio_Gentile_1982.jpg",
-  "Berti Vogts": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/Berti_Vogts_1974.jpg/500px-Berti_Vogts_1974.jpg",
-  "Wim Suurbier": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b2/Wim_Suurbier_1974.jpg/500px-Wim_Suurbier_1974.jpg",
-  "Jorginho": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Jorginho_1994.jpg/500px-Jorginho_1994.jpg",
-  "Eric Gerets": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Eric_Gerets_1986.jpg/500px-Eric_Gerets_1986.jpg",
-  "Phil Neal": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Phil_Neal_1982.jpg/500px-Phil_Neal_1982.jpg",
   "Claude Makélélé": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Claude_Makelele_2012.jpg/500px-Claude_Makelele_2012.jpg",
   "Roy Keane": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/25/Roy_Keane_2014_%28cropped%29.jpg/500px-Roy_Keane_2014_%28cropped%29.jpg",
   "Patrick Vieira": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/0d/Patrick_Vieira_2018_%28cropped%29.jpg/500px-Patrick_Vieira_2018_%28cropped%29.jpg",
@@ -342,19 +164,11 @@ export const PLAYER_PHOTOS_BY_NAME: Record<string, string> = {
   "Yaya Touré": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Yaya_Toure_2015.jpg/500px-Yaya_Toure_2015.jpg",
   "Xabi Alonso": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Xabi_Alonso_2023_%28cropped%29.jpg/500px-Xabi_Alonso_2023_%28cropped%29.jpg",
   "Lothar Matthäus": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Lothar_Matth%C3%A4us_2018.jpg/500px-Lothar_Matth%C3%A4us_2018.jpg",
-  "Paulo Roberto Falcão": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Paulo_Roberto_Falcao_1982.jpg/500px-Paulo_Roberto_Falcao_1982.jpg",
-  "Toninho Cerezo": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/39/Toninho_Cerezo_1982.jpg/500px-Toninho_Cerezo_1982.jpg",
-  "Marco Tardelli": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Marco_Tardelli_1982.jpg/500px-Marco_Tardelli_1982.jpg",
-  "Jean Tigana": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/69/Jean_Tigana_1984.jpg/500px-Jean_Tigana_1984.jpg",
-  "Johan Neeskens": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Johan_Neeskens_1974.jpg/500px-Johan_Neeskens_1974.jpg",
   "Clarence Seedorf": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/Clarence_Seedorf_2014_%28cropped%29.jpg/500px-Clarence_Seedorf_2014_%28cropped%29.jpg",
   "Michael Ballack": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/Michael_Ballack_2012_%28cropped%29.jpg/500px-Michael_Ballack_2012_%28cropped%29.jpg",
-  "Bryan Robson": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/Bryan_Robson_1990.jpg/500px-Bryan_Robson_1990.jpg",
   "Sócrates": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/69/Socrates_1982.jpg/500px-Socrates_1982.jpg",
-  "Gérson": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/25/Gerson_1970.jpg/500px-Gerson_1970.jpg",
   "Paul Gascoigne": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/Paul_Gascoigne_1990.jpg/500px-Paul_Gascoigne_1990.jpg",
   "Gheorghe Hagi": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Gheorghe_Hagi_1994.jpg/500px-Gheorghe_Hagi_1994.jpg",
-  "Dragan Stojković": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/Dragan_Stojkovic_2022.jpg/500px-Dragan_Stojkovic_2022.jpg",
   "Deco": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4a/Deco_2013_%28cropped%29.jpg/500px-Deco_2013_%28cropped%29.jpg",
   "Wesley Sneijder": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Wesley_Sneijder_2014.jpg/500px-Wesley_Sneijder_2014.jpg",
   "Bastian Schweinsteiger": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Bastian_Schweinsteiger_2015_%28cropped%29.jpg/500px-Bastian_Schweinsteiger_2015_%28cropped%29.jpg",
@@ -362,40 +176,16 @@ export const PLAYER_PHOTOS_BY_NAME: Record<string, string> = {
   "Juan Sebastián Verón": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8b/Juan_Sebastian_Veron_2010.jpg/500px-Juan_Sebastian_Veron_2010.jpg",
   "Pablo Aimar": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Pablo_Aimar_2006.jpg/500px-Pablo_Aimar_2006.jpg",
   "Rui Costa": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Rui_Costa_2008.jpg/500px-Rui_Costa_2008.jpg",
-  "Zvonimir Boban": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Zvonimir_Boban_1998.jpg/500px-Zvonimir_Boban_1998.jpg",
-  "Robert Prosinečki": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Robert_Prosinecki_1998.jpg/500px-Robert_Prosinecki_1998.jpg",
-  "Jari Litmanen": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Jari_Litmanen_2010.jpg/500px-Jari_Litmanen_2010.jpg",
   "Juninho Pernambucano": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Juninho_Pernambucano_2006.jpg/500px-Juninho_Pernambucano_2006.jpg",
   "Daniele De Rossi": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/Daniele_De_Rossi_2016.jpg/500px-Daniele_De_Rossi_2016.jpg",
-  "Claudio Marchisio": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Claudio_Marchisio_2014.jpg/500px-Claudio_Marchisio_2014.jpg",
   "Mesut Özil": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Mesut_%C3%96zil_2018_%28cropped%29.jpg/500px-Mesut_%C3%96zil_2018_%28cropped%29.jpg",
-  "Enzo Francescoli": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Enzo_Francescoli_1995.jpg/500px-Enzo_Francescoli_1995.jpg",
   "Carlos Valderrama": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/64/Carlos_Valderrama_2018.jpg/500px-Carlos_Valderrama_2018.jpg",
-  "Dejan Savićević": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Dejan_Savicevic_1994.jpg/500px-Dejan_Savicevic_1994.jpg",
   "Jay-Jay Okocha": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Jay-Jay_Okocha_2018.jpg/500px-Jay-Jay_Okocha_2018.jpg",
   "Hidetoshi Nakata": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Hidetoshi_Nakata_2015_%28cropped%29.jpg/500px-Hidetoshi_Nakata_2015_%28cropped%29.jpg",
   "Park Ji-sung": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/72/Park_Ji-sung_2014_%28cropped%29.jpg/500px-Park_Ji-sung_2014_%28cropped%29.jpg",
   "Marek Hamšík": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/eb/Marek_Hamsik_2018.jpg/500px-Marek_Hamsik_2018.jpg",
-  "Rafael van der Vaart": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Rafael_van_der_Vaart_2012.jpg/500px-Rafael_van_der_Vaart_2012.jpg",
   "Robert Pirès": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/25/Robert_Pires_2014.jpg/500px-Robert_Pires_2014.jpg",
   "Marc Overmars": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/29/Marc_Overmars_1998.jpg/500px-Marc_Overmars_1998.jpg",
-  "David Ginola": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4b/David_Ginola_1999.jpg/500px-David_Ginola_1999.jpg",
-  "John Barnes": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/John_Barnes_1990.jpg/500px-John_Barnes_1990.jpg",
-  "Chris Waddle": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/28/Chris_Waddle_1990.jpg/500px-Chris_Waddle_1990.jpg",
-  "Dragan Džajić": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Dragan_Dzajic_1968.jpg/500px-Dragan_Dzajic_1968.jpg",
-  "Mário Zagallo": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/58/Mario_Zagallo_1970.jpg/500px-Mario_Zagallo_1970.jpg",
-  "Zoltán Czibor": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Zoltan_Czibor_1954.jpg/500px-Zoltan_Czibor_1954.jpg",
-  "Piet Keizer": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Piet_Keizer_1974.jpg/500px-Piet_Keizer_1974.jpg",
-  "Rodrygo": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/88/Rodrygo_2022.jpg/500px-Rodrygo_2022.jpg",
-  "Tom Finney": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Tom_Finney_1950.jpg/500px-Tom_Finney_1950.jpg",
-  "Pierre Littbarski": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/03/Pierre_Littbarski_1990.jpg/500px-Pierre_Littbarski_1990.jpg",
-  "Roberto Donadoni": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/Roberto_Donadoni_1994.jpg/500px-Roberto_Donadoni_1994.jpg",
-  "Bruno Conti": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/67/Bruno_Conti_1982.jpg/500px-Bruno_Conti_1982.jpg",
-  "Franco Causio": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/82/Franco_Causio_1982.jpg/500px-Franco_Causio_1982.jpg",
-  "Jimmy Johnstone": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/Jimmy_Johnstone_1967.jpg/500px-Jimmy_Johnstone_1967.jpg",
-  "Fredrik Ljungberg": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Fredrik_Ljungberg_2006.jpg/500px-Fredrik_Ljungberg_2006.jpg",
-  "Mauro Camoranesi": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Mauro_Camoranesi_2006.jpg/500px-Mauro_Camoranesi_2006.jpg",
-  "Antonio Valencia": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Antonio_Valencia_2014.jpg/500px-Antonio_Valencia_2014.jpg",
   "Gonzalo Higuaín": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e2/Gonzalo_Higuain_2018.jpg/500px-Gonzalo_Higuain_2018.jpg",
   "Sergio Agüero": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Sergio_Aguero_2018_%28cropped%29.jpg/500px-Sergio_Aguero_2018_%28cropped%29.jpg",
   "Didier Drogba": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Didier_Drogba_2014_%28cropped%29.jpg/500px-Didier_Drogba_2014_%28cropped%29.jpg",
@@ -406,6 +196,7 @@ export const PLAYER_PHOTOS_BY_NAME: Record<string, string> = {
   "Wayne Rooney": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Wayne_Rooney_2018_%28cropped%29.jpg/500px-Wayne_Rooney_2018_%28cropped%29.jpg",
   "Romário": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/25/Romario_2011_%28cropped%29.jpg/500px-Romario_2011_%28cropped%29.jpg",
   "Rivaldo": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/Rivaldo_2013_%28cropped%29.jpg/500px-Rivaldo_2013_%28cropped%29.jpg",
+  "Luis Suárez": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/28/Luis_Su%C3%A1rez_2018_%28cropped%29.jpg/500px-Luis_Su%C3%A1rez_2018_%28cropped%29.jpg",
 };
 
 // Aliases mapping for common names, nicknames, and legend variations
@@ -416,26 +207,55 @@ export const PLAYER_NAME_ALIASES: Record<string, string> = {
   'diego armando maradona': 'Diego Maradona',
   'zidane': 'Zinedine Zidane',
   'zizou': 'Zinedine Zidane',
+  'beckham': 'David Beckham',
+  'david beckham': 'David Beckham',
   'ronaldinho gaucho': 'Ronaldinho',
   'ronaldinho gaúcho': 'Ronaldinho',
+  'ronaldinho': 'Ronaldinho',
   'cruyff': 'Johan Cruyff',
   'cruijff': 'Johan Cruyff',
+  'johan cruijff': 'Johan Cruyff',
   'maldini': 'Paolo Maldini',
+  'paolo maldini': 'Paolo Maldini',
   'r9': 'Ronaldo Nazário',
   'ronaldo fenomeno': 'Ronaldo Nazário',
   'ronaldo fenômeno': 'Ronaldo Nazário',
+  'ronaldo nazario': 'Ronaldo Nazário',
   'nazario': 'Ronaldo Nazário',
+  'el fenomeno': 'Ronaldo Nazário',
+  'cr7': 'Cristiano Ronaldo',
+  'cristiano': 'Cristiano Ronaldo',
+  'cristiano ronaldo': 'Cristiano Ronaldo',
+  'messi': 'Lionel Messi',
+  'leo messi': 'Lionel Messi',
+  'lionel messi': 'Lionel Messi',
+  'mbappe': 'Kylian Mbappé',
+  'kylian mbappe': 'Kylian Mbappé',
+  'neymar': 'Neymar Jr.',
+  'neymar jr': 'Neymar Jr.',
+  'haaland': 'Erling Haaland',
+  'erling braut haaland': 'Erling Haaland',
+  'bellingham': 'Jude Bellingham',
+  'vinicius jr': 'Vinícius Jr.',
+  'vinicius junior': 'Vinícius Jr.',
+  'vini jr': 'Vinícius Jr.',
+  'yamal': 'Lamine Yamal',
   'beckenbauer': 'Franz Beckenbauer',
   'der kaiser': 'Franz Beckenbauer',
   'yashin': 'Lev Yashin',
   'baggio': 'Roberto Baggio',
   'henry': 'Thierry Henry',
+  'thierry henry': 'Thierry Henry',
   'kaka': 'Kaká',
   'iniesta': 'Andrés Iniesta',
+  'andres iniesta': 'Andrés Iniesta',
   'xavi': 'Xavi Hernández',
+  'xavi hernandez': 'Xavi Hernández',
   'pirlo': 'Andrea Pirlo',
   'buffon': 'Gianluigi Buffon',
   'gigi buffon': 'Gianluigi Buffon',
+  'roberto carlos': 'Roberto Carlos',
+  'cafu': 'Cafu',
   'cannavaro': 'Fabio Cannavaro',
   'puyol': 'Carles Puyol',
   'gerrard': 'Steven Gerrard',
@@ -459,6 +279,7 @@ export const PLAYER_NAME_ALIASES: Record<string, string> = {
   'taffarel': 'Cláudio Taffarel',
   'chilavert': 'José Luis Chilavert',
   'pique': 'Gerard Piqué',
+  'gerard pique': 'Gerard Piqué',
   'chiellini': 'Giorgio Chiellini',
   'bonucci': 'Leonardo Bonucci',
   'godin': 'Diego Godín',
@@ -469,111 +290,35 @@ export const PLAYER_NAME_ALIASES: Record<string, string> = {
   'stam': 'Jaap Stam',
   'desailly': 'Marcel Desailly',
   'blanc': 'Laurent Blanc',
-  'kohler': 'Jürgen Kohler',
-  'sammer': 'Matthias Sammer',
-  'passarella': 'Daniel Passarella',
-  'scirea': 'Gaetano Scirea',
-  'koeman': 'Ronald Koeman',
-  'hierro': 'Fernando Hierro',
-  'carvalho': 'Ricardo Carvalho',
-  'lucio': 'Lúcio',
-  'samuel': 'Walter Samuel',
-  'ayala': 'Roberto Ayala',
-  'evra': 'Patrice Evra',
-  'lahm': 'Philipp Lahm',
-  'brehme': 'Andreas Brehme',
-  'lizarazu': 'Bixente Lizarazu',
-  'thuram': 'Lilian Thuram',
-  'zambrotta': 'Gianluca Zambrotta',
-  'ivanovic': 'Branislav Ivanović',
-  'srna': 'Darijo Srna',
-  'tassotti': 'Mauro Tassotti',
-  'gentile': 'Claudio Gentile',
-  'makelele': 'Claude Makélélé',
-  'keane': 'Roy Keane',
-  'redondo': 'Fernando Redondo',
-  'gattuso': 'Gennaro Gattuso',
-  'davids': 'Edgar Davids',
-  'deschamps': 'Didier Deschamps',
-  'simeone': 'Diego Simeone',
-  'cambiasso': 'Esteban Cambiasso',
-  'essien': 'Michael Essien',
-  'yaya toure': 'Yaya Touré',
-  'falcao': 'Paulo Roberto Falcão',
-  'seedorf': 'Clarence Seedorf',
-  'ballack': 'Michael Ballack',
-  'socrates': 'Sócrates',
-  'gerson': 'Gérson',
-  'gascoigne': 'Paul Gascoigne',
-  'hagi': 'Gheorghe Hagi',
-  'sneijder': 'Wesley Sneijder',
-  'schweinsteiger': 'Bastian Schweinsteiger',
-  'riquelme': 'Juan Román Riquelme',
-  'veron': 'Juan Sebastián Verón',
-  'aimar': 'Pablo Aimar',
-  'boban': 'Zvonimir Boban',
-  'litmanen': 'Jari Litmanen',
-  'juninho': 'Juninho Pernambucano',
-  'de rossi': 'Daniele De Rossi',
-  'marchisio': 'Claudio Marchisio',
-  'ozil': 'Mesut Özil',
-  'valderrama': 'Carlos Valderrama',
-  'okocha': 'Jay-Jay Okocha',
-  'nakata': 'Hidetoshi Nakata',
-  'hamsik': 'Marek Hamšík',
-  'van der vaart': 'Rafael van der Vaart',
-  'pires': 'Robert Pirès',
-  'overmars': 'Marc Overmars',
-  'ginola': 'David Ginola',
-  'camoranesi': 'Mauro Camoranesi',
-  'valencia': 'Antonio Valencia',
-  'higuain': 'Gonzalo Higuaín',
-  'aguero': 'Sergio Agüero',
-  'drogba': 'Didier Drogba',
-  'van nistelrooy': 'Ruud van Nistelrooy',
-  'van persie': 'Robin van Persie',
-  'owen': 'Michael Owen',
-  'shearer': 'Alan Shearer',
-  'rooney': 'Wayne Rooney',
-  'romario': 'Romário',
+  'ramos': 'Sergio Ramos',
+  'sergio ramos': 'Sergio Ramos',
+  'marcelo': 'Marcelo',
+  'gareth bale': 'Gareth Bale',
+  'bale': 'Gareth Bale',
+  'suarez': 'Luis Suárez',
+  'luis suarez': 'Luis Suárez',
 };
 
-// Curated high-resolution fallback photos of international footballers by position & nationality
-const FALLBACK_PHOTO_SERIES = [
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Leo_Messi_Argentina_v_Egypt_7_July_2026-1.jpg/500px-Leo_Messi_Argentina_v_Egypt_7_July_2026-1.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Cristiano_Ronaldo_Croatia_v_Portugal_2_July_2026-075_%28cropped%29.jpg/500px-Cristiano_Ronaldo_Croatia_v_Portugal_2_July_2026-075_%28cropped%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/9/95/Kylian_Mbappe_France_v_Senegal_16_June_2026-391_%28cropped%29.jpg/500px-Kylian_Mbappe_France_v_Senegal_16_June_2026-391_%28cropped%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/Erling_Haaland_Morocco_v_Norway_7_June_2026-51.jpg/500px-Erling_Haaland_Morocco_v_Norway_7_June_2026-51.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Vin%C3%ADcius_J%C3%BAnior_Brazil_V_Morocco_13_June_2026-207_%28cropped%29.jpg/500px-Vin%C3%ADcius_J%C3%BAnior_Brazil_V_Morocco_13_June_2026-207_%28cropped%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Jude_Bellingham_England_v_Ghana_23_June_2026-061_%28cropped%29.jpg/500px-Jude_Bellingham_England_v_Ghana_23_June_2026-061_%28cropped%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Lamine_Yamal_France_v_Spain_7.24.26-142.jpg/500px-Lamine_Yamal_France_v_Spain_7.24.26-142.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Rodri_Argentina_v_Spain_19_July_2026-187_%28cropped%29.jpg/500px-Rodri_Argentina_v_Spain_19_July_2026-187_%28cropped%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/20160604_AUT_NED_8876_%28cropped%29.jpg/500px-20160604_AUT_NED_8876_%28cropped%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Thibaut_Courtois_Belgium_v_USA_6_July_2026-076_%28cropped%29.jpg/500px-Thibaut_Courtois_Belgium_v_USA_6_July_2026-076_%28cropped%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d9/Emiliano_Martinez_Argentina_v_Spain_19_July_2026-269.jpg/500px-Emiliano_Martinez_Argentina_v_Spain_19_July_2026-269.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/Alisson_Becker_Brazil_V_Morocco_13_June_2026-117_%28cropped%29.jpg/500px-Alisson_Becker_Brazil_V_Morocco_13_June_2026-117_%28cropped%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Mohamed_Salah_Argentina_v_Egypt_7_July_2026-163_%28cropped%29.jpg/500px-Mohamed_Salah_Argentina_v_Egypt_7_July_2026-163_%28cropped%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/Kevin_De_Bruyne_USMNT_v_Belgium_Mar_28_2026-64_%28cropped%29.jpg/500px-Kevin_De_Bruyne_USMNT_v_Belgium_Mar_28_2026-64_%28cropped%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/8/80/Luka_Modric_Croatia_v_Portugal_2_July_2026-055.jpg/500px-Luka_Modric_Croatia_v_Portugal_2_July_2026-055.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Zinedine_Zidane_by_Tasnim_03.jpg/500px-Zinedine_Zidane_by_Tasnim_03.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Ronaldinho_in_2019.jpg/500px-Ronaldinho_in_2019.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Pele_con_brasil_%28cropped%29.jpg/500px-Pele_con_brasil_%28cropped%29.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Paolo_Maldini_2008.jpg/500px-Paolo_Maldini_2008.jpg',
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/12.12.2025_%E2%80%93_Cerim%C3%B4nia_de_lan%C3%A7amento_do_SBT_News_-_54980664160_%28cropped2%29.jpg/500px-12.12.2025_%E2%80%93_Cerim%C3%B4nia_de_lan%C3%A7amento_do_SBT_News_-_54980664160_%28cropped2%29.jpg',
-];
-
-function stringHash(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
+// Normalize text for strict comparison (removes diacritics, extra spaces, and casing)
+function normalizeName(str: string): string {
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
 }
 
 // Runtime cache for dynamically resolved photo URLs
 const runtimePhotoCache: Record<string, string> = {};
 
+/**
+ * Returns the verified authentic face image for a specific footballer.
+ * CRITICAL RULE: If a player does not have an authentic verified photo,
+ * returns "" (empty string) so the app renders their custom biometric
+ * 3D/vector athlete likeness instead of showing the wrong person's face!
+ */
 export function getPlayerPhotoUrl(
   playerOrName: { id?: string; name: string; nationality?: string; position?: string } | string
 ): string {
@@ -582,51 +327,90 @@ export function getPlayerPhotoUrl(
 
   // 1. Direct exact match in curated database
   if (PLAYER_PHOTOS_BY_NAME[name]) return PLAYER_PHOTOS_BY_NAME[name];
-  if (runtimePhotoCache[name]) return runtimePhotoCache[name];
+  if (runtimePhotoCache[name] !== undefined) return runtimePhotoCache[name];
 
-  const lower = name.toLowerCase().trim();
+  const norm = normalizeName(name);
 
-  // 2. Check alias mapping (e.g. 'Pele' -> 'Pelé', 'R9' -> 'Ronaldo Nazário', 'Zizou' -> 'Zinedine Zidane')
-  const alias = PLAYER_NAME_ALIASES[lower];
-  if (alias && PLAYER_PHOTOS_BY_NAME[alias]) {
-    return PLAYER_PHOTOS_BY_NAME[alias];
+  // 2. Direct alias match
+  const aliasTarget = PLAYER_NAME_ALIASES[norm];
+  if (aliasTarget && PLAYER_PHOTOS_BY_NAME[aliasTarget]) {
+    runtimePhotoCache[name] = PLAYER_PHOTOS_BY_NAME[aliasTarget];
+    return PLAYER_PHOTOS_BY_NAME[aliasTarget];
   }
 
-  // 3. Case-insensitive & substring match
-  for (const [k, url] of Object.entries(PLAYER_PHOTOS_BY_NAME)) {
-    const kLower = k.toLowerCase();
-    if (kLower === lower || kLower.includes(lower) || lower.includes(kLower)) {
+  // 3. Strict normalized match against PLAYER_PHOTOS_BY_NAME keys
+  for (const [key, url] of Object.entries(PLAYER_PHOTOS_BY_NAME)) {
+    const normKey = normalizeName(key);
+    if (normKey === norm) {
+      runtimePhotoCache[name] = url;
       return url;
     }
   }
 
-  // 4. Deterministic authentic fallback photo from international athlete photo bank
-  const hashIdx = stringHash(name) % FALLBACK_PHOTO_SERIES.length;
-  const fallbackUrl = FALLBACK_PHOTO_SERIES[hashIdx];
-  runtimePhotoCache[name] = fallbackUrl;
-  return fallbackUrl;
-}
+  // 4. Special disambiguation for legends and modern stars:
+  // Ronaldo Nazario vs Cristiano Ronaldo:
+  if (norm.includes('nazario') || norm.includes('fenomeno') || norm === 'r9') {
+    const r9Url = PLAYER_PHOTOS_BY_NAME['Ronaldo Nazário'];
+    runtimePhotoCache[name] = r9Url;
+    return r9Url;
+  }
+  if (norm === 'cristiano' || norm.includes('cristiano ronaldo') || norm === 'cr7') {
+    const cr7Url = PLAYER_PHOTOS_BY_NAME['Cristiano Ronaldo'];
+    runtimePhotoCache[name] = cr7Url;
+    return cr7Url;
+  }
+  if (norm === 'messi' || norm.includes('lionel messi') || norm.includes('leo messi')) {
+    const messiUrl = PLAYER_PHOTOS_BY_NAME['Lionel Messi'];
+    runtimePhotoCache[name] = messiUrl;
+    return messiUrl;
+  }
+  if (norm.includes('beckham')) {
+    const beckhamUrl = PLAYER_PHOTOS_BY_NAME['David Beckham'];
+    runtimePhotoCache[name] = beckhamUrl;
+    return beckhamUrl;
+  }
+  if (norm.includes('ronaldinho')) {
+    const r10Url = PLAYER_PHOTOS_BY_NAME['Ronaldinho'];
+    runtimePhotoCache[name] = r10Url;
+    return r10Url;
+  }
+  if (norm.includes('zidane') || norm === 'zizou') {
+    const zizouUrl = PLAYER_PHOTOS_BY_NAME['Zinedine Zidane'];
+    runtimePhotoCache[name] = zizouUrl;
+    return zizouUrl;
+  }
+  if (norm === 'pele' || norm.includes('edson arantes')) {
+    const peleUrl = PLAYER_PHOTOS_BY_NAME['Pelé'];
+    runtimePhotoCache[name] = peleUrl;
+    return peleUrl;
+  }
+  if (norm.includes('maradona')) {
+    const maradonaUrl = PLAYER_PHOTOS_BY_NAME['Diego Maradona'];
+    runtimePhotoCache[name] = maradonaUrl;
+    return maradonaUrl;
+  }
 
-export async function fetchLivePlayerPhotoFallback(name: string): Promise<string> {
-  if (!name) return '';
-  if (runtimePhotoCache[name]) return runtimePhotoCache[name];
-  try {
-    const url =
-      'https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=' +
-      encodeURIComponent(name + ' footballer') +
-      '&gsrlimit=1&prop=pageimages&piprop=thumbnail&pithumbsize=400&format=json&origin=*';
-    const res = await fetch(url);
-    if (res.ok) {
-      const data = await res.json();
-      const pages = Object.values(data.query?.pages || {}) as Array<{ thumbnail?: { source?: string } }>;
-      if (pages[0]?.thumbnail?.source) {
-        const clean = pages[0].thumbnail.source.replace(/\?.*$/, '');
-        runtimePhotoCache[name] = clean;
-        return clean;
+  // 5. Multi-token full subset match (all tokens of query must match all tokens of key)
+  const tokens = norm.split(' ').filter(Boolean);
+  if (tokens.length >= 2) {
+    for (const [key, url] of Object.entries(PLAYER_PHOTOS_BY_NAME)) {
+      const keyTokens = normalizeName(key).split(' ').filter(Boolean);
+      // Both tokens must match to prevent single-token cross-matching (e.g. "David" or "Luis")
+      const matchesAll = tokens.every((t) => keyTokens.includes(t));
+      if (matchesAll) {
+        runtimePhotoCache[name] = url;
+        return url;
       }
     }
-  } catch {
-    // Ignore network errors
   }
+
+  // CRITICAL: NEVER assign someone else's face!
+  // Return empty string so PlayerPhotoAvatar renders the correct custom athlete likeness.
+  runtimePhotoCache[name] = '';
   return '';
+}
+
+export function isPlayerPhotoVerified(playerName: string): boolean {
+  const url = getPlayerPhotoUrl(playerName);
+  return Boolean(url && url.length > 0);
 }

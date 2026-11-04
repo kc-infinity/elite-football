@@ -1,12 +1,37 @@
 import { PLAYERS_10000_DB } from './players10000Database';
-export type PlayerRarity = 'Common' | 'Rare' | 'Elite' | 'World Class' | 'Legendary' | 'Special Edition';
-export type PositionCode = 'ST' | 'CF' | 'LW' | 'RW' | 'LM' | 'RM' | 'CAM' | 'CM' | 'CDM' | 'LB' | 'CB' | 'RB' | 'GK';
+
+export type PlayerRarity =
+  | 'Common'
+  | 'Rare'
+  | 'Elite'
+  | 'World Class'
+  | 'Legendary'
+  | 'Special Edition';
+
+export type PositionCode =
+  | 'ST'
+  | 'CF'
+  | 'LW'
+  | 'RW'
+  | 'LM'
+  | 'RM'
+  | 'CAM'
+  | 'CM'
+  | 'CDM'
+  | 'LB'
+  | 'LWB'
+  | 'CB'
+  | 'RB'
+  | 'RWB'
+  | 'GK';
 
 export const ALL_SQUAD_POSITIONS: PositionCode[] = [
   'GK',
   'LB',
+  'LWB',
   'CB',
   'RB',
+  'RWB',
   'CDM',
   'CM',
   'CAM',
@@ -179,8 +204,10 @@ export const FORMATIONS: Record<FormationName, FormationSlot[]> = {
 export function normalizeSlotPosition(slotRole: PositionCode, slotLabel: string): PositionCode {
   const lbl = slotLabel.toUpperCase();
   if (lbl === 'GK') return 'GK';
-  if (lbl === 'LB' || lbl === 'LWB') return 'LB';
-  if (lbl === 'RB' || lbl === 'RWB') return 'RB';
+  if (lbl === 'LWB') return 'LWB';
+  if (lbl === 'RWB') return 'RWB';
+  if (lbl === 'LB') return 'LB';
+  if (lbl === 'RB') return 'RB';
   if (lbl === 'CB' || lbl === 'LCB' || lbl === 'CCB' || lbl === 'RCB') return 'CB';
   if (lbl === 'CDM' || lbl === 'LCDM' || lbl === 'RCDM') return 'CDM';
   if (lbl === 'CM' || lbl === 'LCM' || lbl === 'RCM') return 'CM';
@@ -204,12 +231,16 @@ export function getCompatiblePositionsForSlot(
   switch (canonical) {
     case 'GK':
       return { exact: ['GK'], compatible: ['GK'] };
+    case 'LWB':
+      return { exact: ['LWB', 'LB'], compatible: ['LM', 'LW', 'CB', 'CM'] };
+    case 'RWB':
+      return { exact: ['RWB', 'RB'], compatible: ['RM', 'RW', 'CB', 'CM'] };
     case 'LB':
-      return { exact: ['LB'], compatible: ['LM', 'CB', 'LW'] };
+      return { exact: ['LB', 'LWB'], compatible: ['LM', 'CB', 'LW'] };
     case 'RB':
-      return { exact: ['RB'], compatible: ['RM', 'CB', 'RW'] };
+      return { exact: ['RB', 'RWB'], compatible: ['RM', 'CB', 'RW'] };
     case 'CB':
-      return { exact: ['CB'], compatible: ['CDM', 'LB', 'RB'] };
+      return { exact: ['CB'], compatible: ['CDM', 'LB', 'RB', 'LWB', 'RWB'] };
     case 'CDM':
       return { exact: ['CDM'], compatible: ['CM', 'CB'] };
     case 'CM':
@@ -217,18 +248,18 @@ export function getCompatiblePositionsForSlot(
     case 'CAM':
       return { exact: ['CAM'], compatible: ['CF', 'CM', 'LW', 'RW', 'LM', 'RM'] };
     case 'LM':
-      return { exact: ['LM'], compatible: ['LW', 'LB', 'CM', 'CAM'] };
+      return { exact: ['LM'], compatible: ['LW', 'LB', 'LWB', 'CM', 'CAM'] };
     case 'RM':
-      return { exact: ['RM'], compatible: ['RW', 'RB', 'CM', 'CAM'] };
+      return { exact: ['RM'], compatible: ['RW', 'RB', 'RWB', 'CM', 'CAM'] };
     case 'LW':
       return { exact: ['LW'], compatible: ['LM', 'ST', 'CF', 'CAM', 'RW'] };
     case 'RW':
       return { exact: ['RW'], compatible: ['RM', 'ST', 'CF', 'CAM', 'LW'] };
     case 'CF':
-      return { exact: ['CF'], compatible: ['ST', 'CAM', 'LW', 'RW'] };
+      return { exact: ['CF', 'ST'], compatible: ['ST', 'CAM', 'LW', 'RW'] };
     case 'ST':
     default:
-      return { exact: ['ST'], compatible: ['CF', 'LW', 'RW', 'CAM'] };
+      return { exact: ['ST', 'CF'], compatible: ['CF', 'LW', 'RW', 'CAM'] };
   }
 }
 

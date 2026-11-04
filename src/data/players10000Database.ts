@@ -14,10 +14,10 @@
 // ============================================================================
 
 import type { CelebrationType, FootballPlayer, PlayerAttributes, PlayerRarity, PositionCode } from './gameDatabase';
-import { PLAYER_PHOTOS_BY_NAME } from './playerPhotos';
+import { getPlayerPhotoUrl, PLAYER_PHOTOS_BY_NAME } from './playerPhotos';
 
 // Real high-resolution authentic athlete portrait photos from Wikimedia Commons
-// Used to ensure every single player in the 10,000 dataset has an authentic, realistic face image
+// Used for verified athletes to ensure no mistaken face assignments
 const VERIFIED_ATHLETE_PHOTOS = [
   "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Leo_Messi_Argentina_v_Egypt_7_July_2026-1.jpg/500px-Leo_Messi_Argentina_v_Egypt_7_July_2026-1.jpg",
   "https://upload.wikimedia.org/wikipedia/commons/thumb/2/26/Cristiano_Ronaldo_Croatia_v_Portugal_2_July_2026-075_%28cropped%29.jpg/500px-Cristiano_Ronaldo_Croatia_v_Portugal_2_July_2026-075_%28cropped%29.jpg",
@@ -206,7 +206,13 @@ const VERIFIED_ATHLETE_PHOTOS = [
 ];
 
 // Helper to resolve player face photo url accurately
-export function resolvePlayerFacePhoto(name: string, fallbackSeed: number): string {
+// Strictly returns verified authentic photos for players to guarantee 0 face mix-ups.
+// Unknown generic players return empty string so PlayerPhotoAvatar renders their custom 3D biometric likeness.
+export function resolvePlayerFacePhoto(name: string, _fallbackSeed?: number): string {
+  const verified = getPlayerPhotoUrl(name);
+  if (verified && verified.length > 0) {
+    return verified;
+  }
   if (PLAYER_PHOTOS_BY_NAME[name]) {
     return PLAYER_PHOTOS_BY_NAME[name];
   }
@@ -214,8 +220,7 @@ export function resolvePlayerFacePhoto(name: string, fallbackSeed: number): stri
   if (PLAYER_PHOTOS_BY_NAME[cleanName]) {
     return PLAYER_PHOTOS_BY_NAME[cleanName];
   }
-  const idx = Math.abs(fallbackSeed) % VERIFIED_ATHLETE_PHOTOS.length;
-  return VERIFIED_ATHLETE_PHOTOS[idx];
+  return '';
 }
 
 // Celebration types
@@ -292,6 +297,22 @@ function generateAttributes(
         weakFoot: 3,
         skillMoves: 3,
       };
+    case 'LWB':
+    case 'RWB':
+      return {
+        pace: v(8, 4),
+        shooting: v(-15, 8),
+        passing: v(2, 6),
+        dribbling: v(3, 5),
+        defending: v(0, 4),
+        physical: v(0, 6),
+        stamina: v(7, 4),
+        skill: v(2, 5),
+        curve: v(2, 6),
+        reactions: v(1, 4),
+        weakFoot: 3,
+        skillMoves: 3,
+      };
     case 'CDM':
       return {
         pace: v(-6, 8),
@@ -337,6 +358,22 @@ function generateAttributes(
         weakFoot: 4,
         skillMoves: 4,
       };
+    case 'LM':
+    case 'RM':
+      return {
+        pace: v(7, 4),
+        shooting: v(0, 6),
+        passing: v(3, 5),
+        dribbling: v(5, 4),
+        defending: v(-16, 8),
+        physical: v(-3, 6),
+        stamina: v(5, 4),
+        skill: v(4, 4),
+        curve: v(4, 5),
+        reactions: v(2, 4),
+        weakFoot: 4,
+        skillMoves: 4,
+      };
     case 'LW':
     case 'RW':
       return {
@@ -354,6 +391,20 @@ function generateAttributes(
         skillMoves: 5,
       };
     case 'CF':
+      return {
+        pace: v(4, 5),
+        shooting: v(5, 3),
+        passing: v(4, 5),
+        dribbling: v(5, 4),
+        defending: v(-26, 8),
+        physical: v(0, 6),
+        stamina: v(2, 5),
+        skill: v(5, 3),
+        curve: v(4, 4),
+        reactions: v(4, 3),
+        weakFoot: 4,
+        skillMoves: 4,
+      };
     case 'ST':
     default:
       return {
@@ -381,13 +432,24 @@ function getRarityForRating(rating: number, isLegend: boolean): PlayerRarity {
   return 'Common';
 }
 
-function calculatePlayerPrice(rating: number, rarity: PlayerRarity, initialUnlocked?: boolean): number {
+export function calculatePlayerPrice(rating: number, rarity: PlayerRarity, initialUnlocked?: boolean): number {
   if (initialUnlocked) return 0;
-  if (rarity === 'Legendary') return Math.max(120000, 100000 + (rating - 90) * 12000);
-  if (rarity === 'World Class') return Math.max(75000, 65000 + (rating - 90) * 7000);
-  if (rarity === 'Elite') return Math.max(35000, 28000 + (rating - 85) * 5000);
-  if (rarity === 'Rare') return Math.max(12000, 9000 + (rating - 78) * 1200);
-  return Math.max(4000, 3000 + (rating - 65) * 400);
+  // Starting base price around 124,000 coins, increasing with rating and performance
+  const basePrice = 124000;
+  if (rarity === 'Legendary') {
+    return Math.round(basePrice + 520000 + Math.max(0, rating - 90) * 36000);
+  }
+  if (rarity === 'World Class') {
+    return Math.round(basePrice + 280000 + Math.max(0, rating - 90) * 22000);
+  }
+  if (rarity === 'Elite') {
+    return Math.round(basePrice + 140000 + Math.max(0, rating - 85) * 14000);
+  }
+  if (rarity === 'Rare') {
+    return Math.round(basePrice + 45000 + Math.max(0, rating - 78) * 6000);
+  }
+  // Common (65-77): starts around 124,000 up to ~155,000
+  return Math.round(basePrice + Math.max(0, rating - 65) * 2600);
 }
 
 // ============================================================================
@@ -853,9 +915,82 @@ const LEGENDS_BY_POSITION: Record<PositionCode, PlayerMetaDef[]> = {
     { name: "Emilio Butragueño", nat: "Spain", club: "Real Madrid Legend", rating: 95 },
     { name: "Jürgen Klinsmann", nat: "Germany", club: "Inter Milan Legend", rating: 95 },
   ],
-  CF: [],
-  LM: [],
-  RM: []
+  CF: [
+    { name: "Johan Cruyff", nat: "Netherlands", club: "FC Barcelona Legend", rating: 99 },
+    { name: "Diego Maradona", nat: "Argentina", club: "Napoli Legend", rating: 99 },
+    { name: "Alfredo Di Stéfano", nat: "Argentina", club: "Real Madrid Legend", rating: 98 },
+    { name: "Roberto Baggio", nat: "Italy", club: "Juventus Legend", rating: 98 },
+    { name: "Dennis Bergkamp", nat: "Netherlands", club: "Arsenal Legend", rating: 97 },
+    { name: "Francesco Totti", nat: "Italy", club: "AS Roma Legend", rating: 97 },
+    { name: "Alessandro Del Piero", nat: "Italy", club: "Juventus Legend", rating: 97 },
+    { name: "Karl-Heinz Rummenigge", nat: "Germany", club: "Bayern Munich Legend", rating: 97 },
+    { name: "Eric Cantona", nat: "France", club: "Manchester United Legend", rating: 96 },
+    { name: "Ruud Gullit", nat: "Netherlands", club: "AC Milan Legend", rating: 97 },
+    { name: "Rivaldo", nat: "Brazil", club: "FC Barcelona Legend", rating: 97 },
+    { name: "Emilio Butragueño", nat: "Spain", club: "Real Madrid Legend", rating: 95 },
+    { name: "Enzo Francescoli", nat: "Uruguay", club: "River Plate Legend", rating: 95 },
+    { name: "Gianfranco Zola", nat: "Italy", club: "Chelsea Legend", rating: 95 },
+    { name: "Kenny Dalglish", nat: "Scotland", club: "Liverpool Legend", rating: 96 },
+  ],
+  LM: [
+    { name: "Pavel Nedvěd", nat: "Czech Republic", club: "Juventus Legend", rating: 97 },
+    { name: "Ryan Giggs", nat: "Wales", club: "Manchester United Legend", rating: 97 },
+    { name: "John Barnes", nat: "England", club: "Liverpool Legend", rating: 95 },
+    { name: "Marc Overmars", nat: "Netherlands", club: "Arsenal Legend", rating: 95 },
+    { name: "David Ginola", nat: "France", club: "Tottenham Legend", rating: 94 },
+    { name: "Robert Pires", nat: "France", club: "Arsenal Legend", rating: 95 },
+    { name: "Dragan Džajić", nat: "Yugoslavia", club: "Red Star Legend", rating: 96 },
+    { name: "Zoltán Czibor", nat: "Hungary", club: "FC Barcelona Legend", rating: 95 },
+    { name: "Mario Zagallo", nat: "Brazil", club: "Botafogo Legend", rating: 95 },
+    { name: "Piet Keizer", nat: "Netherlands", club: "Ajax Legend", rating: 94 },
+    { name: "Chris Waddle", nat: "England", club: "Marseille Legend", rating: 93 },
+    { name: "Ze Roberto", nat: "Brazil", club: "Bayern Munich Legend", rating: 93 },
+    { name: "Harry Kewell", nat: "Australia", club: "Leeds United Legend", rating: 92 },
+  ],
+  RM: [
+    { name: "David Beckham", nat: "England", club: "Manchester United Legend", rating: 97 },
+    { name: "George Best", nat: "Northern Ireland", club: "Manchester United Legend", rating: 98 },
+    { name: "Luís Figo", nat: "Portugal", club: "Real Madrid Legend", rating: 97 },
+    { name: "Garrincha", nat: "Brazil", club: "Botafogo Legend", rating: 98 },
+    { name: "Jairzinho", nat: "Brazil", club: "Botafogo Legend", rating: 97 },
+    { name: "Jimmy Johnstone", nat: "Scotland", club: "Celtic Legend", rating: 94 },
+    { name: "Pierre Littbarski", nat: "Germany", club: "FC Köln Legend", rating: 94 },
+    { name: "Roberto Donadoni", nat: "Italy", club: "AC Milan Legend", rating: 95 },
+    { name: "Franco Causio", nat: "Italy", club: "Juventus Legend", rating: 94 },
+    { name: "Bruno Conti", nat: "Italy", club: "AS Roma Legend", rating: 94 },
+    { name: "Fredrik Ljungberg", nat: "Sweden", club: "Arsenal Legend", rating: 93 },
+    { name: "Mauro Camoranesi", nat: "Italy", club: "Juventus Legend", rating: 93 },
+    { name: "Antonio Valencia", nat: "Ecuador", club: "Manchester United Legend", rating: 92 },
+  ],
+  LWB: [
+    { name: "Roberto Carlos", nat: "Brazil", club: "Real Madrid Legend", rating: 97 },
+    { name: "Giacinto Facchetti", nat: "Italy", club: "Inter Milan Legend", rating: 96 },
+    { name: "Andreas Brehme", nat: "Germany", club: "Inter Milan Legend", rating: 95 },
+    { name: "Antonio Cabrini", nat: "Italy", club: "Juventus Legend", rating: 94 },
+    { name: "Branco", nat: "Brazil", club: "Porto Legend", rating: 94 },
+    { name: "Bixente Lizarazu", nat: "France", club: "Bayern Munich Legend", rating: 94 },
+    { name: "Denis Irwin", nat: "Ireland", club: "Manchester United Legend", rating: 93 },
+    { name: "Silvio Marzolini", nat: "Argentina", club: "Boca Juniors Legend", rating: 93 },
+    { name: "Leo Júnior", nat: "Brazil", club: "Flamengo Legend", rating: 94 },
+    { name: "Juan Pablo Sorín", nat: "Argentina", club: "Villarreal Legend", rating: 92 },
+    { name: "Giovanni van Bronckhorst", nat: "Netherlands", club: "FC Barcelona Legend", rating: 92 },
+  ],
+  RWB: [
+    { name: "Cafu", nat: "Brazil", club: "AC Milan Legend", rating: 98 },
+    { name: "Dani Alves", nat: "Brazil", club: "FC Barcelona Legend", rating: 97 },
+    { name: "Djalma Santos", nat: "Brazil", club: "Palmeiras Legend", rating: 96 },
+    { name: "Carlos Alberto", nat: "Brazil", club: "Santos Legend", rating: 96 },
+    { name: "Javier Zanetti", nat: "Argentina", club: "Inter Milan Legend", rating: 96 },
+    { name: "Maicon", nat: "Brazil", club: "Inter Milan Legend", rating: 95 },
+    { name: "Gianluca Zambrotta", nat: "Italy", club: "Juventus Legend", rating: 94 },
+    { name: "Claudio Gentile", nat: "Italy", club: "Juventus Legend", rating: 94 },
+    { name: "Mauro Tassotti", nat: "Italy", club: "AC Milan Legend", rating: 93 },
+    { name: "Jorginho", nat: "Brazil", club: "Bayern Munich Legend", rating: 93 },
+    { name: "Eric Gerets", nat: "Belgium", club: "PSV Legend", rating: 93 },
+    { name: "Phil Neal", nat: "England", club: "Liverpool Legend", rating: 92 },
+    { name: "Darijo Srna", nat: "Croatia", club: "Shakhtar Donetsk Legend", rating: 92 },
+    { name: "Branislav Ivanović", nat: "Serbia", club: "Chelsea Legend", rating: 92 },
+  ],
 };
 
 // ============================================================================
@@ -1482,9 +1617,86 @@ const CURRENT_SUPERSTARS_BY_POS: Record<PositionCode, PlayerMetaDef[]> = {
     { name: "Terem Moffi", nat: "Nigeria", club: "Nice", rating: 85 },
     { name: "Paul Onuachu", nat: "Nigeria", club: "Southampton", rating: 84 },
   ],
-  CF: [],
-  LM: [],
-  RM: []
+  CF: [
+    { name: "Antoine Griezmann", nat: "France", club: "Atlético Madrid", rating: 91 },
+    { name: "Christopher Nkunku", nat: "France", club: "Chelsea", rating: 88 },
+    { name: "Kai Havertz", nat: "Germany", club: "Arsenal", rating: 89 },
+    { name: "Paulo Dybala", nat: "Argentina", club: "AS Roma", rating: 89 },
+    { name: "João Félix", nat: "Portugal", club: "Chelsea", rating: 86 },
+    { name: "Memphis Depay", nat: "Netherlands", club: "Corinthians", rating: 87 },
+    { name: "Gerard Moreno", nat: "Spain", club: "Villarreal", rating: 87 },
+    { name: "Thomas Müller", nat: "Germany", club: "Bayern Munich", rating: 88 },
+    { name: "Brahim Díaz", nat: "Morocco", club: "Real Madrid", rating: 87 },
+    { name: "Ángel Correa", nat: "Argentina", club: "Atlético Madrid", rating: 86 },
+    { name: "Giacomo Raspadori", nat: "Italy", club: "Napoli", rating: 85 },
+    { name: "Amine Gouiri", nat: "Algeria", club: "Rennes", rating: 85 },
+    { name: "Jonathan Burkardt", nat: "Germany", club: "Mainz", rating: 84 },
+    { name: "Ferran Torres", nat: "Spain", club: "FC Barcelona", rating: 85 },
+    { name: "Cody Gakpo", nat: "Netherlands", club: "Liverpool", rating: 87 },
+  ],
+  LM: [
+    { name: "Nico Williams", nat: "Spain", club: "Athletic Club", rating: 91 },
+    { name: "Luis Díaz", nat: "Colombia", club: "Liverpool", rating: 90 },
+    { name: "Gabriel Martinelli", nat: "Brazil", club: "Arsenal", rating: 89 },
+    { name: "Kingsley Coman", nat: "France", club: "Bayern Munich", rating: 88 },
+    { name: "Bradley Barcola", nat: "France", club: "Paris Saint-Germain", rating: 88 },
+    { name: "Anthony Gordon", nat: "England", club: "Newcastle United", rating: 88 },
+    { name: "Harvey Barnes", nat: "England", club: "Newcastle United", rating: 86 },
+    { name: "Samuel Lino", nat: "Brazil", club: "Atlético Madrid", rating: 86 },
+    { name: "Mattia Zaccagni", nat: "Italy", club: "Lazio", rating: 86 },
+    { name: "Kaoru Mitoma", nat: "Japan", club: "Brighton", rating: 88 },
+    { name: "Filip Kostić", nat: "Serbia", club: "Fenerbahçe", rating: 85 },
+    { name: "Karim Adeyemi", nat: "Germany", club: "Borussia Dortmund", rating: 86 },
+    { name: "Jack Grealish", nat: "England", club: "Manchester City", rating: 87 },
+    { name: "Yannick Carrasco", nat: "Belgium", club: "Al-Shabab", rating: 86 },
+  ],
+  RM: [
+    { name: "Michael Olise", nat: "France", club: "Bayern Munich", rating: 90 },
+    { name: "Leroy Sané", nat: "Germany", club: "Bayern Munich", rating: 89 },
+    { name: "Bryan Mbeumo", nat: "Cameroon", club: "Brentford", rating: 87 },
+    { name: "Jarrod Bowen", nat: "England", club: "West Ham United", rating: 88 },
+    { name: "Leon Bailey", nat: "Jamaica", club: "Aston Villa", rating: 86 },
+    { name: "Takefusa Kubo", nat: "Japan", club: "Real Sociedad", rating: 88 },
+    { name: "Pedro Neto", nat: "Portugal", club: "Chelsea", rating: 87 },
+    { name: "Viktor Tsygankov", nat: "Ukraine", club: "Girona", rating: 86 },
+    { name: "Dejan Kulusevski", nat: "Sweden", club: "Tottenham Hotspur", rating: 88 },
+    { name: "Brennan Johnson", nat: "Wales", club: "Tottenham Hotspur", rating: 86 },
+    { name: "Anthony Elanga", nat: "Sweden", club: "Nottingham Forest", rating: 85 },
+    { name: "Donyell Malen", nat: "Netherlands", club: "Borussia Dortmund", rating: 86 },
+    { name: "Johan Bakayoko", nat: "Belgium", club: "PSV Eindhoven", rating: 87 },
+    { name: "Amad Diallo", nat: "Ivory Coast", club: "Manchester United", rating: 85 },
+  ],
+  LWB: [
+    { name: "Federico Dimarco", nat: "Italy", club: "Inter Milan", rating: 89 },
+    { name: "Alejandro Grimaldo", nat: "Spain", club: "Bayer Leverkusen", rating: 90 },
+    { name: "Nuno Mendes", nat: "Portugal", club: "Paris Saint-Germain", rating: 88 },
+    { name: "Destiny Udogie", nat: "Italy", club: "Tottenham Hotspur", rating: 88 },
+    { name: "Ferland Mendy", nat: "France", club: "Real Madrid", rating: 88 },
+    { name: "Rayan Aït-Nouri", nat: "Algeria", club: "Wolverhampton", rating: 86 },
+    { name: "Caio Henrique", nat: "Brazil", club: "AS Monaco", rating: 85 },
+    { name: "Pervis Estupiñán", nat: "Ecuador", club: "Brighton", rating: 86 },
+    { name: "Adrien Truffert", nat: "France", club: "Rennes", rating: 84 },
+    { name: "Miguel Gutiérrez", nat: "Spain", club: "Girona", rating: 86 },
+    { name: "Sergio Gómez", nat: "Spain", club: "Real Sociedad", rating: 84 },
+    { name: "Antonee Robinson", nat: "USA", club: "Fulham", rating: 86 },
+    { name: "David Raum", nat: "Germany", club: "RB Leipzig", rating: 86 },
+    { name: "Robin Gosens", nat: "Germany", club: "Fiorentina", rating: 84 },
+  ],
+  RWB: [
+    { name: "Jeremie Frimpong", nat: "Netherlands", club: "Bayer Leverkusen", rating: 91 },
+    { name: "Pedro Porro", nat: "Spain", club: "Tottenham Hotspur", rating: 89 },
+    { name: "Denzel Dumfries", nat: "Netherlands", club: "Inter Milan", rating: 88 },
+    { name: "Jonathan Clauss", nat: "France", club: "Nice", rating: 86 },
+    { name: "Nahuel Molina", nat: "Argentina", club: "Atlético Madrid", rating: 87 },
+    { name: "Vanderson", nat: "Brazil", club: "AS Monaco", rating: 86 },
+    { name: "Daniel Muñoz", nat: "Colombia", club: "Crystal Palace", rating: 86 },
+    { name: "Malo Gusto", nat: "France", club: "Chelsea", rating: 87 },
+    { name: "Timothy Weah", nat: "USA", club: "Juventus", rating: 85 },
+    { name: "Yan Couto", nat: "Brazil", club: "Borussia Dortmund", rating: 85 },
+    { name: "Reece James", nat: "England", club: "Chelsea", rating: 89 },
+    { name: "Wilfried Singo", nat: "Ivory Coast", club: "AS Monaco", rating: 85 },
+    { name: "Yukinari Sugawara", nat: "Japan", club: "Southampton", rating: 84 },
+  ],
 };
 
 // ============================================================================
@@ -1595,7 +1807,23 @@ function pickRandomName(seed: number, pos: PositionCode): { name: string; nat: s
 // MAIN GENERATOR: BUILDS EXACTLY 10,000 FOOTBALL PLAYERS (1,000 PER POSITION)
 // ============================================================================
 export function build10000PlayersDatabase(): FootballPlayer[] {
-  const allPositions: PositionCode[] = ['GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'LW', 'RW', 'ST'];
+  const allPositions: PositionCode[] = [
+    'GK',
+    'CB',
+    'LB',
+    'RB',
+    'LWB',
+    'RWB',
+    'CDM',
+    'CM',
+    'CAM',
+    'LM',
+    'RM',
+    'LW',
+    'RW',
+    'CF',
+    'ST',
+  ];
   const players: FootballPlayer[] = [];
 
   // Track existing IDs & names to guarantee uniqueness

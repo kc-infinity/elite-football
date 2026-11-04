@@ -1253,7 +1253,19 @@ export class FootballEngine3D {
     }
   }
 
-  private releaseChargedShot() {
+  public startChargingShot(action: 'shoot' | 'curve' | 'chip' = 'shoot') {
+    if (this.chargingAction === 'none') {
+      this.chargingAction = action;
+      this.chargeLevel = 24;
+      const p = this.getControlledPlayer();
+      if (p) {
+        const goalX = p.teamSide === 'home' ? PITCH_WIDTH / 2 : -PITCH_WIDTH / 2;
+        p.facingAngle = Math.atan2(0 - p.z, goalX - p.x);
+      }
+    }
+  }
+
+  public releaseChargedShot() {
     const action = this.chargingAction;
     const powerPct = THREE.MathUtils.clamp(this.chargeLevel, 20, 100) / 100;
     this.chargingAction = 'none';

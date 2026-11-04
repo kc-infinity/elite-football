@@ -144,9 +144,31 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
   const [tipIndex, setTipIndex] = useState(0);
   const [showControlGuideModal, setShowControlGuideModal] = useState(false);
   const [showOpponentSquadPopup, setShowOpponentSquadPopup] = useState(false);
+  const [deviceFormFactor, setDeviceFormFactor] = useState<'mobile' | 'tablet' | 'desktop'>(() => {
+    if (typeof window === 'undefined') return 'desktop';
+    const w = window.innerWidth;
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    if (w <= 767) return 'mobile';
+    if (w <= 1180 || (isTouch && w <= 1366)) return 'tablet';
+    return 'desktop';
+  });
+
+  useEffect(() => {
+    const onResize = () => {
+      const w = window.innerWidth;
+      const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      if (w <= 767) setDeviceFormFactor('mobile');
+      else if (w <= 1180 || (isTouch && w <= 1366)) setDeviceFormFactor('tablet');
+      else setDeviceFormFactor('desktop');
+      setShowTouchControls(w < 1180 || isTouch);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   const [showTouchControls, setShowTouchControls] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
-    return window.innerWidth < 1024 || 'ontouchstart' in window;
+    return window.innerWidth < 1180 || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   });
   const [touchKnob, setTouchKnob] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [touchSprinting, setTouchSprinting] = useState<boolean>(false);
@@ -353,13 +375,20 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
   useEffect(() => {
     if (hud.isMatchOver && !matchRecorded) {
       setMatchRecorded(true);
-      const winBonus = hud.homeScore > hud.awayScore ? 3500 : hud.homeScore === hud.awayScore ? 1500 : 800;
-      const goalBonus = hud.homeScore * 600;
+      // Realistic performance-based rewards calibrated for market prices
+      const won = hud.homeScore > hud.awayScore;
+      const draw = hud.homeScore === hud.awayScore;
+      const baseReward = won ? 45000 : draw ? 20000 : 10000;
+      const goalBonus = hud.homeScore * 12000;
+      const cleanSheetBonus = hud.awayScore === 0 ? 25000 : 0;
+      const hatTrickBonus = hud.homeScore >= 3 ? 35000 : 0;
+      const totalEarned = baseReward + goalBonus + cleanSheetBonus + hatTrickBonus;
+
       onMatchComplete({
         homeScore: hud.homeScore,
         awayScore: hud.awayScore,
         stats: hud.stats,
-        coinsEarned: winBonus + goalBonus,
+        coinsEarned: totalEarned,
       });
     }
   }, [hud.isMatchOver, matchRecorded]);
@@ -475,12 +504,9 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
             </div>
           </div>
 
-          <div className="w-full grid grid-cols-2 md:grid-cols-5 gap-3 text-xs text-slate-300 border-t border-white/10 pt-4 font-mono">
-            <div>[P] Short Pass · [U] Through</div>
-            <div>[S] Shoot · [C] Curve Shot</div>
-            <div>[K] Skill Move · [I] Sprint</div>
-            <div>[W/O/A/D] Move · [Mouse] Aim</div>
-            <div>[D/T] Defend · [V] GK Save</div>
+          <div className="w-full flex items-center justify-between text-xs text-slate-400 border-t border-white/10 pt-4 font-mono">
+            <span>OFFICIAL MATCH PREVIEW</span>
+            <span className="text-[#10B981] font-bold">11V11 TOURNAMENT EDITION</span>
           </div>
         </div>
       )}
@@ -628,18 +654,18 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
             </div>
           )}
 
-          {/* Top-Right Camera Switcher & Quick Actions */}
-          <div className="pointer-events-auto flex flex-wrap items-center gap-2">
+          {/* Top-Right Camera Switcher & Streamlined Broadcast Quick Actions */}
+          <div className="pointer-events-auto flex items-center gap-2">
             {/* Camera Selector */}
-            <div className="flex items-center bg-[#070A0E]/85 backdrop-blur-md border border-white/15 rounded-lg p-1">
-              <Camera className="w-3.5 h-3.5 text-slate-400 ml-2 mr-1.5" />
-              {CAMERA_MODES.map((cam) => (
+            <div className="flex items-center bg-[#070A0E]/90 backdrop-blur-md border border-white/15 rounded-xl p-1 shadow-lg">
+              <Camera className="w-3.5 h-3.5 text-slate-400 ml-2 mr-1" />
+              {(['Broadcast', 'Player', 'Action'] as CameraMode[]).map((cam) => (
                 <button
                   key={cam}
                   onClick={() => handleCameraSwitch(cam)}
-                  className={`px-2.5 py-1 text-xs font-medium rounded transition-colors whitespace-nowrap ${
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap ${
                     hud.cameraMode === cam
-                      ? 'bg-[#10B981] text-[#070A0E] font-semibold'
+                      ? 'bg-[#10B981] text-[#070A0E]'
                       : 'text-slate-300 hover:text-white'
                   }`}
                 >
@@ -648,114 +674,53 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
               ))}
             </div>
 
-            {/* View Opponent Squad (Starting XI & Formation) Without Interrupting Match */}
-            <button
-              type="button"
-              onClick={() => {
-                SoundEngine.playUIClick();
-                setShowOpponentSquadPopup((v) => !v);
-              }}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
-                showOpponentSquadPopup
-                  ? 'bg-[#38BDF8] text-[#070A0E] border-[#38BDF8] font-semibold shadow-lg'
-                  : 'bg-[#070A0E]/85 text-[#38BDF8] border-[#38BDF8]/40 hover:border-[#38BDF8]'
-              }`}
-              title="View Opponent Starting XI, Formation & Player Ratings (Shortcut: Tab)"
-            >
-              <Users className="w-3.5 h-3.5" />
-              Opponent XI (Tab)
-            </button>
-
-            {/* Auto Play Feature (Auto / Manual Toggle) */}
+            {/* Auto Play Pill */}
             <button
               type="button"
               onClick={() => {
                 SoundEngine.playUIClick();
                 engineRef.current?.toggleAutoPlay();
               }}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer shadow-md ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer shadow-lg ${
                 hud.autoPlay
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-[#070A0E] border-white font-bold ring-2 ring-emerald-400/60 shadow-emerald-500/25'
-                  : 'bg-[#070A0E]/85 text-slate-300 border-white/20 hover:border-white/40'
+                  ? 'bg-emerald-500 text-[#070A0E] border-emerald-400 font-bold'
+                  : 'bg-[#070A0E]/90 text-slate-300 border-white/15 hover:border-white/30'
               }`}
-              title="Toggle Auto Play: AI controls active player; move joystick or press keys anytime to take manual control"
-            >
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  hud.autoPlay ? 'bg-[#070A0E] animate-ping' : 'bg-slate-500'
-                }`}
-              />
-              {hud.autoPlay ? 'AUTO PLAY: ON' : 'MANUAL PLAY'}
-            </button>
-
-            {/* Auto Player Switch Option Toggle */}
-            <button
-              type="button"
-              onClick={handleCycleAutoSwitch}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
-                hud.autoSwitchMode === 'auto'
-                  ? 'bg-[#10B981] text-[#070A0E] border-[#10B981] font-semibold'
-                  : hud.autoSwitchMode === 'air_balls'
-                  ? 'bg-[#38BDF8] text-[#070A0E] border-[#38BDF8] font-semibold'
-                  : 'bg-[#070A0E]/85 text-slate-200 border-white/15 hover:border-white/30'
-              }`}
-              title="Click to cycle Auto Player Switch mode (Auto Always / Air Balls / Manual Q)"
+              title="Toggle Auto Play"
             >
               <Zap className="w-3.5 h-3.5" />
-              {hud.autoSwitchMode === 'auto'
-                ? 'Auto Switch: ON'
-                : hud.autoSwitchMode === 'air_balls'
-                ? 'Auto Switch: Air Balls'
-                : 'Auto Switch: Manual [Q]'}
+              {hud.autoPlay ? 'AUTO: ON' : 'AUTO'}
             </button>
 
-            {/* Manual GK Toggle */}
-            <button
-              onClick={() => engineRef.current?.toggleManualGK()}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-                hud.manualGKActive
-                  ? 'bg-[#F59E0B] text-[#070A0E] border-[#F59E0B] font-semibold'
-                  : 'bg-[#070A0E]/85 text-slate-200 border-white/15 hover:border-white/30'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5" />
-              {hud.manualGKActive ? 'GK Control: ON (V)' : 'Control GK (G)'}
-            </button>
-
-            {/* Instant Replay Button */}
+            {/* Instant Replay */}
             <button
               onClick={() => engineRef.current?.triggerInstantReplay('INSTANT REPLAY')}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#070A0E]/85 text-slate-200 border border-white/15 hover:border-white/30 transition-colors whitespace-nowrap flex items-center gap-1.5"
+              className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-[#070A0E]/90 text-slate-200 border border-white/15 hover:border-white/30 transition-colors whitespace-nowrap flex items-center gap-1.5 shadow-lg"
+              title="Watch Replay"
             >
               <Eye className="w-3.5 h-3.5 text-[#38BDF8]" />
               Replay
             </button>
 
-            {/* Controls Help Toggle */}
+            {/* Opponent Starting XI Modal */}
             <button
-              onClick={() => setShowControlGuideModal((v) => !v)}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#070A0E]/85 text-slate-200 border border-white/15 hover:border-white/30 transition-colors whitespace-nowrap"
+              type="button"
+              onClick={() => {
+                SoundEngine.playUIClick();
+                setShowOpponentSquadPopup((v) => !v);
+              }}
+              className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-[#070A0E]/90 text-[#38BDF8] border border-[#38BDF8]/40 hover:border-[#38BDF8] transition-colors whitespace-nowrap flex items-center gap-1.5 shadow-lg"
+              title="View Opponent Lineup"
             >
-              Controls
+              <Users className="w-3.5 h-3.5" />
+              Lineups
             </button>
 
-            {/* Touch Pad Toggle (Desktop & Mobile) */}
-            <button
-              onClick={() => setShowTouchControls((v) => !v)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap ${
-                showTouchControls
-                  ? 'bg-[#10B981] text-[#070A0E] border-[#10B981] font-semibold'
-                  : 'bg-[#070A0E]/85 text-slate-200 border-white/15 hover:border-white/30'
-              }`}
-            >
-              Touch Pad
-            </button>
-
-            {/* Audio Mute */}
+            {/* Sound Mute */}
             <button
               onClick={handleToggleMute}
-              className="p-2 rounded-lg bg-[#070A0E]/85 text-slate-200 border border-white/15 hover:border-white/30 transition-colors"
-              aria-label="Toggle Mute"
+              className="p-2 rounded-xl bg-[#070A0E]/90 text-slate-200 border border-white/15 hover:border-white/30 transition-colors shadow-lg"
+              aria-label="Toggle Audio Mute"
             >
               {muted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-[#10B981]" />}
             </button>
@@ -768,20 +733,21 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
                   SoundEngine.playUIClick();
                   setShowPostMatchStats((v) => !v);
                 }}
-                className="px-3 py-1.5 text-xs font-display font-bold rounded-lg bg-[#38BDF8]/20 hover:bg-[#38BDF8]/30 text-[#38BDF8] border border-[#38BDF8]/60 transition-colors whitespace-nowrap flex items-center gap-1.5 shadow cursor-pointer"
-                title="Toggle Post-Match Statistics Modal / View 3D Stadium & Upper Scoreboard"
+                className="px-3 py-1.5 text-xs font-display font-bold rounded-xl bg-[#38BDF8]/20 hover:bg-[#38BDF8]/30 text-[#38BDF8] border border-[#38BDF8]/60 transition-colors whitespace-nowrap flex items-center gap-1.5 shadow-lg cursor-pointer"
+                title="Toggle Match Stats"
               >
                 <Eye className="w-3.5 h-3.5" />
-                {showPostMatchStats ? 'View Stadium & Scoreboard' : 'Show Match Stats'}
+                {showPostMatchStats ? 'Pitch' : 'Stats'}
               </button>
             )}
 
-            {/* Exit Match */}
+            {/* Match Exit / Pause */}
             <button
               onClick={onExitToMenu}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-500/20 text-rose-200 border border-rose-500/40 hover:bg-rose-500/30 transition-colors whitespace-nowrap cursor-pointer"
+              className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500 hover:text-white transition-colors shadow-lg cursor-pointer"
+              title="Leave Match"
             >
-              Exit Match
+              Exit
             </button>
           </div>
         </div>
@@ -941,30 +907,27 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
               </div>
             </div>
 
-            {/* Shot Power Meter with Play Code: S Shoot */}
-            <div>
-              <div className="flex justify-between text-[11px] text-slate-300 mb-1 font-mono">
-                <span className="flex items-center gap-1.5 font-bold">
-                  <span className="px-1.5 py-0.5 rounded bg-rose-500/25 border border-rose-500/60 text-rose-300 font-mono text-[10px]">
-                    PLAY CODE: S SHOOT
-                  </span>
-                  <span className="text-slate-400">HOLD / TAP</span>
-                </span>
-                <span className="font-bold text-[#F59E0B]">{hud.shotPower}%</span>
+            {/* Shot Power Gauge (Reveals when charging shot) */}
+            {hud.shotPower > 0 && (
+              <div className="mt-2 pt-2 border-t border-white/10 animate-fadeIn">
+                <div className="flex justify-between text-[11px] text-slate-300 mb-1 font-mono">
+                  <span className="font-bold text-rose-400">SHOT POWER</span>
+                  <span className="font-bold text-[#F59E0B]">{Math.round(hud.shotPower)}%</span>
+                </div>
+                <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-75 ${
+                      hud.shotPower > 80
+                        ? 'bg-rose-500'
+                        : hud.shotPower > 45
+                        ? 'bg-[#F59E0B]'
+                        : 'bg-[#10B981]'
+                    }`}
+                    style={{ width: `${hud.shotPower}%` }}
+                  />
+                </div>
               </div>
-              <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
-                <div
-                  className={`h-full transition-all duration-75 ${
-                    hud.shotPower > 80
-                      ? 'bg-rose-500'
-                      : hud.shotPower > 45
-                      ? 'bg-[#F59E0B]'
-                      : 'bg-[#10B981]'
-                  }`}
-                  style={{ width: `${hud.shotPower}%` }}
-                />
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Bottom-Center: 2D Tactical Mini-Map Radar */}
@@ -999,76 +962,19 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
               />
             </div>
           </div>
-
-          {/* Bottom-Right: Unobtrusive Control Bar + Instant Bicycle Kick [B] & Rainbow Flick Actions */}
-          <div className="pointer-events-auto bg-[#070A0E]/85 backdrop-blur-md border border-white/15 rounded-xl px-4 py-3 text-xs text-slate-300 font-mono space-y-2 shadow-2xl">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[11px] text-slate-400 font-sans font-semibold">
-                ACTIVE CONTROLS ({controlScheme.toUpperCase()})
-              </span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => engineRef.current?.triggerBicycleKick()}
-                  className="px-2.5 py-1 bg-[#10B981] hover:bg-[#059669] text-[#070A0E] font-display font-bold text-[11px] rounded transition-colors cursor-pointer whitespace-nowrap"
-                >
-                  🚲 BICYCLE KICK [B]
-                </button>
-                <button
-                  onClick={() => engineRef.current?.triggerRainbowFlick()}
-                  className="px-2.5 py-1 bg-[#F59E0B] hover:bg-[#D97706] text-[#070A0E] font-display font-bold text-[11px] rounded transition-colors cursor-pointer whitespace-nowrap"
-                >
-                  🌈 RAINBOW [F]
-                </button>
-              </div>
-            </div>
-            <div className="p-1 rounded bg-[#10B981]/15 border border-[#10B981]/40 flex items-center justify-between px-2">
-              <span className="text-[#10B981] font-bold">PLAY CODE: [S] SHOOT</span>
-              <span className="text-slate-300 text-[10px]">Hold S for power · Tap for quick shot</span>
-            </div>
-            <div>
-              <span className="text-[#10B981] font-bold">P</span> Pass ·{' '}
-              <span className="text-white font-bold">U</span> Through ·{' '}
-              <span className="text-[#F59E0B] font-bold">B</span> Bicycle Kick ·{' '}
-              <span className="text-[#38BDF8] font-bold">K</span> Skill
-            </div>
-            <div>
-              <span className="text-white font-bold">W/O/A/D</span> Move ·{' '}
-              <span className="text-white font-bold">I</span> Sprint ·{' '}
-              <span className="text-white font-bold">F</span> Rainbow ·{' '}
-              <span className="text-white font-bold">V</span> GK Save
-            </div>
-            <div>
-              <span className="text-white font-bold">U</span> Through ·{' '}
-              <span className="text-white font-bold">X</span> Cross ·{' '}
-              <span className="text-white font-bold">Q</span> Switch ·{' '}
-              <span className="text-white font-bold">Mouse</span> Aim
-            </div>
-            <div className="pt-1 border-t border-white/10 text-[10px] text-slate-400 flex items-center justify-between gap-2">
-              <span>
-                🚩 Corners: <strong className="text-white">{hud.stats.homeCorners}-{hud.stats.awayCorners}</strong>
-              </span>
-              <span>
-                Fouls: <strong className="text-white">{hud.stats.homeFouls}-{hud.stats.awayFouls}</strong>
-              </span>
-              <span>
-                Offsides: <strong className="text-white">{hud.stats.homeOffsides}-{hud.stats.awayOffsides}</strong>
-              </span>
-              <span>
-                🟨 <strong className="text-[#F59E0B]">{hud.stats.homeYellowCards}-{hud.stats.awayYellowCards}</strong>
-              </span>
-            </div>
-          </div>
         </div>
       )}
 
-      {/* MOBILE & TOUCH GAMEPAD OVERLAY (VIRTUAL JOYSTICK + ACTION PAD + AUTO PLAY TOGGLE) */}
+      {/* MOBILE & TABLET RESPONSIVE TOUCH GAMEPAD OVERLAY */}
       {!isLoading && !hud.isMatchOver && showTouchControls && (
-        <div className="fixed inset-x-3 sm:inset-x-6 bottom-32 sm:bottom-28 z-30 flex items-end justify-between pointer-events-none select-none">
-          {/* Left: Virtual 360° Thumbstick */}
+        <div className={`fixed inset-x-3 sm:inset-x-8 z-30 flex items-end justify-between pointer-events-none select-none ${
+          deviceFormFactor === 'tablet' ? 'bottom-24 sm:bottom-20' : 'bottom-28 sm:bottom-24'
+        }`}>
+          {/* Left: Responsive 360° Virtual Joystick */}
           <div className="flex flex-col items-center">
             {/* Auto Play indicator above joystick */}
             {hud.autoPlay && (
-              <div className="mb-2 px-2.5 py-1 rounded-full bg-[#10B981]/95 text-[#070A0E] font-mono text-[9px] font-extrabold shadow-lg flex items-center gap-1.5 animate-pulse border border-white/40">
+              <div className="mb-2 px-3 py-1 rounded-full bg-[#10B981]/95 text-[#070A0E] font-mono text-[9px] sm:text-[10px] font-extrabold shadow-lg flex items-center gap-1.5 animate-pulse border border-white/40">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#070A0E]" />
                 AI DRIVING · TOUCH TO OVERRIDE
               </div>
@@ -1086,7 +992,7 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
                 if (!joystickCenterRef.current) return;
                 const dx = e.clientX - joystickCenterRef.current.x;
                 const dy = e.clientY - joystickCenterRef.current.y;
-                const maxR = 48;
+                const maxR = deviceFormFactor === 'tablet' ? 62 : 48;
                 const dist = Math.hypot(dx, dy);
                 const clampedDist = Math.min(maxR, dist);
                 const angle = Math.atan2(dy, dx);
@@ -1105,25 +1011,31 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
                 setTouchKnob({ x: 0, y: 0 });
                 engineRef.current?.setTouchMovement(0, 0, false);
               }}
-              className="pointer-events-auto w-32 h-32 rounded-full bg-[#070A0E]/80 border-2 border-emerald-400/40 backdrop-blur-md flex items-center justify-center relative touch-none shadow-2xl ring-1 ring-white/10"
+              className={`pointer-events-auto rounded-full bg-[#070A0E]/85 border-2 border-emerald-400/40 backdrop-blur-md flex items-center justify-center relative touch-none shadow-2xl ring-1 ring-white/10 ${
+                deviceFormFactor === 'tablet' ? 'w-44 h-44' : 'w-32 h-32 sm:w-36 sm:h-36'
+              }`}
             >
-              <div className="text-[9px] font-mono font-bold text-white/50 absolute top-2">
+              <div className="text-[9px] sm:text-[10px] font-mono font-bold text-white/50 absolute top-2.5">
                 MOVE 360°
               </div>
-              <div className="w-14 h-14 rounded-full border border-white/10 absolute pointer-events-none" />
+              <div className={`rounded-full border border-white/10 absolute pointer-events-none ${
+                deviceFormFactor === 'tablet' ? 'w-20 h-20' : 'w-14 h-14'
+              }`} />
               <div
-                className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 border-2 border-white shadow-xl flex items-center justify-center transition-transform duration-75"
+                className={`rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 border-2 border-white shadow-xl flex items-center justify-center transition-transform duration-75 ${
+                  deviceFormFactor === 'tablet' ? 'w-18 h-18' : 'w-14 h-14'
+                }`}
                 style={{
                   transform: `translate(${touchKnob.x}px, ${touchKnob.y}px)`,
                 }}
               >
-                <div className="w-4 h-4 rounded-full bg-white/70 shadow-sm" />
+                <div className="w-4 h-4 rounded-full bg-white/80 shadow-sm" />
               </div>
             </div>
           </div>
 
-          {/* Right: Auto/Manual Switch + 6 eFootball Touch Buttons (Pass, Shoot, Through Pass, Sprint, Skill, Switch Player) */}
-          <div className="flex flex-col items-end gap-2">
+          {/* Right: eFootball Mobile & Tablet Action Cluster */}
+          <div className="flex flex-col items-end gap-2.5">
             {/* Quick Auto Play Toggle Pill */}
             <button
               type="button"
@@ -1131,7 +1043,7 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
                 SoundEngine.playUIClick();
                 engineRef.current?.toggleAutoPlay();
               }}
-              className={`pointer-events-auto px-3.5 py-1.5 rounded-full font-mono text-[10px] sm:text-xs font-bold border flex items-center gap-2 shadow-lg active:scale-95 transition-all cursor-pointer ${
+              className={`pointer-events-auto px-4 py-2 rounded-full font-mono text-[10px] sm:text-xs font-bold border flex items-center gap-2 shadow-lg active:scale-95 transition-all cursor-pointer ${
                 hud.autoPlay
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-[#070A0E] border-white ring-2 ring-emerald-300/60 shadow-emerald-500/25'
                   : 'bg-[#070A0E]/90 text-slate-300 border-white/25 hover:border-white/50'
@@ -1142,93 +1054,139 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
                   hud.autoPlay ? 'bg-[#070A0E] animate-ping' : 'bg-slate-500'
                 }`}
               />
-              {hud.autoPlay ? 'AUTO PLAY: ON' : 'MANUAL CONTROL'}
+              {hud.autoPlay ? 'AI PLAY: ON' : 'MANUAL'}
             </button>
 
-            {/* 6 Touch Buttons Grid */}
-            <div className="pointer-events-auto grid grid-cols-3 gap-2">
+            {/* eFootball Radial Button Arc (Enlarged and well-spaced for tablets) */}
+            <div className={`pointer-events-auto grid grid-cols-3 touch-none select-none ${
+              deviceFormFactor === 'tablet' ? 'gap-4' : 'gap-2.5'
+            }`}>
               {/* 1. THROUGH PASS */}
               <button
                 type="button"
-                onPointerDown={() => engineRef.current?.triggerMobileThroughBall()}
-                className="w-16 sm:w-20 h-12 sm:h-14 rounded-2xl bg-gradient-to-b from-sky-400 to-sky-600 active:scale-95 text-slate-950 font-display font-bold text-[10px] sm:text-xs shadow-xl border border-sky-300/60 flex flex-col items-center justify-center cursor-pointer"
-                title="Through Pass: Lead teammate into open space"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  SoundEngine.playUIClick();
+                  engineRef.current?.triggerMobileThroughBall();
+                }}
+                className={`rounded-full bg-gradient-to-br from-sky-400 to-sky-600 active:scale-90 text-slate-950 font-display font-extrabold shadow-2xl border-2 border-sky-300/80 flex flex-col items-center justify-center cursor-pointer transition-transform ${
+                  deviceFormFactor === 'tablet'
+                    ? 'w-20 h-20 text-xs sm:text-sm'
+                    : 'w-16 h-16 text-[11px]'
+                }`}
+                title="Through Pass"
               >
-                <span className="leading-tight">THROUGH</span>
-                <span className="text-[8px] font-mono text-slate-900/80">PASS</span>
+                <span className="leading-none">THROUGH</span>
               </button>
 
-              {/* 2. SKILL */}
+              {/* 2. SKILL MOVE */}
               <button
                 type="button"
-                onPointerDown={() => engineRef.current?.triggerSkillMove()}
-                className="w-16 sm:w-20 h-12 sm:h-14 rounded-2xl bg-gradient-to-b from-purple-500 to-indigo-600 active:scale-95 text-white font-display font-bold text-[10px] sm:text-xs shadow-xl border border-purple-300/60 flex flex-col items-center justify-center cursor-pointer"
-                title="Skill Move: Roulette, Rainbow, Step-over, Heel-to-heel"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  SoundEngine.playUIClick();
+                  engineRef.current?.triggerSkillMove();
+                }}
+                className={`rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 active:scale-90 text-white font-display font-extrabold shadow-2xl border-2 border-purple-300/80 flex flex-col items-center justify-center cursor-pointer transition-transform ${
+                  deviceFormFactor === 'tablet'
+                    ? 'w-20 h-20 text-xs sm:text-sm'
+                    : 'w-16 h-16 text-[11px]'
+                }`}
+                title="Skill Move: Roulette / Rainbow / Elastico"
               >
-                <span className="leading-tight">SKILL</span>
-                <span className="text-[8px] font-mono text-purple-200">MOVE</span>
+                <span className="leading-none">SKILL</span>
               </button>
 
-              {/* 3. SHOOT */}
+              {/* 3. SHOOT (Hold to charge power, release to fire strike) */}
               <button
                 type="button"
-                onPointerDown={() => engineRef.current?.triggerPlayCodeShoot(84)}
-                className="w-16 sm:w-20 h-12 sm:h-14 rounded-2xl bg-gradient-to-b from-rose-500 to-red-600 active:scale-95 text-white font-display font-bold text-[10px] sm:text-xs shadow-xl border border-rose-300/60 flex flex-col items-center justify-center cursor-pointer"
-                title="Shoot on Target"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  engineRef.current?.startChargingShot('shoot');
+                }}
+                onPointerUp={(e) => {
+                  e.preventDefault();
+                  engineRef.current?.releaseChargedShot();
+                }}
+                onPointerLeave={() => {
+                  if (hud.shotPower > 0) engineRef.current?.releaseChargedShot();
+                }}
+                className={`rounded-full bg-gradient-to-br from-rose-500 to-red-600 active:scale-90 text-white font-display font-extrabold shadow-2xl border-2 border-rose-300/80 flex flex-col items-center justify-center cursor-pointer transition-transform ring-2 ring-rose-500/30 ${
+                  deviceFormFactor === 'tablet'
+                    ? 'w-20 h-20 text-xs sm:text-sm'
+                    : 'w-16 h-16 text-[12px]'
+                }`}
+                title="Hold to charge shot, release to shoot"
               >
-                <span className="leading-tight">SHOOT</span>
-                <span className="text-[8px] font-mono text-rose-200">[S]</span>
+                <span className="leading-none">SHOOT</span>
               </button>
 
-              {/* 4. SWITCH PLAYER */}
+              {/* 4. SWITCH PLAYER / TACKLE */}
               <button
                 type="button"
-                onPointerDown={() => engineRef.current?.triggerMobileSwitchOrTackle()}
-                className="w-16 sm:w-20 h-12 sm:h-14 rounded-2xl bg-[#111722]/95 active:scale-95 text-sky-400 font-display font-bold text-[10px] sm:text-xs shadow-xl border border-sky-500/40 flex flex-col items-center justify-center cursor-pointer"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  SoundEngine.playUIClick();
+                  engineRef.current?.triggerMobileSwitchOrTackle();
+                }}
+                className={`rounded-full bg-[#111722]/95 active:scale-90 text-sky-400 font-display font-extrabold shadow-2xl border-2 border-sky-500/50 flex flex-col items-center justify-center cursor-pointer transition-transform ${
+                  deviceFormFactor === 'tablet'
+                    ? 'w-20 h-20 text-xs sm:text-sm'
+                    : 'w-16 h-16 text-[11px]'
+                }`}
                 title="Switch Player or Slide Tackle"
               >
-                <span className="leading-tight">SWITCH</span>
-                <span className="text-[8px] font-mono text-slate-300">PLAYER</span>
+                <span className="leading-none">SWITCH</span>
               </button>
 
-              {/* 5. SPRINT */}
+              {/* 5. SPRINT (Toggle burst speed) */}
               <button
                 type="button"
-                onPointerDown={() => {
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  SoundEngine.playUIClick();
                   const next = !touchSprinting;
                   setTouchSprinting(next);
+                  const maxR = deviceFormFactor === 'tablet' ? 62 : 48;
                   engineRef.current?.setTouchMovement(
-                    touchKnob.x / 48,
-                    touchKnob.y / 48,
+                    touchKnob.x / maxR,
+                    touchKnob.y / maxR,
                     next
                   );
                 }}
-                className={`w-16 sm:w-20 h-12 sm:h-14 rounded-2xl font-display font-bold text-[10px] sm:text-xs shadow-xl border active:scale-95 flex flex-col items-center justify-center cursor-pointer transition-colors ${
+                className={`rounded-full font-display font-extrabold shadow-2xl border-2 active:scale-90 flex flex-col items-center justify-center cursor-pointer transition-all ${
+                  deviceFormFactor === 'tablet'
+                    ? 'w-20 h-20 text-xs sm:text-sm'
+                    : 'w-16 h-16 text-[11px]'
+                } ${
                   touchSprinting
-                    ? 'bg-gradient-to-b from-amber-400 to-amber-600 text-slate-950 border-white shadow-amber-500/30'
-                    : 'bg-[#111722]/95 text-amber-400 border-amber-500/40'
+                    ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 border-white ring-4 ring-amber-400/50'
+                    : 'bg-[#111722]/95 text-amber-400 border-amber-500/50'
                 }`}
                 title="Toggle Sprint"
               >
-                <span className="leading-tight">SPRINT</span>
-                <span
-                  className={`text-[8px] font-mono ${
-                    touchSprinting ? 'text-slate-950 font-bold' : 'text-amber-300/70'
-                  }`}
-                >
+                <span className="leading-none">SPRINT</span>
+                <span className={`text-[8px] font-mono mt-0.5 ${touchSprinting ? 'font-bold' : 'opacity-70'}`}>
                   {touchSprinting ? 'ON' : 'OFF'}
                 </span>
               </button>
 
-              {/* 6. PASS */}
+              {/* 6. PASS (Crisp Ground / Air Pass) */}
               <button
                 type="button"
-                onPointerDown={() => engineRef.current?.triggerMobilePass()}
-                className="w-16 sm:w-20 h-12 sm:h-14 rounded-2xl bg-gradient-to-b from-emerald-400 to-emerald-600 active:scale-95 text-slate-950 font-display font-bold text-[10px] sm:text-xs shadow-xl border border-emerald-300/60 flex flex-col items-center justify-center cursor-pointer"
-                title="Ground Pass to Best Teammate"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  SoundEngine.playUIClick();
+                  engineRef.current?.triggerMobilePass();
+                }}
+                className={`rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 active:scale-90 text-slate-950 font-display font-extrabold shadow-2xl border-2 border-emerald-300/80 flex flex-col items-center justify-center cursor-pointer transition-transform ring-2 ring-emerald-500/30 ${
+                  deviceFormFactor === 'tablet'
+                    ? 'w-20 h-20 text-xs sm:text-sm'
+                    : 'w-16 h-16 text-[12px]'
+                }`}
+                title="Ground Pass"
               >
-                <span className="leading-tight">PASS</span>
-                <span className="text-[8px] font-mono text-slate-900/80">[P]</span>
+                <span className="leading-none">PASS</span>
               </button>
             </div>
           </div>

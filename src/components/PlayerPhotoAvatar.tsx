@@ -41,6 +41,16 @@ function hashSeed(str: string): number {
 
 export interface PlayerLikenessProfile {
   archetype:
+    | 'pele'
+    | 'maradona'
+    | 'ronaldinho'
+    | 'zidane'
+    | 'beckham'
+    | 'r9'
+    | 'cruyff'
+    | 'maldini'
+    | 'henry'
+    | 'buffon'
     | 'ronaldo'
     | 'messi'
     | 'mbappe'
@@ -64,6 +74,13 @@ export interface PlayerLikenessProfile {
   browArch: number;
   beardStyle: 'none' | 'stubble' | 'goatee' | 'full_trimmed' | 'full_thick' | 'mustache_soul';
   hairStyle:
+    | 'pele_crop'
+    | 'maradona_curls'
+    | 'ronaldinho_ponytail'
+    | 'zidane_bald'
+    | 'beckham_quiff'
+    | 'r9_wedge'
+    | 'cruyff_flow'
     | 'cr7_quiff'
     | 'messi_swept'
     | 'mbappe_buzz'
@@ -90,6 +107,153 @@ export function getPlayerLikenessProfile(player: FootballPlayer): PlayerLikeness
   const n = player.name.toLowerCase();
   const seed = hashSeed(player.id + player.name);
 
+  // --- LEGENDS (Pelé, Maradona, Ronaldinho, Zidane, Beckham, R9, Cruyff, Maldini, Henry, Buffon) ---
+  if (n.includes('ronaldinho')) {
+    return {
+      archetype: 'ronaldinho',
+      faceWidth: 23.5,
+      jawWidth: 19.8,
+      chinLength: 30.5,
+      eyeColor: '#2B1B10',
+      browThickness: 2.8,
+      browArch: -1.6,
+      beardStyle: 'goatee',
+      hairStyle: 'ronaldinho_ponytail',
+      hasHeadband: true,
+      hasEarring: true,
+      smileIntensity: 1.0,
+    };
+  }
+  if (n.includes('nazário') || n.includes('nazario') || n.includes('fenômeno') || n.includes('fenomeno') || n === 'r9' || (n.includes('ronaldo') && (n.includes('luís') || n.includes('luis') || n.includes('brazil') || player.rarity === 'Legendary'))) {
+    return {
+      archetype: 'r9',
+      faceWidth: 24.5,
+      jawWidth: 21.2,
+      chinLength: 30.0,
+      eyeColor: '#2D1D12',
+      browThickness: 2.7,
+      browArch: -1.5,
+      beardStyle: 'none',
+      hairStyle: 'r9_wedge',
+      smileIntensity: 0.95,
+    };
+  }
+  if (n.includes('pelé') || n.includes('pele') || n.includes('edson arantes')) {
+    return {
+      archetype: 'pele',
+      faceWidth: 23.8,
+      jawWidth: 20.0,
+      chinLength: 29.8,
+      eyeColor: '#1F1208',
+      browThickness: 2.9,
+      browArch: -1.4,
+      beardStyle: 'none',
+      hairStyle: 'pele_crop',
+      smileIntensity: 0.9,
+    };
+  }
+  if (n.includes('maradona') || n.includes('diego armando')) {
+    return {
+      archetype: 'maradona',
+      faceWidth: 24.8,
+      jawWidth: 21.5,
+      chinLength: 29.5,
+      eyeColor: '#22130A',
+      browThickness: 3.4,
+      browArch: -1.9,
+      beardStyle: 'stubble',
+      hairStyle: 'maradona_curls',
+      hasEarring: true,
+      smileIntensity: 0.7,
+    };
+  }
+  if (n.includes('zidane') || n.includes('zizou')) {
+    return {
+      archetype: 'zidane',
+      faceWidth: 23.9,
+      jawWidth: 20.2,
+      chinLength: 31.0,
+      eyeColor: '#365314',
+      browThickness: 3.1,
+      browArch: -1.8,
+      beardStyle: 'stubble',
+      hairStyle: 'zidane_bald',
+      smileIntensity: 0.35,
+    };
+  }
+  if (n.includes('beckham')) {
+    return {
+      archetype: 'beckham',
+      faceWidth: 23.0,
+      jawWidth: 19.0,
+      chinLength: 30.2,
+      eyeColor: '#38BDF8',
+      browThickness: 2.4,
+      browArch: -1.3,
+      beardStyle: 'stubble',
+      hairStyle: 'beckham_quiff',
+      hasEarring: true,
+      smileIntensity: 0.6,
+    };
+  }
+  if (n.includes('cruyff') || n.includes('cruijff')) {
+    return {
+      archetype: 'cruyff',
+      faceWidth: 22.8,
+      jawWidth: 18.5,
+      chinLength: 30.5,
+      eyeColor: '#0284C7',
+      browThickness: 2.5,
+      browArch: -1.2,
+      beardStyle: 'none',
+      hairStyle: 'cruyff_flow',
+      smileIntensity: 0.55,
+    };
+  }
+  if (n.includes('maldini')) {
+    return {
+      archetype: 'maldini',
+      faceWidth: 23.4,
+      jawWidth: 19.4,
+      chinLength: 31.2,
+      eyeColor: '#0284C7',
+      browThickness: 2.6,
+      browArch: -1.4,
+      beardStyle: 'stubble',
+      hairStyle: 'slick_back',
+      smileIntensity: 0.45,
+    };
+  }
+  if (n.includes('henry') && (n.includes('thierry') || player.rarity === 'Legendary')) {
+    return {
+      archetype: 'henry',
+      faceWidth: 23.2,
+      jawWidth: 19.2,
+      chinLength: 30.4,
+      eyeColor: '#1F1208',
+      browThickness: 2.8,
+      browArch: -1.5,
+      beardStyle: 'goatee',
+      hairStyle: 'mbappe_buzz',
+      smileIntensity: 0.65,
+    };
+  }
+  if (n.includes('buffon')) {
+    return {
+      archetype: 'buffon',
+      faceWidth: 23.6,
+      jawWidth: 20.1,
+      chinLength: 31.5,
+      eyeColor: '#334155',
+      browThickness: 2.9,
+      browArch: -1.3,
+      beardStyle: 'stubble',
+      hairStyle: 'slick_back',
+      smileIntensity: 0.5,
+    };
+  }
+
+  // --- MODERN SUPERSTARS ---
   if (n.includes('ronaldo')) {
     return {
       archetype: 'ronaldo',

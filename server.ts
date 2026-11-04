@@ -246,6 +246,7 @@ const friendRequests: FriendRequestRecord[] = [];
 const friendships: FriendshipRecord[] = [];
 const matchInvitations: MatchInvitationRecord[] = [];
 const matchRecords: MatchRecord[] = [];
+const gameSaves = new Map<string, any>(); // key (userId, username, or device) -> ComprehensiveGameSave
 const rooms = new Map<string, FriendRoom>();
 const onlineClients = new Map<string, OnlinePresenceClient>(); // clientId -> OnlinePresenceClient
 const lobbies = new Map<string, OnlineMatchLobby>(); // lobbyId -> OnlineMatchLobby
@@ -344,6 +345,11 @@ function loadPersistedData() {
       if (Array.isArray(raw.matchRecords)) {
         matchRecords.push(...raw.matchRecords);
       }
+      if (raw.gameSaves && typeof raw.gameSaves === 'object') {
+        Object.entries(raw.gameSaves).forEach(([k, v]) => {
+          gameSaves.set(k, v);
+        });
+      }
     }
   } catch {
     // ignore corrupt cache
@@ -357,6 +363,10 @@ function savePersistedData() {
     sessionsByToken.forEach((uid, tok) => {
       sessionsObj[tok] = uid;
     });
+    const savesObj: Record<string, any> = {};
+    gameSaves.forEach((val, k) => {
+      savesObj[k] = val;
+    });
     const payload = {
       users: Array.from(usersById.values()),
       sessions: sessionsObj,
@@ -365,6 +375,7 @@ function savePersistedData() {
       friendships: friendships.slice(-500),
       matchInvitations: matchInvitations.slice(-200),
       matchRecords: matchRecords.slice(-200),
+      gameSaves: savesObj,
     };
     fs.writeFileSync(DATA_FILE, JSON.stringify(payload, null, 2), 'utf-8');
   } catch {
@@ -1003,6 +1014,70 @@ async function startServer() {
 
     savePersistedData();
     res.json({ user });
+  });
+
+  // ============================================================================
+  // 1B. PERMANENT DATABASE AUTO-SAVE & COMPREHENSIVE PROGRESS RESTORATION
+  // ============================================================================
+  app.post('/api/save/sync', (req, res) => {
+    try {
+      const save = req.body;
+      if (!save || typeof save !== 'object') {
+        res.status(400).json({ error: 'Missing save payload' });
+        return;
+      }
+      const user = getAuthenticatedUser(req);
+      const username = String(save.username || req.headers['x-username'] || user?.username || 'player').toLowerCase().trim();
+      const deviceId = String(req.headers['x-device-id'] || save.deviceId || 'device_default');
+
+      const enriched = {
+        ...save,
+        serverSavedAt: Date.now(),
+      };
+
+      if (username) {
+        gameSaves.set(`user_${username}`, enriched);
+      }
+      if (user?.id) {
+        gameSaves.set(`uid_${user.id}`, enriched);
+      }
+      if (deviceId) {
+        gameSaves.set(`device_${deviceId}`, enriched);
+      }
+      gameSaves.set('latest_save', enriched);
+
+      savePersistedData();
+      res.json({ ok: true, savedAt: Date.now() });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to sync game save' });
+    }
+  });
+
+  app.get('/api/save/load', (req, res) => {
+    try {
+      const user = getAuthenticatedUser(req);
+      const username = String(req.headers['x-username'] || req.query.username || user?.username || '').toLowerCase().trim();
+      const deviceId = String(req.headers['x-device-id'] || req.query.deviceId || '').trim();
+
+      let found = null;
+      if (user?.id && gameSaves.has(`uid_${user.id}`)) {
+        found = gameSaves.get(`uid_${user.id}`);
+      } else if (username && gameSaves.has(`user_${username}`)) {
+        found = gameSaves.get(`user_${username}`);
+      } else if (deviceId && gameSaves.has(`device_${deviceId}`)) {
+        found = gameSaves.get(`device_${deviceId}`);
+      } else {
+        found = gameSaves.get('latest_save') || null;
+      }
+
+      if (found) {
+        res.json({ ok: true, save: found });
+      } else {
+        res.json({ ok: false, message: 'No save found on server' });
+      }
+    } catch {
+      res.status(500).json({ error: 'Failed to load save' });
+    }
   });
 
   // ============================================================================

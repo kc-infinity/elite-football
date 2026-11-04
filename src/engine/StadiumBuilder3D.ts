@@ -140,7 +140,22 @@ export function buildStadiumScene(
   ctx.arc(canvas.width - mX - 205, canvas.height / 2, 95, Math.PI - 0.65, Math.PI + 0.65);
   ctx.stroke();
 
+  // 4 Corner Quadrant Arcs (1m FIFA Corner Markings)
+  ctx.beginPath();
+  ctx.arc(mX, mY, 32, 0, Math.PI / 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(canvas.width - mX, mY, 32, Math.PI / 2, Math.PI);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(mX, canvas.height - mY, 32, -Math.PI / 2, 0);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(canvas.width - mX, canvas.height - mY, 32, Math.PI, -Math.PI / 2);
+  ctx.stroke();
+
   const pitchTex = new THREE.CanvasTexture(canvas);
+  pitchTex.colorSpace = THREE.SRGBColorSpace;
   pitchTex.anisotropy = 4;
 
   const pitchGeo = new THREE.PlaneGeometry(PITCH_WIDTH + 10, PITCH_DEPTH + 9);
@@ -156,11 +171,59 @@ export function buildStadiumScene(
 
   // Outer Stadium Track / Apron
   const apronGeo = new THREE.PlaneGeometry(PITCH_WIDTH + 48, PITCH_DEPTH + 44);
-  const apronMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 });
+  const apronMat = new THREE.MeshStandardMaterial({ color: 0x090d16, roughness: 0.92 });
   const apronMesh = new THREE.Mesh(apronGeo, apronMat);
   apronMesh.rotation.x = -Math.PI / 2;
   apronMesh.position.y = -0.04;
   scene.add(apronMesh);
+
+  // 3D Corner Flags at the 4 pitch corners
+  const flagPositions = [
+    [-PITCH_WIDTH / 2, -PITCH_DEPTH / 2],
+    [PITCH_WIDTH / 2, -PITCH_DEPTH / 2],
+    [-PITCH_WIDTH / 2, PITCH_DEPTH / 2],
+    [PITCH_WIDTH / 2, PITCH_DEPTH / 2],
+  ];
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+  const flagMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.4, side: THREE.DoubleSide });
+
+  flagPositions.forEach(([fx, fz]) => {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.6, 8), poleMat);
+    pole.position.set(fx, 0.8, fz);
+    scene.add(pole);
+
+    const flagPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.25), flagMat);
+    flagPlane.position.set(fx + (fx < 0 ? 0.18 : -0.18), 1.45, fz);
+    scene.add(flagPlane);
+  });
+
+  // LED Perimeter Advertising Hoardings (North & South touchlines)
+  const adCanvas = document.createElement('canvas');
+  adCanvas.width = 1024;
+  adCanvas.height = 64;
+  const adCtx = adCanvas.getContext('2d')!;
+  adCtx.fillStyle = '#070a0e';
+  adCtx.fillRect(0, 0, 1024, 64);
+  const adLabels = ['eFOOTBALL', 'WORLD TOUR', 'KONAMI CLASSIC', 'DREAM TEAM', 'CHAMPIONS LEAGUE', 'FAIR PLAY'];
+  adCtx.font = '900 24px "Chakra Petch", sans-serif';
+  adCtx.textAlign = 'center';
+  adCtx.textBaseline = 'middle';
+  adLabels.forEach((label, i) => {
+    const lx = (i + 0.5) * (1024 / adLabels.length);
+    adCtx.fillStyle = i % 2 === 0 ? '#10b981' : '#38bdf8';
+    adCtx.fillText(label, lx, 32);
+  });
+  const adTex = new THREE.CanvasTexture(adCanvas);
+  adTex.colorSpace = THREE.SRGBColorSpace;
+  const adMat = new THREE.MeshBasicMaterial({ map: adTex });
+
+  const adBoardNorth = new THREE.Mesh(new THREE.BoxGeometry(PITCH_WIDTH + 8, 1.1, 0.35), adMat);
+  adBoardNorth.position.set(0, 0.55, -(PITCH_DEPTH / 2 + 3.2));
+  scene.add(adBoardNorth);
+
+  const adBoardSouth = new THREE.Mesh(new THREE.BoxGeometry(PITCH_WIDTH + 8, 1.1, 0.35), adMat);
+  adBoardSouth.position.set(0, 0.55, PITCH_DEPTH / 2 + 3.2);
+  scene.add(adBoardSouth);
 
   // 4. Goals & Deformable Goal Nets
   const createGoal = (side: -1 | 1): THREE.Mesh => {

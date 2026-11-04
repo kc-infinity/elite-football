@@ -1651,23 +1651,27 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                 ))}
               </div>
 
-              {/* Quick Position Filter Pills for ST, CF, LW, RW, CAM, CM, CDM, LB, RB, CB, GK */}
+              {/* Quick Position Filter Pills for all 15 positions */}
               <div className="flex flex-wrap items-center gap-1">
                 <span className="text-[11px] font-mono text-slate-400 mr-1">POS:</span>
                 {(
                   [
                     'All',
-                    'ST',
-                    'CF',
-                    'LW',
-                    'RW',
-                    'CAM',
-                    'CM',
-                    'CDM',
+                    'GK',
+                    'CB',
                     'LB',
                     'RB',
-                    'CB',
-                    'GK',
+                    'LWB',
+                    'RWB',
+                    'CDM',
+                    'CM',
+                    'CAM',
+                    'LM',
+                    'RM',
+                    'LW',
+                    'RW',
+                    'CF',
+                    'ST',
                   ] as const
                 ).map((pos) => (
                   <button

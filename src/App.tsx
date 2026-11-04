@@ -76,6 +76,11 @@ import { useAppIcon } from './data/appIconStore';
 import { WEAPONS_ARMORY, SHOOTER_ARENAS, WeaponItem } from './data/weaponsDatabase';
 import { ArmoryAndShooterHub } from './components/ArmoryAndShooterHub';
 import { ShooterMatchViewport3D } from './components/ShooterMatchViewport3D';
+import {
+  PersistentDatabaseService,
+  GameSaveState,
+  AutoSaveStatus,
+} from './services/PersistentDatabaseService';
 import heroStadiumImg from './assets/images/hero_stadium_backdrop_1791305638088.jpg';
 
 type ActiveScreen =
@@ -122,13 +127,13 @@ export default function App() {
     return isSignedIn ? 'home' : 'welcome';
   });
 
-  // Persistent / Session Club & Match State
+  // Persistent / Session Club & Match State (500,000 Starting Coins for new accounts)
   const [coins, setCoins] = useState<number>(() => {
     const saved = localStorage.getItem('fe_coins');
     if (saved !== null && !Number.isNaN(Number(saved))) {
       return Math.max(0, Number(saved));
     }
-    return 1250000;
+    return 500000;
   });
   const [userTeam, setUserTeam] = useState<TeamData>(() => {
     const savedClubId = localStorage.getItem('fe_favourite_club_id');
@@ -573,7 +578,59 @@ export default function App() {
       .catch(() => {});
   }, [authToken]);
 
-  // Save all progress permanently to localStorage & sync to backend whenever any state changes
+  // Initial Comprehensive Hydration: Load all progress from ACID IndexedDB + Server Backup
+  useEffect(() => {
+    let active = true;
+    PersistentDatabaseService.loadComprehensiveSave(authToken, profile.username).then((saved) => {
+      if (!active || !saved) return;
+      if (typeof saved.coins === 'number') {
+        setCoins(saved.coins);
+      }
+      if (saved.favouriteClubId) {
+        const club = TEAMS_DB.find((t) => t.id === saved.favouriteClubId);
+        if (club) setUserTeam(club);
+      }
+      if (saved.formation) {
+        setUserFormation(saved.formation);
+      }
+      if (Array.isArray(saved.unlockedPlayerIds) && saved.unlockedPlayerIds.length > 0) {
+        setUnlockedPlayerIds((prev) => Array.from(new Set([...prev, ...saved.unlockedPlayerIds])));
+      }
+      if (Array.isArray(saved.squadIds) && saved.squadIds.length >= 11) {
+        const resolved = saved.squadIds
+          .map((id) => PLAYERS_DB.find((p) => p.id === id))
+          .filter((p): p is FootballPlayer => Boolean(p));
+        if (resolved.length >= 11) {
+          setUserSquad(resolved);
+        }
+      }
+      if (saved.captainId) setCaptainId(saved.captainId);
+      if (saved.preferredCelebration) setPreferredCelebration(saved.preferredCelebration);
+      if (typeof saved.tournamentStageIndex === 'number') setTournamentStageIndex(saved.tournamentStageIndex);
+      if (saved.profile) setProfile((prev) => ({ ...prev, ...saved.profile }));
+      if (saved.playerUpgrades) setPlayerUpgrades(saved.playerUpgrades);
+      if (saved.weapons) {
+        if (Array.isArray(saved.weapons.unlockedWeaponIds) && saved.weapons.unlockedWeaponIds.length > 0) {
+          setUnlockedWeaponIds(saved.weapons.unlockedWeaponIds);
+        }
+        if (saved.weapons.selectedWeaponId) setSelectedWeaponId(saved.weapons.selectedWeaponId);
+        if (saved.weapons.weaponUpgradeLevels) setWeaponUpgradeLevels(saved.weapons.weaponUpgradeLevels);
+        if (saved.weapons.selectedOperativeId) setSelectedOperativeId(saved.weapons.selectedOperativeId);
+      }
+      if (saved.settings) {
+        if (saved.settings.difficulty) setDifficulty(saved.settings.difficulty);
+        if (saved.settings.cameraMode) setCameraMode(saved.settings.cameraMode);
+        if (saved.settings.controlScheme) setControlScheme(saved.settings.controlScheme);
+        if (saved.settings.graphicsQuality) setGraphicsQuality(saved.settings.graphicsQuality);
+        if (saved.settings.autoSwitchMode) setAutoSwitchMode(saved.settings.autoSwitchMode);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Save all progress permanently to IndexedDB, LocalStorage & Server whenever any state changes
   useEffect(() => {
     try {
       localStorage.setItem('fe_coins', String(coins));
@@ -595,6 +652,43 @@ export default function App() {
     } catch {
       // ignore storage quota errors
     }
+
+    const fullSave: GameSaveState = {
+      version: 2,
+      updatedAt: Date.now(),
+      deviceId: localStorage.getItem('fe_device_unique_id') || 'dev_client',
+      userId: account?.id,
+      username: profile.username,
+      coins,
+      favouriteClubId: userTeam.id,
+      unlockedPlayerIds,
+      squadIds: userSquad.map((p) => p.id),
+      formation: userFormation,
+      captainId,
+      preferredCelebration,
+      tournamentStageIndex,
+      profile,
+      playerUpgrades,
+      weapons: {
+        unlockedWeaponIds,
+        selectedWeaponId,
+        weaponUpgradeLevels,
+        selectedOperativeId,
+      },
+      settings: {
+        difficulty,
+        cameraMode,
+        controlScheme,
+        graphicsQuality,
+        mouseSensitivity,
+        cameraSensitivity,
+        keyBindings,
+        autoSwitchMode,
+        audio: SoundEngine.settings,
+      },
+    };
+
+    PersistentDatabaseService.autoSave(fullSave, authToken);
 
     const savedEmail = localStorage.getItem('fe_user_email_v3') || account?.email || '';
     if (!authToken && !savedEmail) return;
@@ -641,6 +735,17 @@ export default function App() {
     tournamentStageIndex,
     autoSwitchMode,
     playerUpgrades,
+    unlockedWeaponIds,
+    selectedWeaponId,
+    weaponUpgradeLevels,
+    selectedOperativeId,
+    difficulty,
+    cameraMode,
+    controlScheme,
+    graphicsQuality,
+    mouseSensitivity,
+    cameraSensitivity,
+    keyBindings,
   ]);
 
   const handleMatchComplete = (result: {
@@ -998,6 +1103,13 @@ export default function App() {
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#111722] border border-[#F59E0B]/30 text-xs font-mono font-bold text-[#F59E0B]">
             <Coins className="w-3.5 h-3.5" />
             {coins.toLocaleString()}
+          </div>
+          <div
+            className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#10B981]/10 border border-[#10B981]/30 text-[10px] font-mono text-[#10B981]"
+            title="Auto-Save: Permanently synchronized to ACID database"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse" />
+            <span className="font-bold">AUTO-SAVED</span>
           </div>
           <button
             onClick={() => setShowGoogleAuthModal(true)}

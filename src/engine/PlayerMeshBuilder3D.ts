@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CelebrationType, FootballPlayer, PositionCode, TeamData } from '../data/gameDatabase';
 import { getPlayerLikenessProfile } from '../components/PlayerPhotoAvatar';
+import { getPlayerPhotoUrl } from '../data/playerPhotos';
 
 export interface ArticulatedPlayer3D {
   id: string;
@@ -237,8 +238,43 @@ function createRealistic3DFaceTexture(player: FootballPlayer): THREE.CanvasTextu
   }
 
   const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
   faceTextureCache.set(cacheKey, tex);
+
+  // Authentically project player's genuine photographic face onto the 3D model
+  const photoUrl = player.photoUrl || getPlayerPhotoUrl(player);
+  if (photoUrl && typeof Image !== 'undefined') {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = photoUrl;
+    img.onload = () => {
+      try {
+        ctx.save();
+        // Cut out smooth elliptical facial aperture centered on front face area
+        ctx.beginPath();
+        ctx.ellipse(256, 148, 58, 68, 0, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.globalAlpha = 0.90;
+        ctx.drawImage(img, 198, 80, 116, 136);
+        ctx.restore();
+
+        // Subtle gradient skin edge blending so photo transitions smoothly into 3D skin tone
+        const edgeBlend = ctx.createRadialGradient(256, 148, 44, 256, 148, 62);
+        edgeBlend.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        edgeBlend.addColorStop(1, player.skinTone || '#e0ac69');
+        ctx.fillStyle = edgeBlend;
+        ctx.beginPath();
+        ctx.ellipse(256, 148, 62, 72, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        tex.needsUpdate = true;
+      } catch {
+        // Retain procedural likeness if canvas is tainted by CORS
+      }
+    };
+  }
+
   return tex;
 }
 
@@ -311,14 +347,17 @@ function createJerseyTexture(
   return tex;
 }
 
-function createYouOverheadSprite(playerName: string, isHome: boolean): THREE.Sprite {
+function createYouOverheadSprite(player: FootballPlayer | string, isHome: boolean): THREE.Sprite {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
-  canvas.height = 96;
+  canvas.height = 128;
   const ctx = canvas.getContext('2d')!;
 
-  const accent = isHome ? '#10b981' : '#f59e0b';
-  const shortName = (
+  const accent = isHome ? '#10b981' : '#38bdf8';
+  const playerName = typeof player === 'string' ? player : player.name;
+  const rating = typeof player === 'string' ? '90' : String(player.rating || 88);
+
+  const cleanSurname = (
     playerName
       .replace(/\(.*?\)/g, '')
       .trim()
@@ -326,35 +365,65 @@ function createYouOverheadSprite(playerName: string, isHome: boolean): THREE.Spr
       .pop() || playerName
   )
     .toUpperCase()
-    .slice(0, 10);
+    .slice(0, 11);
 
-  ctx.fillStyle = 'rgba(7, 10, 14, 0.88)';
+  // eFootball Broadcast Overhead Marker (Pill with Name + Rating + Inverted Triangular Pointer)
+  // Background Pill
+  ctx.save();
+  ctx.fillStyle = 'rgba(7, 10, 14, 0.92)';
   ctx.strokeStyle = accent;
-  ctx.lineWidth = 4;
+  ctx.lineWidth = 3.5;
   ctx.beginPath();
-  ctx.roundRect(18, 8, 220, 50, 12);
+  ctx.roundRect(24, 12, 208, 48, 12);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = accent;
-  ctx.font = '900 22px "Chakra Petch", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(`YOU · ${shortName}`, 128, 34);
-
-  // Downward pointer arrow
+  // Glow line on top of pill
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(114, 60);
-  ctx.lineTo(142, 60);
-  ctx.lineTo(128, 82);
+  ctx.moveTo(38, 15);
+  ctx.lineTo(218, 15);
+  ctx.stroke();
+
+  // Player Surname
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 21px "Chakra Petch", sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(cleanSurname, 36, 36);
+
+  // Overall Rating Badge in Accent Color
+  ctx.fillStyle = accent;
+  ctx.font = '900 20px "JetBrains Mono", monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText(rating, 218, 36);
+
+  // Inverted Chevron Arrow pointing directly at player's head
+  ctx.fillStyle = accent;
+  ctx.beginPath();
+  ctx.moveTo(114, 66);
+  ctx.lineTo(142, 66);
+  ctx.lineTo(128, 92);
   ctx.closePath();
   ctx.fill();
 
+  // Inner arrow highlight
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(122, 69);
+  ctx.lineTo(134, 69);
+  ctx.lineTo(128, 80);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
   const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(2.3, 0.86, 1);
-  sprite.position.set(0, 2.75, 0);
+  sprite.scale.set(2.4, 1.2, 1);
+  sprite.position.set(0, 2.78, 0);
   sprite.renderOrder = 999;
   return sprite;
 }
@@ -643,7 +712,79 @@ export function createArticulatedPlayer3D(
   capMesh.rotation.x = -0.22;
   headGroup.add(capMesh);
 
-  if (likeness.hairStyle === 'cr7_quiff') {
+  if (likeness.hairStyle === 'ronaldinho_ponytail') {
+    // Ronaldinho signature long curls ponytail + black headband
+    const ponyGeo = new THREE.CylinderGeometry(0.045, 0.08, 0.32, 12);
+    ponyGeo.rotateX(0.42);
+    const ponyMesh = new THREE.Mesh(ponyGeo, hairMat);
+    ponyMesh.position.set(0, 0.14, -0.22);
+    headGroup.add(ponyMesh);
+
+    const bandGeo = new THREE.TorusGeometry(0.188, 0.016, 10, 26);
+    bandGeo.rotateX(Math.PI / 2);
+    const bandMesh = new THREE.Mesh(
+      bandGeo,
+      new THREE.MeshStandardMaterial({ color: '#09090b', roughness: 0.5 })
+    );
+    bandMesh.position.set(0, 0.30, 0);
+    bandMesh.rotation.x = 0.16;
+    headGroup.add(bandMesh);
+
+    // Front curl tendril
+    const tendril = new THREE.Mesh(new THREE.CapsuleGeometry(0.02, 0.12, 6, 8), hairMat);
+    tendril.position.set(-0.11, 0.28, 0.14);
+    tendril.rotation.z = -0.25;
+    headGroup.add(tendril);
+  } else if (likeness.hairStyle === 'maradona_curls') {
+    // Diego Maradona iconic 1986 voluminous black curly mane & sideburns
+    const curlPoints = [
+      [0, 0.38, 0.04, 0.12],
+      [-0.11, 0.36, 0.02, 0.11],
+      [0.11, 0.36, 0.02, 0.11],
+      [0, 0.35, -0.12, 0.13],
+      [-0.12, 0.28, -0.08, 0.10],
+      [0.12, 0.28, -0.08, 0.10],
+      [-0.15, 0.21, 0.03, 0.07],
+      [0.15, 0.21, 0.03, 0.07],
+    ];
+    curlPoints.forEach(([cx, cy, cz, cr]) => {
+      const cMesh = new THREE.Mesh(new THREE.SphereGeometry(cr, 12, 12), hairMat);
+      cMesh.position.set(cx, cy, cz);
+      headGroup.add(cMesh);
+    });
+  } else if (likeness.hairStyle === 'r9_wedge') {
+    // Ronaldo Nazário iconic 2002 World Cup triangular wedge fringe
+    const wedgeGeo = new THREE.CylinderGeometry(0.08, 0.11, 0.04, 12, 1, false, -Math.PI * 0.35, Math.PI * 0.7);
+    const wedgeMesh = new THREE.Mesh(wedgeGeo, hairMat);
+    wedgeMesh.position.set(0, 0.365, 0.135);
+    wedgeMesh.rotation.x = 0.35;
+    headGroup.add(wedgeMesh);
+  } else if (likeness.hairStyle === 'zidane_bald') {
+    // Zinedine Zidane classic shaved crown with neat nape trim
+    const trimGeo = new THREE.CylinderGeometry(0.188, 0.198, 0.06, 18, 1, true, Math.PI * 0.6, Math.PI * 1.8);
+    const trimMesh = new THREE.Mesh(trimGeo, hairMat);
+    trimMesh.position.set(0, 0.22, -0.02);
+    headGroup.add(trimMesh);
+  } else if (likeness.hairStyle === 'beckham_quiff') {
+    // David Beckham styled blonde comb-over / quiff
+    const bGeo = new THREE.BoxGeometry(0.19, 0.08, 0.22);
+    const bMesh = new THREE.Mesh(bGeo, hairMat);
+    bMesh.position.set(0.02, 0.42, 0.03);
+    bMesh.rotation.set(-0.2, 0.1, -0.06);
+    headGroup.add(bMesh);
+  } else if (likeness.hairStyle === 'pele_crop') {
+    // Pelé classic neat vintage buzz-cut
+    const cropGeo = new THREE.SphereGeometry(0.202, 18, 16, 0, Math.PI * 2, 0, Math.PI * 0.48);
+    const cropMesh = new THREE.Mesh(cropGeo, hairMat);
+    cropMesh.position.set(0, 0.23, -0.01);
+    headGroup.add(cropMesh);
+  } else if (likeness.hairStyle === 'cruyff_flow') {
+    // Johan Cruyff 1970s flowing parted locks
+    const flowGeo = new THREE.CylinderGeometry(0.18, 0.22, 0.18, 16, 1, true);
+    const flowMesh = new THREE.Mesh(flowGeo, hairMat);
+    flowMesh.position.set(0, 0.24, -0.02);
+    headGroup.add(flowMesh);
+  } else if (likeness.hairStyle === 'cr7_quiff') {
     // Cristiano Ronaldo signature sculpted high front quiff + textured crest
     const quiffGeo = new THREE.BoxGeometry(0.18, 0.09, 0.22);
     const quiffMesh = new THREE.Mesh(quiffGeo, hairMat);
@@ -905,7 +1046,7 @@ export function createArticulatedPlayer3D(
   root.add(sprintHalo);
 
   // Floating 3D "YOU" indicator above controlled player + Ball Carrier Name above head
-  const youSprite = createYouOverheadSprite(player.name, teamSide === 'home');
+  const youSprite = createYouOverheadSprite(player, teamSide === 'home');
   root.add(youSprite);
 
   const carrierNameSprite = createCarrierNameOverheadSprite(player.name, teamSide === 'home');
