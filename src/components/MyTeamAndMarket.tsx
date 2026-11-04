@@ -384,15 +384,33 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
     const copy = [...userSquad];
     const playerA = copy[idxA];
     const playerB = copy[idxB];
+    const slots = FORMATIONS[userFormation];
+
+    // If both are starting XI slots, enforce strict assigned position match
+    if (idxA < 11 && idxB < 11 && playerA && playerB) {
+      const slotA = slots[idxA];
+      const slotB = slots[idxB];
+      const canonA = normalizeSlotPosition(slotA.role, slotA.label);
+      const canonB = normalizeSlotPosition(slotB.role, slotB.label);
+
+      if (playerA.position !== canonB || playerB.position !== canonA) {
+        setSquadActionBanner(
+          `Position Lock: Players must play only in their assigned positions! Cannot put ${playerA.name} (${playerA.position}) into ${slotB.label} (${canonB}) or ${playerB.name} (${playerB.position}) into ${slotA.label} (${canonA}).`
+        );
+        SoundEngine.playUIClick();
+        return;
+      }
+    }
+
     copy[idxA] = playerB;
     copy[idxB] = playerA;
     onUpdateSquadOrder(copy);
     setSelectedSwapIndex(idxB);
-    const slotA = FORMATIONS[userFormation][idxA]?.label || `Slot #${idxA + 1}`;
-    const slotB = FORMATIONS[userFormation][idxB]?.label || `Slot #${idxB + 1}`;
+    const slotA = slots[idxA]?.label || `Slot #${idxA + 1}`;
+    const slotB = slots[idxB]?.label || `Slot #${idxB + 1}`;
     if (playerA && playerB) {
       setSquadActionBanner(
-        `Swapped ${playerA.name} (${slotA} → ${slotB}) with ${playerB.name} (${slotB} → ${slotA}).`
+        `Swapped ${playerA.name} (${slotA}) with ${playerB.name} (${slotB}) in their assigned positions.`
       );
     }
     SoundEngine.playUIClick();
@@ -407,30 +425,49 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
         ? selectedSwapIndex
         : findBestSlotIndexForPlayer(player, userFormation, userSquad);
 
+    const slots = FORMATIONS[userFormation];
+    const targetSlotDef = slots[targetSlot];
+    const targetCanonicalPos = targetSlotDef ? normalizeSlotPosition(targetSlotDef.role, targetSlotDef.label) : player.position;
+
+    // Strict Position Lock: Players must play ONLY in their assigned positions
+    if (targetSlot < 11 && player.position !== targetCanonicalPos) {
+      setSquadActionBanner(
+        `Position Lock: ${player.name} is assigned to ${player.position} and can ONLY play as ${player.position}! Slot ${targetSlotDef.label} requires an assigned ${targetCanonicalPos}.`
+      );
+      return;
+    }
+
     const copy = [...userSquad];
     const existingIdx = copy.findIndex((p) => p?.id === player.id);
-    const slotLabel = FORMATIONS[userFormation][targetSlot]?.label || player.position;
+    const slotLabel = targetSlotDef?.label || player.position;
     const previousOccupant = copy[targetSlot];
 
     if (existingIdx === targetSlot) {
-      setSquadActionBanner(`${player.name} is already active at ${slotLabel}.`);
+      setSquadActionBanner(`${player.name} is already playing at assigned position ${slotLabel}.`);
       return;
     }
 
     if (existingIdx >= 0 && existingIdx < 11) {
-      // Swap between two Starting XI positions
-      const otherSlotLabel = FORMATIONS[userFormation][existingIdx]?.label || `Slot #${existingIdx + 1}`;
+      // Swap between two Starting XI positions - check if previousOccupant can play in existingIdx
+      const otherSlotDef = slots[existingIdx];
+      const otherCanonical = otherSlotDef ? normalizeSlotPosition(otherSlotDef.role, otherSlotDef.label) : null;
+      if (previousOccupant && otherCanonical && previousOccupant.position !== otherCanonical) {
+        setSquadActionBanner(
+          `Position Lock: Cannot move ${previousOccupant.name} (${previousOccupant.position}) into ${otherSlotDef.label} (${otherCanonical}). Players must play only in their assigned positions!`
+        );
+        return;
+      }
       copy[targetSlot] = player;
       copy[existingIdx] = previousOccupant;
       setSquadActionBanner(
-        `Swapped ${player.name} into ${slotLabel} and moved ${previousOccupant?.name || 'player'} to ${otherSlotLabel}!`
+        `Swapped ${player.name} into ${slotLabel} and ${previousOccupant?.name || 'player'} into ${otherSlotDef.label} in assigned positions!`
       );
     } else if (existingIdx >= 11) {
       // Swap from reserve bench into Starting XI targetSlot
       copy[targetSlot] = player;
       copy[existingIdx] = previousOccupant;
       setSquadActionBanner(
-        `Placed ${player.name} (${player.position} · OVR ${player.rating}) into ${slotLabel} (replaced ${previousOccupant?.name || 'player'})!`
+        `Placed ${player.name} (${player.position} · OVR ${player.rating}) into assigned position ${slotLabel}!`
       );
     } else {
       // Player wasn't in userSquad array yet — place into targetSlot and keep previous occupant in reserves
@@ -439,7 +476,7 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
         copy.push(previousOccupant);
       }
       setSquadActionBanner(
-        `Placed ${player.name} (${player.position} · OVR ${player.rating}) into ${slotLabel} (replaced ${previousOccupant?.name || 'player'})!`
+        `Placed ${player.name} (${player.position} · OVR ${player.rating}) into assigned position ${slotLabel}!`
       );
     }
     onUpdateSquadOrder(copy.filter(Boolean));

@@ -223,54 +223,30 @@ export function normalizeSlotPosition(slotRole: PositionCode, slotLabel: string)
   return slotRole;
 }
 
+export function isPlayerPositionAllowedInSlot(
+  playerPos: PositionCode,
+  slotRole: PositionCode,
+  slotLabel: string
+): boolean {
+  const canonical = normalizeSlotPosition(slotRole, slotLabel);
+  return playerPos === canonical;
+}
+
 export function getCompatiblePositionsForSlot(
   slotRole: PositionCode,
   slotLabel: string
 ): { exact: PositionCode[]; compatible: PositionCode[] } {
   const canonical = normalizeSlotPosition(slotRole, slotLabel);
-  switch (canonical) {
-    case 'GK':
-      return { exact: ['GK'], compatible: ['GK'] };
-    case 'LWB':
-      return { exact: ['LWB', 'LB'], compatible: ['LM', 'LW', 'CB', 'CM'] };
-    case 'RWB':
-      return { exact: ['RWB', 'RB'], compatible: ['RM', 'RW', 'CB', 'CM'] };
-    case 'LB':
-      return { exact: ['LB', 'LWB'], compatible: ['LM', 'CB', 'LW'] };
-    case 'RB':
-      return { exact: ['RB', 'RWB'], compatible: ['RM', 'CB', 'RW'] };
-    case 'CB':
-      return { exact: ['CB'], compatible: ['CDM', 'LB', 'RB', 'LWB', 'RWB'] };
-    case 'CDM':
-      return { exact: ['CDM'], compatible: ['CM', 'CB'] };
-    case 'CM':
-      return { exact: ['CM'], compatible: ['CDM', 'CAM', 'LM', 'RM'] };
-    case 'CAM':
-      return { exact: ['CAM'], compatible: ['CF', 'CM', 'LW', 'RW', 'LM', 'RM'] };
-    case 'LM':
-      return { exact: ['LM'], compatible: ['LW', 'LB', 'LWB', 'CM', 'CAM'] };
-    case 'RM':
-      return { exact: ['RM'], compatible: ['RW', 'RB', 'RWB', 'CM', 'CAM'] };
-    case 'LW':
-      return { exact: ['LW'], compatible: ['LM', 'ST', 'CF', 'CAM', 'RW'] };
-    case 'RW':
-      return { exact: ['RW'], compatible: ['RM', 'ST', 'CF', 'CAM', 'LW'] };
-    case 'CF':
-      return { exact: ['CF', 'ST'], compatible: ['ST', 'CAM', 'LW', 'RW'] };
-    case 'ST':
-    default:
-      return { exact: ['ST', 'CF'], compatible: ['CF', 'LW', 'RW', 'CAM'] };
-  }
+  return { exact: [canonical], compatible: [canonical] };
 }
 
 export function getPlayerSlotFitLevel(
   playerPos: PositionCode,
   slotRole: PositionCode,
   slotLabel: string
-): 'exact' | 'compatible' | 'out_of_position' {
-  const { exact, compatible } = getCompatiblePositionsForSlot(slotRole, slotLabel);
-  if (exact.includes(playerPos)) return 'exact';
-  if (compatible.includes(playerPos)) return 'compatible';
+): 'exact' | 'out_of_position' {
+  const canonical = normalizeSlotPosition(slotRole, slotLabel);
+  if (playerPos === canonical) return 'exact';
   return 'out_of_position';
 }
 
@@ -355,48 +331,29 @@ export function buildOptimalSquadForFormation(
   const usedIds = new Set<string>();
   const startingXI: FootballPlayer[] = new Array(11);
 
-  // Pass 1: Fill each slot with highest-rated exact position match
+  // Fill each slot with highest-rated player assigned strictly to this exact position
   slots.forEach((slot, idx) => {
+    const canonical = normalizeSlotPosition(slot.role, slot.label);
     const candidates = pool
-      .filter(
-        (p) =>
-          !usedIds.has(p.id) &&
-          getPlayerSlotFitLevel(p.position, slot.role, slot.label) === 'exact'
-      )
+      .filter((p) => !usedIds.has(p.id) && p.position === canonical)
       .sort((a, b) => b.rating - a.rating);
+
     if (candidates.length > 0) {
       startingXI[idx] = candidates[0];
       usedIds.add(candidates[0].id);
+    } else {
+      // Pull the best natural player for this exact position from PLAYERS_DB
+      const fallback = PLAYERS_DB.filter(
+        (p) => !usedIds.has(p.id) && p.position === canonical
+      ).sort((a, b) => b.rating - a.rating)[0];
+      if (fallback) {
+        startingXI[idx] = fallback;
+        usedIds.add(fallback.id);
+      }
     }
   });
 
-  // Pass 2: Fill remaining slots with highest-rated compatible position match
-  slots.forEach((slot, idx) => {
-    if (startingXI[idx]) return;
-    const candidates = pool
-      .filter(
-        (p) =>
-          !usedIds.has(p.id) &&
-          getPlayerSlotFitLevel(p.position, slot.role, slot.label) === 'compatible'
-      )
-      .sort((a, b) => b.rating - a.rating);
-    if (candidates.length > 0) {
-      startingXI[idx] = candidates[0];
-      usedIds.add(candidates[0].id);
-    }
-  });
-
-  // Pass 3: Fill any still-empty slots with highest-rated remaining players
-  slots.forEach((_, idx) => {
-    if (startingXI[idx]) return;
-    const remaining = pool.filter((p) => !usedIds.has(p.id)).sort((a, b) => b.rating - a.rating);
-    if (remaining.length > 0) {
-      startingXI[idx] = remaining[0];
-      usedIds.add(remaining[0].id);
-    }
-  });
-
-  // Append all unused unlocked players as reserves so no player is ever lost
+  // Append all unused unlocked players as bench reserves so no player is ever lost
   const reserves = pool.filter((p) => !usedIds.has(p.id)).sort((a, b) => b.rating - a.rating);
   return [...startingXI.filter(Boolean), ...reserves];
 }
