@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { FootballPlayer } from '../data/gameDatabase';
 import { getPlayerPhotoUrl } from '../data/playerPhotos';
+import { getGuaranteedPlayerFaceUrl, generateRealisticPlayerFaceDataUri } from '../data/realisticFaceGenerator';
 
 const RARITY_ACCENT: Record<string, string> = {
   Common: '#94A3B8',
@@ -505,7 +506,8 @@ export const PlayerPhotoAvatar: React.FC<PlayerPhotoAvatarProps> = ({
   showPositionBadge = false,
 }) => {
   const [imgFailed, setImgFailed] = useState(false);
-  const photoUrl = player.photoUrl || getPlayerPhotoUrl(player);
+  const guaranteedUrl = player.photoUrl || getGuaranteedPlayerFaceUrl(player);
+  const activePhotoSrc = !imgFailed && guaranteedUrl ? guaranteedUrl : generateRealisticPlayerFaceDataUri(player);
   const accent = RARITY_ACCENT[player.rarity] || '#10B981';
   const likeness = getPlayerLikenessProfile(player);
   const kit = NATION_JERSEY[player.nationality] || {
@@ -960,17 +962,15 @@ export const PlayerPhotoAvatar: React.FC<PlayerPhotoAvatarProps> = ({
         )}
       </svg>
 
-      {/* Real-World Photo Layer when available & valid */}
-      {!imgFailed && photoUrl && (
-        <img
-          src={photoUrl}
-          alt={player.name}
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          onError={() => setImgFailed(true)}
-          className="relative z-10 w-full h-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
-        />
-      )}
+      {/* Guaranteed Realistic Player Face Photo Layer (Authentic Photo / Bespoke Photorealistic Portrait) */}
+      <img
+        src={activePhotoSrc}
+        alt={player.name}
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setImgFailed(true)}
+        className="relative z-10 w-full h-full object-cover object-top transition-transform duration-300 group-hover:scale-105"
+      />
 
       {/* Optional Position Badge */}
       {showPositionBadge && (

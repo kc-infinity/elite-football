@@ -1233,6 +1233,8 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                                   className={`mt-1.5 w-full py-1 px-1.5 rounded text-[9px] font-mono font-bold truncate ${
                                     isCurrentInSelectedSlot
                                       ? 'bg-[#10B981]/20 text-[#10B981]'
+                                      : fitLevel !== 'exact'
+                                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
                                       : isInAnotherXISlot
                                       ? 'bg-[#38BDF8]/20 text-[#38BDF8]'
                                       : 'bg-[#10B981] text-[#070A0E]'
@@ -1240,6 +1242,8 @@ export const MyTeamAndMarket: React.FC<MyTeamAndMarketProps> = ({
                                 >
                                   {isCurrentInSelectedSlot
                                     ? `✓ ACTIVE AT ${activeSlot.label}`
+                                    : fitLevel !== 'exact'
+                                    ? `🔒 ${p.position} ONLY`
                                     : isInAnotherXISlot
                                     ? `⇄ SWAP (${otherSlotLabel})`
                                     : `+ PLACE AT ${activeSlot.label}`}

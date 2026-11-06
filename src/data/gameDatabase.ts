@@ -244,7 +244,7 @@ export function getPlayerSlotFitLevel(
   playerPos: PositionCode,
   slotRole: PositionCode,
   slotLabel: string
-): 'exact' | 'out_of_position' {
+): 'exact' | 'compatible' | 'out_of_position' {
   const canonical = normalizeSlotPosition(slotRole, slotLabel);
   if (playerPos === canonical) return 'exact';
   return 'out_of_position';

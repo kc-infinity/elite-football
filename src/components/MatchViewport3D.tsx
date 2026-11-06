@@ -2,7 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Camera,
   Eye,
+  EyeOff,
   FastForward,
+  Gamepad2,
   Play,
   RotateCcw,
   Shield,
@@ -153,6 +155,27 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
     return 'desktop';
   });
 
+  const [showTouchControls, setShowTouchControls] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const saved = localStorage.getItem('fe_show_touch_controls');
+    if (saved !== null) {
+      return saved === 'true';
+    }
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    return window.innerWidth < 1180 || isTouch;
+  });
+
+  const toggleTouchControls = (visible?: boolean) => {
+    setShowTouchControls((prev) => {
+      const next = visible !== undefined ? visible : !prev;
+      try {
+        localStorage.setItem('fe_show_touch_controls', String(next));
+      } catch {}
+      SoundEngine.playUIClick();
+      return next;
+    });
+  };
+
   useEffect(() => {
     const onResize = () => {
       const w = window.innerWidth;
@@ -160,16 +183,15 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
       if (w <= 767) setDeviceFormFactor('mobile');
       else if (w <= 1180 || (isTouch && w <= 1366)) setDeviceFormFactor('tablet');
       else setDeviceFormFactor('desktop');
-      setShowTouchControls(w < 1180 || isTouch);
+
+      const saved = localStorage.getItem('fe_show_touch_controls');
+      if (saved === null) {
+        setShowTouchControls(w < 1180 || isTouch);
+      }
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
-
-  const [showTouchControls, setShowTouchControls] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth < 1180 || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-  });
   const [touchKnob, setTouchKnob] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [touchSprinting, setTouchSprinting] = useState<boolean>(false);
   const joystickCenterRef = useRef<{ x: number; y: number } | null>(null);
@@ -719,10 +741,25 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
             {/* Sound Mute */}
             <button
               onClick={handleToggleMute}
-              className="p-2 rounded-xl bg-[#070A0E]/90 text-slate-200 border border-white/15 hover:border-white/30 transition-colors shadow-lg"
+              className="p-2 rounded-xl bg-[#070A0E]/90 text-slate-200 border border-white/15 hover:border-white/30 transition-colors shadow-lg cursor-pointer"
               aria-label="Toggle Audio Mute"
             >
               {muted ? <VolumeX className="w-4 h-4 text-rose-400" /> : <Volume2 className="w-4 h-4 text-[#10B981]" />}
+            </button>
+
+            {/* Option to Show / Hide Touch Controls */}
+            <button
+              type="button"
+              onClick={() => toggleTouchControls()}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer shadow-lg ${
+                showTouchControls
+                  ? 'bg-[#10B981]/20 text-[#10B981] border-[#10B981]/50 font-bold'
+                  : 'bg-[#070A0E]/90 text-slate-300 border-white/15 hover:border-white/30'
+              }`}
+              title={showTouchControls ? 'Hide on-screen touch joystick & buttons' : 'Show on-screen touch joystick & buttons'}
+            >
+              <Gamepad2 className="w-3.5 h-3.5" />
+              <span>TOUCH: {showTouchControls ? 'ON' : 'OFF'}</span>
             </button>
 
             {/* Toggle Full Time Stats / Inspect Scoreboard & Pitch */}
@@ -1036,26 +1073,38 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
 
           {/* Right: eFootball Mobile & Tablet Action Cluster */}
           <div className="flex flex-col items-end gap-2.5">
-            {/* Quick Auto Play Toggle Pill */}
-            <button
-              type="button"
-              onClick={() => {
-                SoundEngine.playUIClick();
-                engineRef.current?.toggleAutoPlay();
-              }}
-              className={`pointer-events-auto px-4 py-2 rounded-full font-mono text-[10px] sm:text-xs font-bold border flex items-center gap-2 shadow-lg active:scale-95 transition-all cursor-pointer ${
-                hud.autoPlay
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-[#070A0E] border-white ring-2 ring-emerald-300/60 shadow-emerald-500/25'
-                  : 'bg-[#070A0E]/90 text-slate-300 border-white/25 hover:border-white/50'
-              }`}
-            >
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  hud.autoPlay ? 'bg-[#070A0E] animate-ping' : 'bg-slate-500'
+            {/* Quick Actions Row above Radial Buttons: Hide Touch Controls & Auto Play */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => toggleTouchControls(false)}
+                className="pointer-events-auto px-3 py-1.5 rounded-full font-mono text-[10px] sm:text-xs font-bold border border-white/20 bg-[#070A0E]/85 hover:bg-black text-slate-300 hover:text-white flex items-center gap-1.5 shadow-lg active:scale-95 transition-all cursor-pointer"
+                title="Hide on-screen touch joystick and buttons"
+              >
+                <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                <span>HIDE CONTROLS</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  SoundEngine.playUIClick();
+                  engineRef.current?.toggleAutoPlay();
+                }}
+                className={`pointer-events-auto px-3.5 py-1.5 rounded-full font-mono text-[10px] sm:text-xs font-bold border flex items-center gap-1.5 shadow-lg active:scale-95 transition-all cursor-pointer ${
+                  hud.autoPlay
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-[#070A0E] border-white ring-2 ring-emerald-300/60 shadow-emerald-500/25'
+                    : 'bg-[#070A0E]/90 text-slate-300 border-white/25 hover:border-white/50'
                 }`}
-              />
-              {hud.autoPlay ? 'AI PLAY: ON' : 'MANUAL'}
-            </button>
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    hud.autoPlay ? 'bg-[#070A0E] animate-ping' : 'bg-slate-500'
+                  }`}
+                />
+                {hud.autoPlay ? 'AI PLAY: ON' : 'MANUAL'}
+              </button>
+            </div>
 
             {/* eFootball Radial Button Arc (Enlarged and well-spaced for tablets) */}
             <div className={`pointer-events-auto grid grid-cols-3 touch-none select-none ${
@@ -1193,6 +1242,21 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
         </div>
       )}
 
+      {/* FLOATING BUTTON TO RESTORE TOUCH CONTROLS WHEN HIDDEN */}
+      {!isLoading && !hud.isMatchOver && !showTouchControls && (
+        <div className="fixed bottom-6 right-6 z-30 pointer-events-auto animate-fadeIn">
+          <button
+            type="button"
+            onClick={() => toggleTouchControls(true)}
+            className="px-4 py-2.5 rounded-full bg-[#070A0E]/90 hover:bg-[#111722] text-[#10B981] border border-[#10B981]/50 shadow-[0_8px_25px_rgba(0,0,0,0.85)] backdrop-blur-md font-mono text-xs font-bold flex items-center gap-2 cursor-pointer transition-transform hover:scale-105 active:scale-95"
+            title="Tap to restore on-screen virtual joystick and action buttons"
+          >
+            <Gamepad2 className="w-4 h-4 text-[#10B981]" />
+            <span>SHOW TOUCH CONTROLS</span>
+          </button>
+        </div>
+      )}
+
       {/* QUICK CONTROL GUIDE MODAL */}
       {showControlGuideModal && (
         <div className="absolute inset-0 z-40 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
@@ -1208,6 +1272,29 @@ export const MatchViewport3D: React.FC<MatchViewport3DProps> = ({
                 Close
               </button>
             </div>
+            {/* Option to Show / Hide On-Screen Touch Controls */}
+            <div className="mb-3 p-3 rounded-xl bg-[#070A0E] border border-white/10 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-display font-bold text-white tracking-wider block">
+                  ON-SCREEN TOUCH CONTROLS
+                </span>
+                <span className="text-[11px] text-slate-400">
+                  Virtual 360° joystick & action buttons on phones & tablets
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleTouchControls()}
+                className={`px-3 py-1.5 rounded-lg font-mono text-xs font-bold transition-all cursor-pointer ${
+                  showTouchControls
+                    ? 'bg-[#10B981] text-[#070A0E]'
+                    : 'bg-white/10 text-slate-300 hover:text-white'
+                }`}
+              >
+                {showTouchControls ? 'SHOWING (ON)' : 'HIDDEN (OFF)'}
+              </button>
+            </div>
+
             <div className="mb-4 p-3 rounded-xl bg-[#070A0E] border border-white/10">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-display font-bold text-white tracking-wider">

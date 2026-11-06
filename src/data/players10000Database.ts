@@ -15,6 +15,7 @@
 
 import type { CelebrationType, FootballPlayer, PlayerAttributes, PlayerRarity, PositionCode } from './gameDatabase';
 import { getPlayerPhotoUrl, PLAYER_PHOTOS_BY_NAME } from './playerPhotos';
+import { generateRealisticPlayerFaceDataUri } from './realisticFaceGenerator';
 
 // Real high-resolution authentic athlete portrait photos from Wikimedia Commons
 // Used for verified athletes to ensure no mistaken face assignments
@@ -205,23 +206,10 @@ const VERIFIED_ATHLETE_PHOTOS = [
   "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/Rivaldo_2013_%28cropped%29.jpg/500px-Rivaldo_2013_%28cropped%29.jpg"
 ];
 
-// Helper to resolve player face photo url accurately
-// Strictly returns verified authentic photos for players to guarantee 0 face mix-ups.
-// Unknown generic players return empty string so PlayerPhotoAvatar renders their custom 3D biometric likeness.
-export function resolvePlayerFacePhoto(name: string, _fallbackSeed?: number): string {
-  const verified = getPlayerPhotoUrl(name);
-  if (verified && verified.length > 0) {
-    return verified;
-  }
-  if (PLAYER_PHOTOS_BY_NAME[name]) {
-    return PLAYER_PHOTOS_BY_NAME[name];
-  }
-  const cleanName = name.replace(/\s*\(.*?\)\s*/g, '').trim();
-  if (PLAYER_PHOTOS_BY_NAME[cleanName]) {
-    return PLAYER_PHOTOS_BY_NAME[cleanName];
-  }
-  return '';
-}
+// Skin tone options
+const SKIN_TONES = ['#f8d9b8', '#ffdbac', '#e0ac69', '#c68642', '#8d5524', '#53341b', '#3d2314'];
+const HAIR_COLORS = ['#1c1917', '#451a03', '#78350f', '#09090b', '#d97706', '#facc15', '#a1a1aa'];
+const BOOT_COLORS = ['#10b981', '#38bdf8', '#f59e0b', '#ef4444', '#ec4899', '#ffffff', '#eab308', '#6366f1'];
 
 // Celebration types
 const CELEBRATIONS_POOL: CelebrationType[] = [
@@ -233,10 +221,36 @@ const CELEBRATIONS_POOL: CelebrationType[] = [
   'Team Huddle Roar',
 ];
 
-// Skin tone options
-const SKIN_TONES = ['#f8d9b8', '#ffdbac', '#e0ac69', '#c68642', '#8d5524', '#53341b', '#3d2314'];
-const HAIR_COLORS = ['#1c1917', '#451a03', '#78350f', '#09090b', '#d97706', '#facc15', '#a1a1aa'];
-const BOOT_COLORS = ['#10b981', '#38bdf8', '#f59e0b', '#ef4444', '#ec4899', '#ffffff', '#eab308', '#6366f1'];
+// Helper to resolve player face photo url accurately
+// Strictly returns verified authentic photos for players to guarantee 0 face mix-ups.
+// Unknown generic players receive a bespoke photorealistic portrait matching their identity.
+export function resolvePlayerFacePhoto(
+  name: string,
+  fallbackSeed?: number,
+  playerPos?: PositionCode,
+  playerNat?: string
+): string {
+  const verified = getPlayerPhotoUrl(name);
+  if (verified && verified.length > 0) {
+    return verified;
+  }
+  if (PLAYER_PHOTOS_BY_NAME[name]) {
+    return PLAYER_PHOTOS_BY_NAME[name];
+  }
+  const cleanName = name.replace(/\s*\(.*?\)\s*/g, '').trim();
+  if (PLAYER_PHOTOS_BY_NAME[cleanName]) {
+    return PLAYER_PHOTOS_BY_NAME[cleanName];
+  }
+  const seed = fallbackSeed ?? 42;
+  return generateRealisticPlayerFaceDataUri({
+    id: `photo_${name.replace(/[^a-zA-Z0-9]/g, '_')}_${seed}`,
+    name,
+    nationality: playerNat || 'International',
+    position: playerPos || 'CM',
+    skinTone: SKIN_TONES[Math.abs(seed >> 2) % SKIN_TONES.length],
+    hairColor: HAIR_COLORS[Math.abs(seed >> 3) % HAIR_COLORS.length],
+  } as FootballPlayer);
+}
 
 // Helper to compute balanced realistic attributes
 function generateAttributes(
